@@ -9,6 +9,8 @@ pip install -r requerimientos.txt    //instalar requerimientos
 
 chatbotW\Scripts\deactivate.bat //cerrar entorno (cuando necesiten)
 
+python chatbotW\src\main.py //correr
+
 
 
 
