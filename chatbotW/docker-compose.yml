@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  whatsapp-bot:
+    build: .
+    container_name: gemini_whatsapp_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./PDFs:/app/PDFs
+      - ./audios:/app/audios
+      - ./vectorstore:/app/vectorstore
+      - ./cache:/app/cache
+    stdin_open: true
+    tty: true

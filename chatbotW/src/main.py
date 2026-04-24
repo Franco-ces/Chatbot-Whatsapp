@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-from src.rag_langchain import RAGLangchain
+from rag_langchain import RAGLangchain
 from speech_to_text import SpeechToText
 from audio_handler import AudioHandler
 
