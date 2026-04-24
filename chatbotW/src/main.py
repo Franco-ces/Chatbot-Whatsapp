@@ -24,9 +24,16 @@ while True:
 
     # 🔹 MODO TEXTO
     if opcion == "1":
-        query = input("\nPregunta: ")
-        respuesta = rag.preguntar(query)
-        print("\nRespuesta:", respuesta)
+        try:
+            query = input("\nPregunta: ")
+            respuesta = rag.preguntar(query)
+            print("\nRespuesta:", respuesta)
+        except Exception as e:
+            error_msg = "Servidor saturado o error de conexión. Reintentá en unos segundos."
+            if "503" in str(e):
+                print(f" {error_msg}")
+            else:
+                print(f" Error: {e}")
 
     # 🔹 MODO AUDIO (LISTA + PROCESAMIENTO)
     elif opcion == "2":
