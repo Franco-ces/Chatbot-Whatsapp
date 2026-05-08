@@ -1,9 +1,9 @@
 import os
 from dotenv import load_dotenv
 
-from src.rag_langchain_con_audio import RAGLangchain
-from src.audio_handler import AudioHandler
-from src.chat_logger import ChatLogger
+from rag_langchain_con_audio import RAGLangchain
+from audio_handler import AudioHandler
+from chat_logger import ChatLogger
 
 load_dotenv()
 
@@ -20,6 +20,8 @@ while True:
     print("0. Salir")
 
     opcion = input("Elegí una opción: ")
+
+    rag.actualizar_memoria()
 
     if opcion == "1":
         query = input("\nPregunta: ")
@@ -74,6 +76,7 @@ while True:
 
     elif opcion == "0":
         print("Cerrando sesión de chat...")
+        logger.finalizar_log()
         break
     else:
         print("Opción inválida.")

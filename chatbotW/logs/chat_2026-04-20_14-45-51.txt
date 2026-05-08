@@ -1,0 +1,18 @@
+==================================================
+Chat iniciado: 2026-04-20 14:45:51.248498
+==================================================
+
+[14:59:01] USER: como se utilizan los auriculares sony
+[14:59:03] BOT: Póngase los auriculares en las orejas. Para saber cómo ponérselos en los oídos, consulte “Ponerse los auriculares”.
+[14:59:30] USER: cuales son las funciones de bluetooth de los auriculares sony
+[14:59:35] BOT: Las funciones de Bluetooth de los auriculares Sony son:
+
+*   Establecer una conexión inalámbrica con dispositivos Bluetooth.
+*   Conexión con un teléfono inteligente Android emparejado.
+*   Escuchar música de un dispositivo conectado a través de una conexión Bluetooth.
+*   Desconectar la conexión Bluetooth (después de su uso).
+*   Emparejar los auriculares con 2 dispositivos y conectarse a 2 dispositivos simultáneamente (activando [Connect to 2 devices simultaneously] con la app “Sony | Sound Connect”).
+*   Conexión con un ordenador emparejado (Windows 10).
+*   Realización de una videollamada en su ordenador.
+[15:00:31] BOT: ERROR en WhatsApp Ptt 2026-04-13 at 1.47.38 PM.ogg: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+[15:01:03] BOT: ERROR en WhatsApp Ptt 2026-04-13 at 1.47.38 PM.ogg: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}

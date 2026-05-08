@@ -33,3 +33,8 @@ class ChatLogger:
 
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write(f"[{hora}] BOT: {mensaje}\n")
+
+    def finalizar_log(self):
+        with open(self.log_file, "a", encoding="utf-8") as f:
+            f.write(f"\nChat finalizado: {datetime.now()}\n")
+            f.write("=" * 50 + "\n")

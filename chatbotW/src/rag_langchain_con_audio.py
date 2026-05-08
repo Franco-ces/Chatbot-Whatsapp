@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+import json
 
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_community.vectorstores import FAISS
@@ -18,6 +19,7 @@ from google.genai import types
 class RAGLangchain:
     def __init__(self, api_key, folder_path="PDFs"):
         self.api_key = api_key
+        # Ajustamos la ruta para que siempre encuentre la carpeta PDFs
         self.folder_path = Path(__file__).resolve().parent.parent / folder_path
         self.cache = EmbeddingCache()
         
@@ -29,16 +31,25 @@ class RAGLangchain:
         
         # 2. Definimos el prompt base
         self.prompt_template = ChatPromptTemplate.from_template("""
-Sos un asistente experto en productos.
-Respondé usando SOLO la información del contexto.
-Si no encontrás la respuesta, decí: "No se encuentra en los documentos".
+Eres un Asistente Virtual de Atención al Cliente profesional y preciso. 
+Tu objetivo es ayudar a los usuarios basándote EXCLUSIVAMENTE en el contexto proporcionado.
 
-Contexto:
+### REGLAS CRÍTICAS DE COMPORTAMIENTO:
+1. NO INVENTES INFORMACIÓN: Si la respuesta no está presente de forma explícita en el contexto, indica amablemente: "Lo siento, no cuento con esa información específica en mis registros actuales."
+2. LÍMITE DE CONTEXTO: Utiliza únicamente los fragmentos de texto entregados abajo. No utilices conocimientos externos ni supongas detalles que no estén escritos.
+3. PRECISIÓN TÉCNICA: Si el contexto menciona precios, códigos o especificaciones, cítalos con exactitud.
+4. TONO: Mantén un tono servicial, profesional y directo.
+5. CASO DE RESPUESTA ERRONEA : si habla sobre el producto, respondele de manera profecional que no cuentas con esa informacion, no incluyas cosas como que no se encuentra en tu "memoria o contexto" intenta responder como una persona que no cuentas con esa informacion.
+
+### CONTEXTO DE DOCUMENTOS:
 {context}
 
-Pregunta:
-{input}
-""")
+### INSTRUCCIÓN DE CONSULTA:
+Analiza el contexto anterior y responde la siguiente pregunta del cliente. Si la pregunta es un saludo, responde cordialmente y pregunta en qué puedes ayudar.
+
+Pregunta del Cliente: {input}
+
+Respuesta del Asistente:""")
 
     def _setup_retriever(self):
         embeddings_model = HuggingFaceEmbeddings(
@@ -78,14 +89,37 @@ Pregunta:
 
         return vectorstore.as_retriever()
 
+    def actualizar_memoria(self):
+        """
+        Verifica rápidamente si hubo cambios en la carpeta de PDFs.
+        """
+        # 1. Calculamos el hash de los archivos actuales
+        hash_actual = VectorStoreManager.calcular_hash_archivos(self.folder_path)
+        
+        # 2. Leemos el hash guardado
+        metadata_path = VectorStoreManager._get_metadata_path()
+        hash_guardado = None
+        
+        if metadata_path.exists():
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+                hash_guardado = metadata.get("hash")
+        
+        # 3. Si hay cambios, recargamos el retriever
+        if hash_actual != hash_guardado:
+            print("🔄 Cambio detectado en los PDFs. Actualizando memoria del RAG...")
+            self.retriever = self._setup_retriever()
+            print("✅ Memoria RAG actualizada con éxito.")
+            return True
+        
+        return False
+
     def preguntar(self, query_text=None, audio_path=None):
         """
         Maneja entradas de texto, de audio o ambas.
-        Retorna: (transcripcion_o_query, respuesta_final)
         """
-        # 1. DETERMINAR EL TEXTO DE BÚSQUEDA PARA EL RAG
         texto_para_buscar = query_text
-        transcripcion_detectada = query_text # Para mostrar qué se leyó
+        transcripcion_detectada = query_text
         
         audio_part = None
         if audio_path:
@@ -96,7 +130,6 @@ Pregunta:
                     mime_type="audio/ogg"
                 )
                 
-                # Si el usuario NO escribió nada pero mandó audio
                 if not texto_para_buscar:
                     res_t = self.client.models.generate_content(
                         model="gemini-2.5-flash",
@@ -105,12 +138,12 @@ Pregunta:
                     texto_para_buscar = res_t.text
                     transcripcion_detectada = res_t.text
 
-        # 2. RAG: Buscar en los PDFs
+        # Búsqueda en RAG
         busqueda_final = texto_para_buscar if texto_para_buscar else "productos"
         docs = self.retriever.invoke(busqueda_final)
         contexto_docs = "\n\n".join(doc.page_content for doc in docs)
 
-        # 3. PREPARAR EL PAQUETE PARA GEMINI
+        # Prompt para Gemini
         prompt_final = self.prompt_template.format(
             context=contexto_docs,
             input=texto_para_buscar if texto_para_buscar else "Responde a la duda del audio."
@@ -119,14 +152,11 @@ Pregunta:
         contenidos_gemini = []
         if audio_part:
             contenidos_gemini.append(audio_part)
-        
         contenidos_gemini.append(prompt_final)
 
-        # 4. RESPUESTA FINAL
         response = self.client.models.generate_content(
             model="gemini-2.5-flash",
             contents=contenidos_gemini
         )
 
-        # Devolvemos el texto detectado y la respuesta
         return transcripcion_detectada, response.text
