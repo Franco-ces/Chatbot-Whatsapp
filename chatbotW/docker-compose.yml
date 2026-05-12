@@ -2,30 +2,58 @@ services:
   whatsapp-bot:
     build: .
     container_name: gemini_whatsapp_bot
+    hostname: bot.local
     restart: unless-stopped
+    working_dir: /app/src
+    command: uvicorn main:app --host 0.0.0.0 --port 5000 --reload
     env_file:
       - .env
     volumes:
+      - ./src:/app/src
       - ./PDFs:/app/PDFs
       - ./audios:/app/audios
       - ./vectorstore:/app/vectorstore
       - ./cache:/app/cache
-      - ./src:/app/src
-    stdin_open: true
-    tty: true
 
   evolution-api:
-    image: atendai/evolution-api:v1.8.2
+    image: evoapicloud/evolution-api:v2.3.7
     container_name: evolution_api
     restart: always
     ports:
       - "8080:8080"
+    depends_on:
+      - evolution_postgres
+      - evolution_redis
     environment:
       - SERVER_URL=http://localhost:8080
       - AUTHENTICATION_TYPE=apikey
       - AUTHENTICATION_API_KEY=franquitoGoat
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evo:evopass@evolution_postgres:5432/evolution?schema=public
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://evolution_redis:6379/0
     volumes:
       - evolution_instances:/evolution/instances
 
+  evolution_postgres:
+    image: postgres:15-alpine
+    container_name: evolution_postgres
+    environment:
+      - POSTGRES_USER=evo
+      - POSTGRES_PASSWORD=evopass
+      - POSTGRES_DB=evolution
+    volumes:
+      - evolution_db:/var/lib/postgresql/data
+    restart: always
+
+  evolution_redis:
+    image: redis:alpine
+    container_name: evolution_redis
+    restart: always
+    volumes:
+      - evolution_redis_data:/data
+
 volumes:
   evolution_instances:
+  evolution_db:
+  evolution_redis_data:
