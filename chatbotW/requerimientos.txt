@@ -1,7 +1,7 @@
 pymupdf
 faiss-cpu
 sentence-transformers
-google-generativeai
+google-genai
 numpy
 python-dotenv
 
@@ -9,7 +9,10 @@ langchain
 langchain-community
 langchain-google-genai
 
-
-openai-whisper
 ffmpeg-python
 openai
+
+
+fastapi==0.104.1
+uvicorn==0.24.0
+requests==2.31.0

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Conectar WhatsApp</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f9; }
+        button { padding: 12px 24px; font-size: 16px; cursor: pointer; background-color: #25D366; color: white; border: none; border-radius: 5px; font-weight: bold; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #qr-container { margin-top: 30px; }
+        img { max-width: 350px; border: 2px solid #ccc; border-radius: 10px; display: none; margin: 0 auto; background: white; padding: 15px; }
+        #log { margin-top: 20px; color: #333; font-size: 15px; }
+    </style>
+</head>
+<body>
+
+    <h2>Vincular Bot de WhatsApp</h2>
+    <button id="btn" onclick="iniciarConexion()">Generar Código QR</button>
+    
+    <div id="qr-container">
+        <img id="qr-img" src="" alt="Código QR">
+    </div>
+    <p id="log"></p>
+
+    <script>
+        const API_URL = "http://localhost:8080";
+        const HEADERS = { "apikey": "franquitoGoat", "Content-Type": "application/json" };
+        const INSTANCE = "rag_bot";
+
+        function log(msg) {
+            document.getElementById('log').innerText = msg;
+        }
+
+        async function iniciarConexion() {
+            document.getElementById('btn').disabled = true;
+            document.getElementById('qr-img').style.display = 'none';
+
+            try {
+                log("1/3 Limpiando intentos anteriores...");
+                await fetch(`${API_URL}/instance/delete/${INSTANCE}`, { method: 'DELETE', headers: HEADERS });
+                
+                await new Promise(r => setTimeout(r, 1000));
+
+                log("2/3 Creando conexión limpia...");
+                await fetch(`${API_URL}/instance/create`, {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: JSON.stringify({ instanceName: INSTANCE, qrcode: true, integration: "WHATSAPP-BAILEYS" })
+                });
+
+                log("3/3 Esperando que WhatsApp dibuje el QR. Dame unos segundos...");
+                
+                // Le pregunta al servidor cada 2 segundos hasta que tenga el QR listo
+                for (let i = 0; i < 15; i++) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    
+                    let res = await fetch(`${API_URL}/instance/connect/${INSTANCE}`, { method: 'GET', headers: HEADERS });
+                    let data = await res.json();
+
+                    // Cubrimos las dos formas en que la API devuelve el código según la versión
+                    let qrBase64 = data.base64 || (data.qrcode && data.qrcode.base64);
+
+                    if (qrBase64 && qrBase64.startsWith("data:image")) {
+                        document.getElementById('qr-img').src = qrBase64;
+                        document.getElementById('qr-img').style.display = 'block';
+                        log("¡Listo! Escanealo con tu celular en 'Dispositivos vinculados'.");
+                        document.getElementById('btn').disabled = false;
+                        return;
+                    }
+                }
+                log("Se agotó el tiempo. El contenedor está tardando demasiado en responder.");
+            } catch (error) {
+                log("Fallo de conexión: " + error.message + ". Revisá que Docker esté corriendo.");
+            }
+            document.getElementById('btn').disabled = false;
+        }
+    </script>
+</body>
+</html>
