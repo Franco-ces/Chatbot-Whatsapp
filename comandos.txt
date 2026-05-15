@@ -11,6 +11,12 @@ chatbotW\Scripts\deactivate.bat //cerrar entorno (cuando necesiten)
 
 python chatbotW\src\main.py //correr
 
+docker-compose up -d //Levantar docker
+
+docker logs gemini_whatsapp_bot -f //Trackeo en tiempo real
+
+docker-compose down //Cerrar docker
+
 
 
 
