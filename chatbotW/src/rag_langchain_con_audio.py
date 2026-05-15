@@ -11,7 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 # Recursos locales
 from vectorstore_manager import VectorStoreManager
 from embedding_cache import EmbeddingCache
-
+from ConfigManager import ConfigManager
 # SDK GEMINI
 from google import genai
 from google.genai import types
@@ -22,6 +22,9 @@ class RAGLangchain:
         # Ajustamos la ruta para que siempre encuentre la carpeta PDFs
         self.folder_path = Path(__file__).resolve().parent.parent / folder_path
         self.cache = EmbeddingCache()
+
+        #gestion de donde se guarda el Mail y Telefono del cliente
+        self.config_manager = ConfigManager()
         
         # Inicializamos el cliente aquí para usarlo en el método preguntar
         self.client = genai.Client(api_key=self.api_key)
@@ -35,7 +38,7 @@ Eres un Asistente Virtual de Atención al Cliente profesional y preciso.
 Tu objetivo es ayudar a los usuarios basándote EXCLUSIVAMENTE en el contexto proporcionado.
 
 ### REGLAS CRÍTICAS DE COMPORTAMIENTO:
-1. NO INVENTES INFORMACIÓN: Si la respuesta no está presente de forma explícita en el contexto, indica amablemente: "Lo siento, no cuento con esa información específica."
+1. NO INVENTES INFORMACIÓN: Si la respuesta no está presente de forma explícita en el contexto, indica amablemente: "Lo siento, no cuento con esa información específica. Puedes ponerte en contacto a través del correo electrónico {email} o llamando al teléfono {telefono}."
 2. LÍMITE DE CONTEXTO: Utiliza únicamente los fragmentos de texto entregados abajo. No utilices conocimientos externos ni supongas detalles que no estén escritos.
 3. PRECISIÓN TÉCNICA: Si el contexto menciona precios, códigos o especificaciones, cítalos con exactitud.
 4. TONO: Mantén un tono servicial, profesional y directo.
@@ -133,7 +136,7 @@ Respuesta del Asistente:""")
                 if not texto_para_buscar:
                     res_t = self.client.models.generate_content(
                         model="gemini-2.5-flash",
-                        contents=[audio_part, "Transcribe la consulta de este audio de forma clara y directa."]
+                        contents=[audio_part, "Transcribe textualmente la consulta de este audio de forma clara y directa."]
                     )
                     texto_para_buscar = res_t.text
                     transcripcion_detectada = res_t.text
@@ -143,10 +146,15 @@ Respuesta del Asistente:""")
         docs = self.retriever.invoke(busqueda_final)
         contexto_docs = "\n\n".join(doc.page_content for doc in docs)
 
+        #lee el disco por si la interfaz cambió algo
+        self.config_manager.cargar()
+
         # Prompt para Gemini
         prompt_final = self.prompt_template.format(
             context=contexto_docs,
-            input=texto_para_buscar if texto_para_buscar else "Responde a la duda del audio."
+            input=texto_para_buscar if texto_para_buscar else "Responde a la duda del audio.",
+            email=self.config_manager.config["email"],     
+            telefono=self.config_manager.config["telefono"]
         )
 
         contenidos_gemini = []

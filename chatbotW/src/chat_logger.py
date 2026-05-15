@@ -1,7 +1,6 @@
 from pathlib import Path
 from datetime import datetime
 
-
 class ChatLogger:
     def __init__(self, folder="logs"):
         # raíz del proyecto
@@ -16,25 +15,27 @@ class ChatLogger:
 
         self.log_file = self.logs_dir / f"chat_{inicio}.txt"
 
-        # encabezado inicial
+        # encabezado inicial (mensaje de sistema)
+        hora = datetime.now().strftime("%H:%M")
+        fecha_linda = datetime.now().strftime("%d/%m/%Y")
         with open(self.log_file, "a", encoding="utf-8") as f:
-            f.write("=" * 50 + "\n")
-            f.write(f"Chat iniciado: {datetime.now()}\n")
-            f.write("=" * 50 + "\n\n")
+            f.write(f"Chat iniciado el {fecha_linda} a las {hora}\n")
 
-    def guardar_usuario(self, mensaje):
-        hora = datetime.now().strftime("%H:%M:%S")
-
+    def guardar_usuario(self, mensaje, identificador="USER"):
+        hora = datetime.now().strftime("%H:%M")
+        # Usamos un placeholder único [BR] para los saltos de línea reales.
+        # Esto evita que el archivo .txt se rompa físicamente.
+        mensaje_limpio = mensaje.replace('\n', '[BR]')
         with open(self.log_file, "a", encoding="utf-8") as f:
-            f.write(f"[{hora}] USER: {mensaje}\n")
+            f.write(f"id_usuario|||{identificador}|||{hora}|||{mensaje_limpio}\n")
 
-    def guardar_bot(self, mensaje):
-        hora = datetime.now().strftime("%H:%M:%S")
-
+    def guardar_bot(self, mensaje, identificador="BOT"):
+        hora = datetime.now().strftime("%H:%M")
+        mensaje_limpio = mensaje.replace('\n', '[BR]')
         with open(self.log_file, "a", encoding="utf-8") as f:
-            f.write(f"[{hora}] BOT: {mensaje}\n")
+            f.write(f"id_bot|||{identificador}|||{hora}|||{mensaje_limpio}\n")
 
     def finalizar_log(self):
+        hora = datetime.now().strftime("%H:%M")
         with open(self.log_file, "a", encoding="utf-8") as f:
-            f.write(f"\nChat finalizado: {datetime.now()}\n")
-            f.write("=" * 50 + "\n")
+            f.write(f"Chat finalizado a las {hora}\n")

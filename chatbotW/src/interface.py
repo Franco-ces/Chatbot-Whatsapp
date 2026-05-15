@@ -7,6 +7,9 @@ import shutil
 from pathlib import Path
 from typing import List
 
+# Importamos tu clase ConfigManager (asegurate de que ConfigManager.py esté en la misma carpeta)
+from ConfigManager import ConfigManager
+
 app = FastAPI()
 
 app.add_middleware(
@@ -26,6 +29,9 @@ ENV_FILE = ROOT_DIR / ".env"
 PDF_FOLDER.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Instanciamos el manager de configuración
+config_manager = ConfigManager()
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
     html_path = FILE_PATH.parent / "index.html"
@@ -40,6 +46,21 @@ async def guardar_api_key(key: str = Form(...)):
         return {"status": "success", "message": "API Key guardada en .env"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# --- NUEVOS ENDPOINTS PARA EL MANAGER DE CONFIGURACIÓN ---
+@app.get("/api/config")
+async def obtener_config():
+    config_manager.cargar() # Nos aseguramos de tener la versión más reciente del disco
+    return config_manager.config
+
+@app.post("/api/config")
+async def guardar_config(email: str = Form(None), telefono: str = Form(None)):
+    try:
+        config_manager.guardar(nuevo_email=email, nuevo_tel=telefono)
+        return {"status": "success", "message": "✅ Datos de contacto actualizados"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+# ---------------------------------------------------------
 
 @app.get("/api/pdfs")
 async def listar_pdfs():
