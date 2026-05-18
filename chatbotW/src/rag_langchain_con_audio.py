@@ -90,7 +90,7 @@ Respuesta del Asistente:""")
             vectorstore = FAISS.from_embeddings(list(zip(texts, vectors)), embeddings_model)
             VectorStoreManager.guardar(vectorstore, self.folder_path)
 
-        return vectorstore.as_retriever()
+        return vectorstore.as_retriever(search_kwargs={"k": 10})
 
     def actualizar_memoria(self):
         """
@@ -135,16 +135,27 @@ Respuesta del Asistente:""")
                 
                 if not texto_para_buscar:
                     res_t = self.client.models.generate_content(
-                        model="gemini-2.5-flash",
+                        model="gemini_3.1_flash_lite",
                         contents=[audio_part, "Transcribe textualmente la consulta de este audio de forma clara y directa."]
                     )
                     texto_para_buscar = res_t.text
                     transcripcion_detectada = res_t.text
 
         # Búsqueda en RAG
+        # Búsqueda en RAG
         busqueda_final = texto_para_buscar if texto_para_buscar else "productos"
         docs = self.retriever.invoke(busqueda_final)
         contexto_docs = "\n\n".join(doc.page_content for doc in docs)
+
+        # ====== LOG EN TIEMPO REAL PARA DEBUGGING ======
+        print("\n" + "="*60, flush=True)
+        print(f"🔍 BÚSQUEDA EXACTA: '{busqueda_final}'", flush=True)
+        print(f"📄 FRAGMENTOS ENCONTRADOS EN PDFs: {len(docs)}", flush=True)
+        for i, doc in enumerate(docs):
+            print(f"\n--- CHUNK {i+1} ---", flush=True)
+            print(doc.page_content, flush=True)
+        print("="*60 + "\n", flush=True)
+        # ===============================================
 
         #lee el disco por si la interfaz cambió algo
         self.config_manager.cargar()
@@ -163,7 +174,7 @@ Respuesta del Asistente:""")
         contenidos_gemini.append(prompt_final)
 
         response = self.client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.1-flash-lite",
             contents=contenidos_gemini
         )
 
