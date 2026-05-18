@@ -1,0 +1,6 @@
+Chat iniciado el 14/05/2026 a las 18:18
+id_usuario|||USER|||18:18|||como se utilizan los auriculares sony XM6
+id_bot|||BOT|||18:18|||Lo siento, no cuento con esa información específica. Puedes ponerte en contacto a través del correo electrónico soporte@empresaprueba.com o llamando al teléfono +54 11 1234-5678.
+id_usuario|||USER|||18:19|||que funciones bluetooth tienen los auriculares sony
+id_bot|||BOT|||18:19|||Los auriculares Sony tienen las siguientes funciones relacionadas con Bluetooth:[BR][BR]*   Establecer una conexión inalámbrica con dispositivos Bluetooth.[BR]*   Conexión con un teléfono inteligente Android emparejado.[BR]*   Escuchar música de un dispositivo conectado.[BR]*   Desconectar la conexión Bluetooth.[BR]*   Emparejar los auriculares con 2 dispositivos.[BR]*   Conectar a 2 dispositivos simultáneamente a través de la app "Sony | Sound Connect".
+Chat finalizado a las 18:19
