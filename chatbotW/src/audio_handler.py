@@ -1,26 +1,27 @@
-from pathlib import Path
+from google.genai import types
 
+class AudioProcessor:
+    def __init__(self, client):
+        self.client = client
 
-class AudioHandler:
-    def __init__(self, folder="audios"):
-        #  ruta absoluta SIEMPRE
-        base_path = Path(__file__).resolve().parent.parent
-        self.folder = base_path / folder
+    def extraer_transcripcion_memoria(self, audio_bytes: bytes, mime_type: str = "audio/ogg"):
+        """
+        Recibe los bytes del audio directamente desde la RAM, 
+        solicita la transcripción y devuelve el texto.
+        """
+        if not audio_bytes:
+            return None, None
         
-
-        if not self.folder.exists():
-            print(f" La carpeta {self.folder} no existe")
-
-    def listar_audios(self):
-        #  formatos compatibles 
-        extensiones = ["*.ogg", "*.opus", "*.mp3", "*.wav", "*.m4a"]
-
-        audios = []
-        for ext in extensiones:
-            audios.extend(self.folder.glob(ext))
-
-        return audios
-
-    def limpiar_todos(self):
-        for audio in self.folder.glob("*.*"):
-            audio.unlink()
+        # Instanciamos el objeto Part de Gemini inyectando la memoria directamente
+        audio_part = types.Part.from_bytes(
+            data=audio_bytes,
+            mime_type=mime_type
+        )
+        
+        # Enviamos los bytes a la API de Google sin haber tocado el disco local
+        respuesta = self.client.models.generate_content(
+            model="gemini-3.1-flash-lite",
+            contents=[audio_part, "Transcribe textualmente la consulta de este audio de forma clara y directa."]
+        )
+        
+        return respuesta.text, audio_part

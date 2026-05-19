@@ -12,6 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from vectorstore_manager import VectorStoreManager
 from embedding_cache import EmbeddingCache
 from ConfigManager import ConfigManager
+from audio_handler import AudioProcessor
 # SDK GEMINI
 from google import genai
 from google.genai import types
@@ -28,6 +29,9 @@ class RAGLangchain:
         
         # Inicializamos el cliente aquí para usarlo en el método preguntar
         self.client = genai.Client(api_key=self.api_key)
+
+        # Inicializar el procesador de audio
+        self.audio_processor = AudioProcessor(self.client)
         
         # 1. Configuramos el retriever (Buscador de PDFs)
         self.retriever = self._setup_retriever()
@@ -117,29 +121,20 @@ Respuesta del Asistente:""")
         
         return False
 
-    def preguntar(self, query_text=None, audio_path=None):
+    def preguntar(self, query_text=None, audio_bytes=None, remitente=None):
         """
-        Maneja entradas de texto, de audio o ambas.
+        Maneja entradas de texto, de audio en memoria o ambas.
         """
         texto_para_buscar = query_text
         transcripcion_detectada = query_text
-        
         audio_part = None
-        if audio_path:
-            p = Path(audio_path)
-            if p.exists():
-                audio_part = types.Part.from_bytes(
-                    data=p.read_bytes(),
-                    mime_type="audio/ogg"
-                )
-                
-                if not texto_para_buscar:
-                    res_t = self.client.models.generate_content(
-                        model="gemini_3.1_flash_lite",
-                        contents=[audio_part, "Transcribe textualmente la consulta de este audio de forma clara y directa."]
-                    )
-                    texto_para_buscar = res_t.text
-                    transcripcion_detectada = res_t.text
+        
+        # Procesamiento desacoplado enteramente en memoria
+        if audio_bytes:
+            texto_extraido, audio_part = self.audio_processor.extraer_transcripcion_memoria(audio_bytes)
+            if not texto_para_buscar and texto_extraido:
+                texto_para_buscar = texto_extraido
+                transcripcion_detectada = texto_extraido
 
         # Búsqueda en RAG
         # Búsqueda en RAG

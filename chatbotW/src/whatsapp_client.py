@@ -10,6 +10,26 @@ class WhatsAppClient:
             "Content-Type": "application/json"
         }
 
+    def obtener_audio_base64(self, mensaje_data: dict):
+        """
+        Solicita a Evolution API que descargue el medio del mensaje y lo devuelva en Base64.
+        """
+        url = f"{self.api_url}/chat/getBase64FromMediaMessage/{self.instance_name}"
+        
+        # Evolution API requiere el bloque 'message' original para ubicar el archivo
+        payload = {
+            "message": mensaje_data
+        }
+        
+        try:
+            response = requests.post(url, json=payload, headers=self.headers)
+            if response.status_code in [200, 201]:
+                return response.json().get("base64")
+            return None
+        except Exception as e:
+            print(f"Error al obtener audio de Evolution API: {e}")
+            return None
+
     def enviar_mensaje(self, numero: str, texto: str):
         url = f"{self.api_url}/message/sendText/{self.instance_name}"
         

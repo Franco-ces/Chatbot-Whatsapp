@@ -1,62 +1,66 @@
+# src/main.py
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, BackgroundTasks
+from contextlib import asynccontextmanager
 
 from rag_langchain_con_audio import RAGLangchain
 from whatsapp_client import WhatsAppClient
+from payload_parser import EvolutionWebhook, extraer_datos_limpios
+from bot_service import procesar_mensaje_bot
 
-load_dotenv()
+# Variables globales para nuestras instancias
+rag = None
+wa_client = None
 
-api_key = os.getenv("GOOGLE_API_KEY")
-rag = RAGLangchain(api_key)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Gestor de ciclo de vida. Carga los modelos pesados SOLO cuando la API ya está lista.
+    """
+    global rag, wa_client
+    print("Iniciando dependencias pesadas (RAG, FAISS)...")
+    
+    load_dotenv()
+    
+    # Obtenemos TODO desde el .env
+    google_key = os.getenv("GOOGLE_API_KEY")
+    evolution_key = os.getenv("EVOLUTION_API_KEY")
+    evolution_url = os.getenv("EVOLUTION_API_URL")
+    instance = os.getenv("EVOLUTION_INSTANCE_NAME")
+    
+    rag = RAGLangchain(google_key)
 
-# Instanciamos el cliente de WhatsApp aislado
-wa_client = WhatsAppClient(
-    api_url="http://evolution_api:8080",
-    api_key="franquitoGoat",
-    instance_name="rag_bot"
-)
+    wa_client = WhatsAppClient(
+        api_url=evolution_url,
+        api_key=evolution_key,
+        instance_name=instance
+    )
+    
+    print("Dependencias cargadas. Servidor listo para recibir mensajes.")
+    yield
+    
+    # (Opcional) Acá podrías agregar lógica para cerrar conexiones a bases de datos si el servidor se apaga
+    print("Apagando servidor y liberando recursos...")
 
-app = FastAPI(title="Gemini WhatsApp Bot")
+# Instanciamos FastAPI inyectando el lifespan
+app = FastAPI(title="Gemini WhatsApp Bot", lifespan=lifespan)
 
-def procesar_y_responder(texto: str, remitente: str):
-    print(f"--> [1] Iniciando consulta a Gemini para el número: {remitente}")
-    try:
-        # Obtenemos la respuesta del modelo
-        transcripcion, respuesta_texto = rag.preguntar(texto)
-        print(f"--> [2] Gemini respondió exitosamente: {respuesta_texto}")
-        
-        # Enviamos el mensaje
-        print("--> [3] Enviando petición a Evolution API...")
-        resultado = wa_client.enviar_mensaje(remitente, respuesta_texto)
-        print(f"--> [4] Resultado final de Evolution API: {resultado}")
-        
-    except Exception as e:
-        print(f"--> [ERROR CRÍTICO] Falló el proceso de fondo: {e}")
 
 @app.post("/webhook")
-async def webhook(request: Request, background_tasks: BackgroundTasks):
-    payload = await request.json()
+async def webhook(payload: EvolutionWebhook, background_tasks: BackgroundTasks):
+    # 'payload' ahora es un objeto validado, no un dict genérico
+    datos = extraer_datos_limpios(payload)
     
-    print(f"PAYLOAD RECIBIDO: {payload}", flush=True)
-    # Verificamos que sea el evento de recepción de mensajes
-    if payload.get("event") == "messages.upsert":
-        mensaje_data = payload.get("data", {}).get("message", {})
-        remitente = payload.get("data", {}).get("key", {}).get("remoteJid")
-        from_me = payload.get("data", {}).get("key", {}).get("fromMe")
-
-        # Ignoramos los mensajes enviados por el propio bot para evitar bucles
-        if from_me:
-            return {"status": "ignorado"}
-
-        # Evolution API manda el texto en distintos campos dependiendo si es un mensaje simple o con formato
-        texto = mensaje_data.get("conversation") or mensaje_data.get("extendedTextMessage", {}).get("text")
-
-        if texto:
-            print(f"Mensaje entrante de {remitente}: {texto}")
-            
-            # Delegamos el procesamiento pesado a una tarea en segundo plano
-            background_tasks.add_task(procesar_y_responder, texto, remitente)
-
-    # FastAPI responde 200 OK inmediatamente
-    return {"status": "recibido"}
+    if datos:
+        background_tasks.add_task(
+            procesar_mensaje_bot, 
+            rag_instance=rag, 
+            wa_client=wa_client, 
+            remitente=datos["remitente"],
+            texto=datos["texto"],
+            mensaje_data=datos["mensaje_data"],
+            es_audio=datos["es_audio"]
+        )
+    
+    return {"status": "ok"}
