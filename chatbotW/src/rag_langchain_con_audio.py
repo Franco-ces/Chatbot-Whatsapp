@@ -4,9 +4,11 @@ import json
 
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.output_parsers import StrOutputParser
 
 # Recursos locales
 from vectorstore_manager import VectorStoreManager
@@ -16,6 +18,7 @@ from audio_handler import AudioProcessor
 # SDK GEMINI
 from google import genai
 from google.genai import types
+from prompts import PROMPT_GUARDRAIL_ENTRADA, PROMPT_GUARDRAIL_SALIDA
 
 class RAGLangchain:
     def __init__(self, api_key, folder_path="PDFs"):
@@ -30,11 +33,20 @@ class RAGLangchain:
         # Inicializamos el cliente aquí para usarlo en el método preguntar
         self.client = genai.Client(api_key=self.api_key)
 
+        # Inicializamos el modelo de embeddings de Google (768D)
+        self.embeddings_model = GoogleGenerativeAIEmbeddings(
+            model="models/text-embedding-004", 
+            google_api_key=self.api_key
+        )
+
         # Inicializar el procesador de audio
         self.audio_processor = AudioProcessor(self.client)
         
         # 1. Configuramos el retriever (Buscador de PDFs)
         self.retriever = self._setup_retriever()
+
+        # LLM auxiliar para Guardrails con Langchain
+        self.llm_guardrail = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", google_api_key=self.api_key)
         
         # 2. Definimos el prompt base
         self.prompt_template = ChatPromptTemplate.from_template("""
@@ -59,11 +71,8 @@ Pregunta del Cliente: {input}
 Respuesta del Asistente:""")
 
     def _setup_retriever(self):
-        embeddings_model = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
-
-        vectorstore = VectorStoreManager.cargar(embeddings_model, self.folder_path)
+        # Intentamos cargar el vectorstore existente con el nuevo modelo
+        vectorstore = VectorStoreManager.cargar(self.embeddings_model, self.folder_path)
 
         if vectorstore is None:
             print("Creando vectorstore desde PDFs...")
@@ -86,12 +95,12 @@ Respuesta del Asistente:""")
                 if cached is not None:
                     vectors.append(np.array(cached))
                 else:
-                    emb = embeddings_model.embed_query(text)
+                    emb = self.embeddings_model.embed_query(text)
                     self.cache.set(text, emb)
                     vectors.append(emb)
             
             self.cache.save()
-            vectorstore = FAISS.from_embeddings(list(zip(texts, vectors)), embeddings_model)
+            vectorstore = FAISS.from_embeddings(list(zip(texts, vectors)), self.embeddings_model)
             VectorStoreManager.guardar(vectorstore, self.folder_path)
 
         return vectorstore.as_retriever(search_kwargs={"k": 10})
@@ -136,6 +145,14 @@ Respuesta del Asistente:""")
                 texto_para_buscar = texto_extraido
                 transcripcion_detectada = texto_extraido
 
+        # --- GUARDRAIL DE ENTRADA ---
+        cadena_entrada = ChatPromptTemplate.from_template(PROMPT_GUARDRAIL_ENTRADA) | self.llm_guardrail | StrOutputParser()
+        evaluacion_entrada = cadena_entrada.invoke({"input": texto_para_buscar if texto_para_buscar else "audio"}).strip().upper()
+        
+        if "INSEGURO" in evaluacion_entrada:
+            return transcripcion_detectada, "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso."
+        # ----------------------------
+
         # Búsqueda en RAG
         # Búsqueda en RAG
         busqueda_final = texto_para_buscar if texto_para_buscar else "productos"
@@ -172,5 +189,14 @@ Respuesta del Asistente:""")
             model="gemini-3.1-flash-lite",
             contents=contenidos_gemini
         )
+        respuesta_texto = response.text
 
-        return transcripcion_detectada, response.text
+        # --- GUARDRAIL DE SALIDA ---
+        cadena_salida = ChatPromptTemplate.from_template(PROMPT_GUARDRAIL_SALIDA) | self.llm_guardrail | StrOutputParser()
+        evaluacion_salida = cadena_salida.invoke({"output": respuesta_texto}).strip().upper()
+        
+        if "RECHAZADO" in evaluacion_salida:
+            return transcripcion_detectada, "Lo siento, generé una respuesta que no cumple con mis parámetros de calidad. ¿Podés reformular tu consulta?"
+        # ---------------------------
+
+        return transcripcion_detectada, respuesta_texto

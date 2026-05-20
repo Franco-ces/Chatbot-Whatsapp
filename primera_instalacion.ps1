@@ -1,5 +1,7 @@
 # primera_instalacion.ps1
 
+cd chatbotW
+
 Write-Host "1. Levantando y construyendo contenedores desde cero..." -ForegroundColor Cyan
 docker-compose up -d --build
 
