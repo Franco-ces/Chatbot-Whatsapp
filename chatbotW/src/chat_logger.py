@@ -29,7 +29,7 @@ class ChatLogger:
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write(f"id_usuario|||{identificador}|||{hora}|||{mensaje_limpio}\n")
 
-    def guardar_bot(self, mensaje, identificador="BOT"):
+    def guardar_bot(self, mensaje, identificador="Neuradocs"):
         hora = datetime.now().strftime("%H:%M")
         mensaje_limpio = mensaje.replace('\n', '[BR]')
         with open(self.log_file, "a", encoding="utf-8") as f:
