@@ -1,35 +1,5 @@
-
-
-
-python -m venv chatbotW //crear entorno virtual 
-
-chatbotW\Scripts\activate  // activar entorno
-
-pip install -r requerimientos.txt    //instalar requerimientos 
-
-chatbotW\Scripts\deactivate.bat //cerrar entorno (cuando necesiten)
-
-python chatbotW\src\main.py //correr
-
 docker-compose up -d //Levantar docker
 
 docker logs gemini_whatsapp_bot -f //Trackeo en tiempo real
 
 docker-compose down //Cerrar docker
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-openAI
-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

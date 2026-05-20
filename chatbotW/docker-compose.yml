@@ -14,6 +14,8 @@ services:
       - ./audios:/app/audios
       - ./vectorstore:/app/vectorstore
       - ./cache:/app/cache
+      - ./logs:/app/logs
+      - ./config_bot.json:/app/config_bot.json
 
   evolution-api:
     image: evoapicloud/evolution-api:v2.3.7

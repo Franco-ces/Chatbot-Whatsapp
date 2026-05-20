@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 import json
+import time
 
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_community.vectorstores import FAISS
@@ -18,7 +19,7 @@ from audio_handler import AudioProcessor
 # SDK GEMINI
 from google import genai
 from google.genai import types
-from prompts import PROMPT_GUARDRAIL_ENTRADA, PROMPT_GUARDRAIL_SALIDA
+from prompts import PROMPT_GUARDRAIL_ENTRADA, PROMPT_GUARDRAIL_SALIDA, PROMPT_ASISTENTE_VIRTUAL
 
 class RAGLangchain:
     def __init__(self, api_key, folder_path="PDFs"):
@@ -33,9 +34,9 @@ class RAGLangchain:
         # Inicializamos el cliente aquí para usarlo en el método preguntar
         self.client = genai.Client(api_key=self.api_key)
 
-        # Inicializamos el modelo de embeddings de Google (768D)
+        # Inicializamos el modelo de embeddings de Google
         self.embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004", 
+            model="models/gemini-embedding-2-preview", 
             google_api_key=self.api_key
         )
 
@@ -49,26 +50,7 @@ class RAGLangchain:
         self.llm_guardrail = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", google_api_key=self.api_key)
         
         # 2. Definimos el prompt base
-        self.prompt_template = ChatPromptTemplate.from_template("""
-Eres un Asistente Virtual de Atención al Cliente profesional y preciso. 
-Tu objetivo es ayudar a los usuarios basándote EXCLUSIVAMENTE en el contexto proporcionado.
-
-### REGLAS CRÍTICAS DE COMPORTAMIENTO:
-1. NO INVENTES INFORMACIÓN: Si la respuesta no está presente de forma explícita en el contexto, indica amablemente: "Lo siento, no cuento con esa información específica. Puedes ponerte en contacto a través del correo electrónico {email} o llamando al teléfono {telefono}."
-2. LÍMITE DE CONTEXTO: Utiliza únicamente los fragmentos de texto entregados abajo. No utilices conocimientos externos ni supongas detalles que no estén escritos.
-3. PRECISIÓN TÉCNICA: Si el contexto menciona precios, códigos o especificaciones, cítalos con exactitud.
-4. TONO: Mantén un tono servicial, profesional y directo.
-5. CASO DE RESPUESTA ERRONEA : si habla sobre el producto, respondele de manera profecional que no cuentas con esa informacion, no incluyas cosas como que no se encuentra en tu "memoria o contexto" intenta responder como una persona que no cuentas con esa informacion.
-
-### CONTEXTO DE DOCUMENTOS:
-{context}
-
-### INSTRUCCIÓN DE CONSULTA:
-Analiza el contexto anterior y responde la siguiente pregunta del cliente. Si la pregunta es un saludo, responde cordialmente y pregunta en qué puedes ayudar.
-
-Pregunta del Cliente: {input}
-
-Respuesta del Asistente:""")
+        self.prompt_template = PROMPT_ASISTENTE_VIRTUAL
 
     def _setup_retriever(self):
         # Intentamos cargar el vectorstore existente con el nuevo modelo
@@ -90,7 +72,8 @@ Respuesta del Asistente:""")
             
             texts = [doc.page_content for doc in splits]
             vectors = []
-            for text in texts:
+            print(f"Procesando {len(texts)} fragmentos de texto. Esto puede demorar por los límites de la cuenta gratuita...")
+            for i, text in enumerate(texts):
                 cached = self.cache.get(text)
                 if cached is not None:
                     vectors.append(np.array(cached))
@@ -172,22 +155,27 @@ Respuesta del Asistente:""")
         #lee el disco por si la interfaz cambió algo
         self.config_manager.cargar()
 
-        # Prompt para Gemini
-        prompt_final = self.prompt_template.format(
+        # Preparamos las instrucciones de sistema sin los envoltorios de Langchain
+        instrucciones_sistema = self.prompt_template.format(
             context=contexto_docs,
             input=texto_para_buscar if texto_para_buscar else "Responde a la duda del audio.",
             email=self.config_manager.config["email"],     
             telefono=self.config_manager.config["telefono"]
         )
 
+        mensaje_usuario = texto_para_buscar if texto_para_buscar else "Audio adjunto. Por favor responder."
+
         contenidos_gemini = []
         if audio_part:
             contenidos_gemini.append(audio_part)
-        contenidos_gemini.append(prompt_final)
+        contenidos_gemini.append(mensaje_usuario)
 
         response = self.client.models.generate_content(
             model="gemini-3.1-flash-lite",
-            contents=contenidos_gemini
+            contents=contenidos_gemini,
+            config=types.GenerateContentConfig(
+                system_instruction=instrucciones_sistema
+            )
         )
         respuesta_texto = response.text
 
