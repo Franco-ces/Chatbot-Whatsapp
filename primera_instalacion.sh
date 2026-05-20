@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Nos aseguramos de entrar a la carpeta del proyecto donde está el docker-compose.yml
+cd "$(dirname "$0")/chatbotW"
+
 # Definimos algunos colores para que la consola se lea mejor
 CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
@@ -8,7 +11,8 @@ RED='\033[0;31m'
 NC='\033[0m' # Sin color
 
 echo -e "${CYAN}1. Levantando y construyendo contenedores desde cero...${NC}"
-docker-compose up -d --build
+# Usamos el comando moderno con espacio que sí funciona con tu Python 3.12:
+docker compose up -d --build
 
 echo -e "${YELLOW}2. Esperando 15 segundos para que Postgres y Evolution API se inicien correctamente...${NC}"
 sleep 15
