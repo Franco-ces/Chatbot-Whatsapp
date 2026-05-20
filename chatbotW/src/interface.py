@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import set_key
 import uvicorn
 import os
 import shutil
@@ -41,9 +42,17 @@ async def serve_frontend():
 @app.post("/api/apikey")
 async def guardar_api_key(key: str = Form(...)):
     try:
-        with open(ENV_FILE, "w", encoding="utf-8") as f:
-            f.write(f"GOOGLE_API_KEY={key}")
-        return {"status": "success", "message": "API Key guardada en .env"}
+        # 1. dotenv se encarga de actualizar el archivo físico de forma segura
+        # Preserva todas las demás variables existentes.
+        dotenv.set_key(str(ENV_FILE), "GOOGLE_API_KEY", key)
+        
+        # 2. ACTUALIZACIÓN EN VIVO (Hot-Reload)
+        # Seteamos la variable en la memoria del proceso actual para que el bot
+        # la lea de inmediato en la próxima consulta sin tener que reiniciar.
+        os.environ["GOOGLE_API_KEY"] = key
+        
+        return {"status": "success", "message": "API Key guardada y actualizada en vivo"}
+        
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
