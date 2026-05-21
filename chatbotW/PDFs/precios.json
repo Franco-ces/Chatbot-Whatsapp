@@ -1,0 +1,37 @@
+[
+  {
+    "id": "PROD-001",
+    "producto": "Notebook HP Pavilion 15",
+    "categoria": "Notebooks",
+    "precio": 850000,
+    "stock": 15
+  },
+  {
+    "id": "PROD-002",
+    "producto": "Samsung Galaxy A54 5G",
+    "categoria": "Celulares",
+    "precio": 520000,
+    "stock": 22
+  },
+  {
+    "id": "PROD-003",
+    "producto": "Auriculares Sony WH-1000XM6",
+    "categoria": "Audio",
+    "precio": 410000,
+    "stock": 8
+  },
+  {
+    "id": "PROD-004",
+    "producto": "Funda Silicona Samsung A54",
+    "categoria": "Accesorios",
+    "precio": 12000,
+    "stock": 50
+  },
+  {
+    "id": "PROD-005",
+    "producto": "Cargador Rápido Tipo C 25W",
+    "categoria": "Accesorios",
+    "precio": 25000,
+    "stock": 35
+  }
+]

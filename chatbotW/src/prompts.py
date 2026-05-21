@@ -32,9 +32,16 @@ Evaluación:"""
 
 PROMPT_GUARDRAIL_SALIDA = """
 Evalúa si la siguiente respuesta del asistente es adecuada, profesional y no inventa información.
+Comprueba estrictamente que la respuesta esté basada ÚNICAMENTE en el siguiente contexto.
+Si la respuesta afirma un dato técnico que no está en el contexto, recházala.
+Una respuesta que dice 'no tengo información' o similares ES VÁLIDA y debe ser APROBADA.
+Solo rechaza si contiene insultos, lenguaje inapropiado, o inventa datos fuera del contexto.
 Responde ÚNICAMENTE con 'APROBADO' o 'RECHAZADO'.
 
-Respuesta: {output}
+Contexto original:
+{context}
+
+Respuesta del asistente: {output}
 Evaluación:"""
 
 def obtener_prompt_rag():

@@ -28,7 +28,7 @@ class RAGLangchain:
         self.folder_path = Path(__file__).resolve().parent.parent / folder_path
         self.cache = EmbeddingCache()
 
-        #gestion de donde se guarda el Mail y Telefono del cliente
+        # gestion de donde se guarda el Mail y Telefono del cliente
         self.config_manager = ConfigManager()
         
         # Inicializamos el cliente aquí para usarlo en el método preguntar
@@ -67,7 +67,8 @@ class RAGLangchain:
                 loader = PyMuPDFLoader(str(pdf))
                 docs.extend(loader.load())
 
-            splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+            # Subimos a 1000 el chunk de los manuales para mejor contexto narrativo
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
             splits = splitter.split_documents(docs)
             
             texts = [doc.page_content for doc in splits]
@@ -90,12 +91,9 @@ class RAGLangchain:
 
     def actualizar_memoria(self):
         """
-        Verifica rápidamente si hubo cambios en la carpeta de PDFs.
+        Verifica rápidamente si hubo cambios en la carpeta de PDFs o Precios.
         """
-        # 1. Calculamos el hash de los archivos actuales
         hash_actual = VectorStoreManager.calcular_hash_archivos(self.folder_path)
-        
-        # 2. Leemos el hash guardado
         metadata_path = VectorStoreManager._get_metadata_path()
         hash_guardado = None
         
@@ -104,9 +102,8 @@ class RAGLangchain:
                 metadata = json.load(f)
                 hash_guardado = metadata.get("hash")
         
-        # 3. Si hay cambios, recargamos el retriever
         if hash_actual != hash_guardado:
-            print("🔄 Cambio detectado en los PDFs. Actualizando memoria del RAG...")
+            print("🔄 Cambio detectado en los archivos. Actualizando memoria del RAG...")
             self.retriever = self._setup_retriever()
             print("✅ Memoria RAG actualizada con éxito.")
             return True
@@ -115,9 +112,9 @@ class RAGLangchain:
 
     def preguntar(self, query_text=None, audio_bytes=None, remitente=None):
         """
-        Maneja entradas de texto, de audio en memoria o ambas.
+        Maneja entradas de texto, de audio en memoria o ambas de forma híbrida (RAG + JSON).
         """
-        texto_para_buscar = query_text
+        texto_para_buscar = query_text if query_text else ""
         transcripcion_detectada = query_text
         audio_part = None
         
@@ -136,15 +133,14 @@ class RAGLangchain:
             return transcripcion_detectada, "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso."
         # ----------------------------
 
-        # Búsqueda en RAG
-        # Búsqueda en RAG
+        # 1. BÚSQUEDA EN RAG (Para manuales e información conceptual de los PDFs)
         busqueda_final = texto_para_buscar if texto_para_buscar else "productos"
         docs = self.retriever.invoke(busqueda_final)
         contexto_docs = "\n\n".join(doc.page_content for doc in docs)
 
         # ====== LOG EN TIEMPO REAL PARA DEBUGGING ======
         print("\n" + "="*60, flush=True)
-        print(f"🔍 BÚSQUEDA EXACTA: '{busqueda_final}'", flush=True)
+        print(f"🔍 BÚSQUEDA EXACTA EN PDFs: '{busqueda_final}'", flush=True)
         print(f"📄 FRAGMENTOS ENCONTRADOS EN PDFs: {len(docs)}", flush=True)
         for i, doc in enumerate(docs):
             print(f"\n--- CHUNK {i+1} ---", flush=True)
@@ -152,12 +148,38 @@ class RAGLangchain:
         print("="*60 + "\n", flush=True)
         # ===============================================
 
-        #lee el disco por si la interfaz cambió algo
+        # 2. BÚSQUEDA DIRECTA EN EL JSON DE PRECIOS
+        contexto_precios = ""
+        ruta_precios = self.folder_path / "precios.json"
+        
+        if ruta_precios.exists():
+            try:
+                with open(ruta_precios, "r", encoding="utf-8") as f:
+                    lista_precios = json.load(f)
+                
+                # Buscamos coincidencias de palabras clave en el texto del usuario
+                coincidencias = []
+                for item in lista_precios:
+                    if item["producto"].lower() in texto_para_buscar.lower():
+                        coincidencias.append(f"- {item['producto']}: Precio: ${item['precio']} | Stock: {item['stock']} unidades.")
+                
+                if coincidencias:
+                    contexto_precios = "\nPrecios y Stock vigentes encontrados para la consulta:\n" + "\n".join(coincidencias)
+                else:
+                    # Si no hay coincidencia directa, inyectamos la lista completa de referencia
+                    contexto_precios = "\nLista completa de Precios, Stock y Productos de la empresa:\n" + json.dumps(lista_precios, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"⚠️ Error al leer el archivo precios.json: {e}")
+
+        # 3. COMBINAMOS AMBOS CONTEXTOS
+        contexto_total = f"--- MANUALES TÉCNICOS Y DETALLES ---\n{contexto_docs}\n\n--- INFORMACIÓN COMERCIAL (PRECIOS Y STOCK) ---\n{contexto_precios}"
+
+        # lee el disco por si la interfaz cambió algo
         self.config_manager.cargar()
 
-        # Preparamos las instrucciones de sistema sin los envoltorios de Langchain
+        # Preparamos las instrucciones de sistema pasándole el contexto unificado
         instrucciones_sistema = self.prompt_template.format(
-            context=contexto_docs,
+            context=contexto_total,
             input=texto_para_buscar if texto_para_buscar else "Responde a la duda del audio.",
             email=self.config_manager.config["email"],     
             telefono=self.config_manager.config["telefono"]
@@ -181,9 +203,13 @@ class RAGLangchain:
 
         # --- GUARDRAIL DE SALIDA ---
         cadena_salida = ChatPromptTemplate.from_template(PROMPT_GUARDRAIL_SALIDA) | self.llm_guardrail | StrOutputParser()
-        evaluacion_salida = cadena_salida.invoke({"output": respuesta_texto}).strip().upper()
+        evaluacion_salida = cadena_salida.invoke({
+            "output": respuesta_texto,
+            "context": contexto_total
+        }).strip().upper()
         
         if "RECHAZADO" in evaluacion_salida:
+            print(respuesta_texto)  # Log para debugging
             return transcripcion_detectada, "Lo siento, generé una respuesta que no cumple con mis parámetros de calidad. ¿Podés reformular tu consulta?"
         # ---------------------------
 
