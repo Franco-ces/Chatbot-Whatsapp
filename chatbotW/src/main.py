@@ -3,6 +3,8 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, BackgroundTasks
 from contextlib import asynccontextmanager
+import time
+from collections import defaultdict
 
 from rag_langchain_con_audio import RAGLangchain
 from whatsapp_client import WhatsAppClient
@@ -12,6 +14,27 @@ from bot_service import procesar_mensaje_bot
 # Variables globales para nuestras instancias
 rag = None
 wa_client = None
+
+# ---- CONFIGURACIÓN DE RATE LIMITING ----
+MAX_MENSAJES = 5        # Máximo de mensajes permitidos
+TIEMPO_VENTANA = 60     # En un rango de X segundos
+
+# Diccionario en memoria para rastrear los mensajes por usuario
+# Formato: { "numero": [timestamp1, timestamp2, ...] }
+historial_mensajes = defaultdict(list)
+
+def usuario_excedido(remitente: str) -> bool:
+    """Verifica si el usuario excedió el límite de mensajes por frecuencia."""
+    ahora = time.time()
+    # Limpiamos los timestamps viejos que ya están fuera de la ventana de tiempo
+    historial_mensajes[remitente] = [t for t in historial_mensajes[remitente] if ahora - t < TIEMPO_VENTANA]
+    
+    if len(historial_mensajes[remitente]) >= MAX_MENSAJES:
+        return True
+        
+    # Si no excedió, registramos el nuevo mensaje
+    historial_mensajes[remitente].append(ahora)
+    return False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,11 +76,19 @@ async def webhook(payload: EvolutionWebhook, background_tasks: BackgroundTasks):
     datos = extraer_datos_limpios(payload)
     
     if datos:
+        remitente = datos["remitente"]
+        
+        # Validar Rate Limit por usuario
+        if usuario_excedido(remitente):
+            print(f"[RATE LIMIT] Usuario {remitente} ignorado por exceso de mensajes.")
+            wa_client.enviar_mensaje(remitente, "Estás enviando mensajes muy rápido. Por favor, espera un minuto.")
+            return {"status": "rate_limited"}
+
         background_tasks.add_task(
             procesar_mensaje_bot, 
             rag_instance=rag, 
             wa_client=wa_client, 
-            remitente=datos["remitente"],
+            remitente=remitente,
             texto=datos["texto"],
             mensaje_data=datos["mensaje_data"],
             es_audio=datos["es_audio"]
