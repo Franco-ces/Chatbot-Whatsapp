@@ -292,21 +292,15 @@
                                 <button onclick="loadLogs()"
                                         class="text-xs bg-gray-200 hover:bg-gray-300 py-1 px-2 rounded">🔄</button>
                             </h2>
+                            <input id="log-search" type="text" placeholder="Buscar por nombre..."
+                                   class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm mb-3"
+                                   oninput="searchLogs(this.value)">
                             <ul id="log-list" class="space-y-2 max-h-96 overflow-y-auto">
                                 <li class="text-gray-500 italic">Cargando...</li>
                             </ul>
                         </div>
                         <div class="md:col-span-2">
                             <h2 id="log-title" class="text-lg font-semibold mb-4 text-gray-700">Selecciona un archivo para leer</h2>
-
-                            <!-- Phone filter — hidden until a log file is selected -->
-                            <div id="log-filter" class="hidden mb-4 p-3 bg-gray-50 rounded border border-gray-200">
-                                <label class="text-sm font-medium text-gray-700 mr-2">Filtrar por teléfono:</label>
-                                <select id="phone-filter" class="border border-gray-300 rounded px-3 py-1.5 text-sm"
-                                        onchange="applyPhoneFilter()">
-                                    <option value="">Todos los mensajes</option>
-                                </select>
-                            </div>
 
                             <div id="log-viewer"
                                  class="w-full h-[500px] bg-wpp p-4 rounded overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-300">
@@ -727,9 +721,13 @@
             const list = document.getElementById('log-list');
             try {
                 const res = await apiFetch('/api/logs');
+                if (!res.ok) {
+                    list.innerHTML = "<li class='p-2 text-red-500'>Error del servidor</li>";
+                    return;
+                }
                 const data = await res.json();
                 list.innerHTML = "";
-                if(data.logs.length === 0) { list.innerHTML = "<li class='p-2 text-gray-500 italic'>No hay logs</li>"; return; }
+                if(!data.logs || data.logs.length === 0) { list.innerHTML = "<li class='p-2 text-gray-500 italic'>No hay logs</li>"; return; }
                 data.logs.forEach(log => {
                     const li = document.createElement('li');
                     const btn = document.createElement('button');
@@ -746,40 +744,48 @@
 
         let currentLogFile = '';
 
-        async function loadPhones(filename) {
+        async function searchLogs(query) {
+            const list = document.getElementById('log-list');
+            if (!query.trim()) {
+                loadLogs();
+                return;
+            }
+
             try {
-                const res = await apiFetch(`/api/logs/${filename}/phones`);
+                const res = await apiFetch(`/api/logs/search?q=${encodeURIComponent(query)}`);
+                if (!res.ok) {
+                    list.innerHTML = '<li class="text-red-500 italic">Error del servidor</li>';
+                    return;
+                }
                 const data = await res.json();
-                const select = document.getElementById('phone-filter');
-                select.innerHTML = '<option value="">Todos los mensajes</option>';
-                data.phones.forEach(phone => {
-                    const opt = document.createElement('option');
-                    opt.value = phone;
-                    opt.textContent = phone;
-                    select.appendChild(opt);
+                list.innerHTML = '';
+                if (!data.results || data.results.length === 0) {
+                    list.innerHTML = '<li class="text-gray-500 italic">Sin resultados</li>';
+                    return;
+                }
+                data.results.forEach(r => {
+                    const li = document.createElement('li');
+                    li.className = 'p-2 bg-gray-100 rounded cursor-pointer hover:bg-blue-100 transition text-sm';
+                    li.textContent = r.filename;
+                    li.onclick = () => readLog(r.filename);
+                    list.appendChild(li);
                 });
             } catch (err) {
-                console.error('Error al cargar teléfonos:', err);
+                list.innerHTML = '<li class="text-red-500 italic">Error al buscar</li>';
+                console.error('searchLogs error:', err);
             }
         }
 
-        function applyPhoneFilter() {
-            const phone = document.getElementById('phone-filter').value;
-            if (currentLogFile) {
-                renderLog(currentLogFile, phone);
-            }
-        }
-
-        async function renderLog(filename, phone) {
+        async function renderLog(filename) {
             const viewer = document.getElementById('log-viewer');
             viewer.innerHTML = '<div class="text-center text-gray-500 text-sm mt-4">Cargando conversación...</div>';
 
             try {
-                let url = `/api/logs/${filename}`;
-                if (phone) {
-                    url += `?phone=${encodeURIComponent(phone)}`;
+                const res = await apiFetch(`/api/logs/${filename}`);
+                if (!res.ok) {
+                    viewer.innerHTML = '<div class="text-center text-red-500 font-bold mt-4">Error del servidor al leer el archivo.</div>';
+                    return;
                 }
-                const res = await apiFetch(url);
                 const data = await res.json();
 
                 const lines = data.contenido.split('\n');
@@ -852,14 +858,7 @@
         async function readLog(filename) {
             currentLogFile = filename;
             document.getElementById('log-title').innerText = `📄 Viendo: ${filename}`;
-
-            // Show filter and load phones
-            const filterDiv = document.getElementById('log-filter');
-            filterDiv.classList.remove('hidden');
-            document.getElementById('phone-filter').value = '';
-            await loadPhones(filename);
-
-            await renderLog(filename, '');
+            await renderLog(filename);
         }
 
         /* ─── Download helper (blob via apiFetch) ──────────────────── */

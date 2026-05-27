@@ -41,6 +41,7 @@ def extraer_datos_limpios(payload: EvolutionWebhook):
 
     return {
         "remitente": payload.data.key.remoteJid,
+        "push_name": payload.data.pushName or "",
         "texto": texto,
         "es_audio": es_audio,
         "mensaje_data": {
