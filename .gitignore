@@ -20,3 +20,24 @@ build/
 .envrc
 auth.json
 secrets.yaml
+
+# agents.md
+.agents
+# Local AI runtime state
+.atl/
+
+# SDD
+openspec/
+skills-lock.json
+
+# Generated / cache
+chatbotW/cache/
+chatbotW/vectorstore/
+chatbotW/audios/
+chatbotW/logs/
+
+# Windows zone identifiers
+*:Zone.Identifier
+
+# Tests (cached)
+chatbotW/.pytest_cache/

@@ -23,7 +23,14 @@ class VectorStoreManager:
 
     @staticmethod
     def calcular_hash_archivos(folder_path):
-        archivos = sorted(Path(folder_path).glob("*.pdf"))
+        # Busca dinámicamente tanto PDFs como el JSON de precios
+        extensiones = ["*.pdf", "*.json"]
+        archivos = []
+        
+        for ext in extensiones:
+            archivos.extend(Path(folder_path).glob(ext))
+            
+        archivos = sorted(archivos)
         hash_total = hashlib.md5()
 
         for archivo in archivos:
@@ -37,10 +44,10 @@ class VectorStoreManager:
         vs_path = VectorStoreManager._get_vectorstore_path()
         metadata_path = VectorStoreManager._get_metadata_path()
 
-        # 🔹 Guardar FAISS
+        # Guardar FAISS
         vectorstore.save_local(str(vs_path))
 
-        # 🔹 Guardar hash
+        # Guardar hash
         hash_actual = VectorStoreManager.calcular_hash_archivos(folder_path)
 
         with open(metadata_path, "w", encoding="utf-8") as f:
@@ -54,8 +61,12 @@ class VectorStoreManager:
         if not vs_path.exists() or not metadata_path.exists():
             return None
 
-        with open(metadata_path, "r", encoding="utf-8") as f:
-            metadata = json.load(f)
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"Advertencia: metadata.json corrupto ({e}). Reconstruyendo...")
+            return None
 
         hash_guardado = metadata.get("hash")
         hash_actual = VectorStoreManager.calcular_hash_archivos(folder_path)
@@ -66,8 +77,12 @@ class VectorStoreManager:
 
         print("Vectorstore actualizado. Cargando desde disco...")
 
-        return FAISS.load_local(
-            str(vs_path),
-            embeddings,
-            allow_dangerous_deserialization=True
-        )
+        try:
+            return FAISS.load_local(
+                str(vs_path),
+                embeddings,
+                allow_dangerous_deserialization=True
+            )
+        except Exception as e:
+            print(f"Advertencia: no se pudo cargar el vectorstore ({e}). Reconstruyendo...")
+            return None

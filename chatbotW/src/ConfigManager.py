@@ -26,9 +26,12 @@ class ConfigManager:
                 self.config = json.load(f)
         except Exception as e:
             print(f"⚠️ Error al cargar configuración: {e}")
-            # Si falla la lectura, aseguramos valores mínimos para que no rompa el RAG
             if not self.config:
                 self.config = {"email": "", "telefono": "", "bot_phone": ""}
+        finally:
+            self.config.setdefault("email", "")
+            self.config.setdefault("telefono", "")
+            self.config.setdefault("bot_phone", "")
 
     def guardar(self, nuevo_email=None, nuevo_tel=None, nuevo_bot_phone=None):
         """Actualiza los valores en memoria y los persiste en el disco."""
