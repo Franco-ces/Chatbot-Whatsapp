@@ -285,6 +285,20 @@
     <!-- ═══════════════════════════════════════════════════════════════
          ALPINE.JS STORE
          ═══════════════════════════════════════════════════════════════ -->
+    <!-- ═══════════════════════════════════════════════════════════════
+         API HELPER — agrega Bearer token a todas las llamadas
+         ═══════════════════════════════════════════════════════════════ -->
+    <script>
+        function apiFetch(url, options = {}) {
+            const token = localStorage.getItem('token');
+            const headers = options.headers || {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            return fetch(url, { ...options, headers });
+        }
+    </script>
+
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.store('auth', {
@@ -292,7 +306,7 @@
 
                 async verify() {
                     try {
-                        const res = await fetch('/api/auth/verify', {
+                        const res = await apiFetch('/api/auth/verify', {
                             headers: { 'Authorization': `Bearer ${this.token}` }
                         });
                         const data = await res.json();
@@ -310,7 +324,7 @@
                     const fd = new FormData();
                     fd.append('username', username);
                     fd.append('password', password);
-                    const res = await fetch('/api/auth/login', { method: 'POST', body: fd });
+                    const res = await apiFetch('/api/auth/login', { method: 'POST', body: fd });
                     if (!res.ok) {
                         const err = await res.json();
                         throw new Error(err.detail || 'Credenciales inválidas');
@@ -342,7 +356,7 @@
                     this.loading = true;
                     this.status = '';
                     try {
-                        const res = await fetch(`/api/csvs/${filename}/data`);
+                        const res = await apiFetch(`/api/csvs/${filename}/data`);
                         const data = await res.json();
                         this.headers = data.headers;
                         this.rows = data.rows;
@@ -359,7 +373,7 @@
                     this.status = '⏳ Guardando...';
                     this.statusClass = 'text-blue-500';
                     try {
-                        const res = await fetch(`/api/csvs/${this.filename}/data`, {
+                        const res = await apiFetch(`/api/csvs/${this.filename}/data`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -441,7 +455,7 @@
             const formData = new FormData();
             formData.append("key", key);
             try {
-                const res = await fetch('/api/apikey', { method: 'POST', body: formData });
+                const res = await apiFetch('/api/apikey', { method: 'POST', body: formData });
                 const data = await res.json();
                 statusLabel.innerText = data.message;
                 statusLabel.className = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
@@ -454,7 +468,7 @@
 
         async function loadContactConfig() {
             try {
-                const res = await fetch('/api/config');
+                const res = await apiFetch('/api/config');
                 const data = await res.json();
 
                 document.getElementById('config-email').value = data.email || '';
@@ -495,7 +509,7 @@
             if(phoneStr) formData.append("telefono", telefonoFinal);
 
             try {
-                const res = await fetch('/api/config', { method: 'POST', body: formData });
+                const res = await apiFetch('/api/config', { method: 'POST', body: formData });
                 const data = await res.json();
                 statusLabel.innerText = data.message;
                 statusLabel.className = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
@@ -510,7 +524,7 @@
         async function loadPdfs() {
             const list = document.getElementById('pdf-list');
             try {
-                const res = await fetch('/api/pdfs');
+                const res = await apiFetch('/api/pdfs');
                 const data = await res.json();
                 list.innerHTML = "";
                 if(data.pdfs.length === 0) { list.innerHTML = "<li class='p-3 text-gray-500 italic'>📁 Carpeta vacía</li>"; return; }
@@ -520,7 +534,7 @@
                     li.innerHTML = `
                         <span class="font-medium text-gray-700 mr-2">📄 ${pdf}</span>
                         <div class="flex gap-2 shrink-0">
-                            <a href="/api/pdfs/${pdf}" download="${pdf}" class="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1 rounded transition-colors text-xl leading-none" title="Descargar">⬇️</a>
+                            <button onclick="downloadFile('/api/pdfs/${pdf}', '${pdf}')" class="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1 rounded transition-colors text-xl leading-none" title="Descargar">⬇️</button>
                             <button onclick="deletePdf('${pdf}')" class="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded transition-colors text-xl leading-none" title="Eliminar">✖</button>
                         </div>
                     `;
@@ -547,7 +561,7 @@
                 formData.append("files", fileInput.files[i]);
             }
             try {
-                await fetch('/api/pdfs', { method: 'POST', body: formData });
+                await apiFetch('/api/pdfs', { method: 'POST', body: formData });
                 statusLabel.innerText = "✅ Subida exitosa";
                 statusLabel.className = "mt-3 text-green-600 text-sm font-medium h-5";
                 fileInput.value = "";
@@ -563,7 +577,7 @@
         async function deletePdf(filename) {
             if(!confirm(`¿Seguro que deseas eliminar ${filename}?`)) return;
             try {
-                await fetch(`/api/pdfs/${filename}`, { method: 'DELETE' });
+                await apiFetch(`/api/pdfs/${filename}`, { method: 'DELETE' });
                 loadPdfs();
             } catch (err) {
                 alert("Error al borrar el archivo");
@@ -573,7 +587,7 @@
         async function loadLogs() {
             const list = document.getElementById('log-list');
             try {
-                const res = await fetch('/api/logs');
+                const res = await apiFetch('/api/logs');
                 const data = await res.json();
                 list.innerHTML = "";
                 if(data.logs.length === 0) { list.innerHTML = "<li class='p-2 text-gray-500 italic'>No hay logs</li>"; return; }
@@ -598,7 +612,7 @@
             viewer.innerHTML = '<div class="text-center text-gray-500 text-sm mt-4">Cargando conversación...</div>';
 
             try {
-                const res = await fetch(`/api/logs/${filename}`);
+                const res = await apiFetch(`/api/logs/${filename}`);
                 const data = await res.json();
 
                 const lines = data.contenido.split('\n');
@@ -668,12 +682,30 @@
             }
         }
 
+        /* ─── Download helper (blob via apiFetch) ──────────────────── */
+        async function downloadFile(url, filename) {
+            try {
+                const res = await apiFetch(url);
+                if (!res.ok) throw new Error('Error al descargar');
+                const blob = await res.blob();
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            } catch (err) {
+                alert('Error al descargar: ' + err.message);
+            }
+        }
+
         /* ─── CSV Functions ─────────────────────────────────────────── */
 
         async function loadCsvs() {
             const list = document.getElementById('csv-list');
             try {
-                const res = await fetch('/api/csvs');
+                const res = await apiFetch('/api/csvs');
                 const data = await res.json();
                 list.innerHTML = "";
                 if(data.csvs.length === 0) { list.innerHTML = "<li class='p-3 text-gray-500 italic'>📁 Carpeta vacía</li>"; return; }
@@ -683,7 +715,7 @@
                     li.innerHTML = `
                         <span class="font-medium text-gray-700 mr-2 cursor-pointer hover:text-blue-600" onclick="editCsv('${csv}')">📄 ${csv}</span>
                         <div class="flex gap-2 shrink-0">
-                            <a href="/api/csvs/${csv}" download="${csv}" class="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1 rounded transition-colors text-xl leading-none" title="Descargar">⬇️</a>
+                            <button onclick="downloadFile('/api/csvs/${csv}', '${csv}')" class="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1 rounded transition-colors text-xl leading-none" title="Descargar">⬇️</button>
                             <button onclick="deleteCsv('${csv}')" class="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded transition-colors text-xl leading-none" title="Eliminar">✖</button>
                         </div>
                     `;
@@ -710,7 +742,7 @@
                 formData.append("files", fileInput.files[i]);
             }
             try {
-                await fetch('/api/csvs', { method: 'POST', body: formData });
+                await apiFetch('/api/csvs', { method: 'POST', body: formData });
                 statusLabel.innerText = "✅ Subida exitosa";
                 statusLabel.className = "mt-3 text-green-600 text-sm font-medium h-5";
                 fileInput.value = "";
@@ -726,7 +758,7 @@
         async function deleteCsv(filename) {
             if(!confirm(`¿Seguro que deseas eliminar ${filename}?`)) return;
             try {
-                await fetch(`/api/csvs/${filename}`, { method: 'DELETE' });
+                await apiFetch(`/api/csvs/${filename}`, { method: 'DELETE' });
                 loadCsvs();
             } catch (err) {
                 alert("Error al borrar el archivo");
