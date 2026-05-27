@@ -252,10 +252,19 @@
                                 </table>
                             </div>
 
-                            <div class="flex gap-3">
+                            <div class="flex gap-3 flex-wrap">
                                 <button @click="$store.csvEditor.save()" :disabled="$store.csvEditor.saving"
                                         class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors disabled:opacity-50"
                                         x-text="$store.csvEditor.saving ? 'Guardando...' : '💾 Guardar cambios'">
+                                </button>
+                                <button @click="$store.csvEditor.addRow()"
+                                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                                    ➕ Agregar fila
+                                </button>
+                                <button @click="$store.csvEditor.removeLastRow()"
+                                        class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors"
+                                        x-show="$store.csvEditor.rows.length > 0">
+                                    🗑️ Eliminar última fila
                                 </button>
                                 <button @click="$store.csvEditor.cancel()"
                                         class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded transition-colors">
@@ -435,10 +444,28 @@
                     }
                 },
 
+                addRow() {
+                    const empty = new Array(this.headers.length).fill('');
+                    this.rows.push(empty);
+                    this.markDirty();
+                },
+
+                removeLastRow() {
+                    if (this.rows.length === 0) return;
+                    if (this.dirty && !confirm('¿Eliminar la última fila?')) return;
+                    this.rows.pop();
+                    this.markDirty();
+                },
+
                 cancel() {
-                    if (this.dirty) {
-                        if (!confirm('Tenés cambios sin guardar. ¿Seguro que querés descartarlos?')) return;
-                    }
+                    if (this.dirty && !confirm('Descartar cambios?')) return;
+                    this.show = false;
+                    this.filename = '';
+                    this.headers = [];
+                    this.rows = [];
+                    this.dirty = false;
+                    this.status = '';
+                }
                     this.dirty = false;
                     this.show = false;
                     this.filename = '';
@@ -886,6 +913,14 @@
                 statusLabel.className = "mt-3 text-orange-500 text-sm font-medium h-5";
                 showToast('Seleccioná al menos un archivo CSV', 'error');
                 return;
+            }
+            for (let f of fileInput.files) {
+                if (!f.name.toLowerCase().endsWith('.csv')) {
+                    statusLabel.innerText = "❌ Solo se permiten archivos .csv";
+                    statusLabel.className = "mt-3 text-red-600 text-sm font-medium h-5";
+                    showToast(`"${f.name}" no es un archivo CSV`, 'error');
+                    return;
+                }
             }
             btn.disabled = true;
             btn.innerText = 'Subiendo...';
