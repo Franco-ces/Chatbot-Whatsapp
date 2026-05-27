@@ -56,7 +56,7 @@
          APP VIEW (autenticado)
          ═══════════════════════════════════════════════════════════════ -->
     <template x-if="$store.auth.token">
-        <div x-data="{ activeTab: 'config', botPhone: '', switchTab(tab) { if (Alpine.store('csvEditor')?.dirty && !confirm('Tenés cambios sin guardar en el CSV. ¿Descartarlos?')) return; this.activeTab = tab; if (tab === 'config') loadContactConfig(); if (tab === 'docs') { loadPdfs(); loadCsvs(); } if (tab === 'logs') loadLogs(); } }">
+        <div x-data="{ activeTab: 'config', switchTab(tab) { if (Alpine.store('csvEditor')?.dirty && !confirm('Tenés cambios sin guardar en el CSV. ¿Descartarlos?')) return; this.activeTab = tab; if (tab === 'config') loadContactConfig(); if (tab === 'docs') { loadPdfs(); loadCsvs(); } if (tab === 'logs') loadLogs(); } }" x-init="loadContactConfig()">
 
             <!-- NAVBAR -->
             <nav class="bg-green-700 text-white shadow-lg">
@@ -66,12 +66,13 @@
                         <span class="font-bold text-lg">Panel Admin</span>
                     </div>
                     <div class="flex items-center gap-3">
-                        <button @click="botPhone && window.open('https://wa.me/' + botPhone, '_blank')"
-                                :class="botPhone ? 'bg-green-600 hover:bg-green-500 cursor-pointer' : 'bg-green-800 opacity-50 cursor-not-allowed'"
-                                class="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
-                                :title="botPhone ? 'Abrir WhatsApp' : 'Configurá el número del bot'">
+                        <button @click="$store.app.botPhone && window.open('https://wa.me/' + $store.app.botPhone, '_blank')"
+                                :class="$store.app.botPhone ? 'bg-green-600 hover:bg-green-500 cursor-pointer' : 'bg-green-800 opacity-50 cursor-not-allowed'"
+                                :disabled="!$store.app.botPhone"
+                                :title="$store.app.botPhone ? 'Abrir WhatsApp' : 'Configurá el número del bot'"
+                                class="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
                             <span>📱</span>
-                            <span x-text="botPhone ? 'WhatsApp' : 'Sin configurar'"></span>
+                            <span x-text="$store.app.botPhone ? 'WhatsApp' : 'Sin configurar'"></span>
                         </button>
                         <button @click="$store.auth.logout()"
                                 class="bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-sm transition-colors">
@@ -269,11 +270,7 @@
                                         class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">
                                     ➕ Agregar fila
                                 </button>
-                                <button @click="$store.csvEditor.removeLastRow()"
-                                        class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors"
-                                        x-show="$store.csvEditor.rows.length > 0">
-                                    🗑️ Eliminar última
-                                </button>
+
                                 <button @click="$store.csvEditor.cancel()"
                                         class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded transition-colors">
                                     ❌ Cancelar
@@ -468,11 +465,6 @@
                     this.markDirty();
                 },
 
-                removeLastRow() {
-                    if (this.rows.length === 0) return;
-                    this.removeRow(this.rows.length - 1);
-                },
-
                 cancel() {
                     if (this.dirty && !confirm('Descartar cambios?')) return;
                     this.show = false;
@@ -604,11 +596,8 @@
 
                 const botPhone = data.bot_phone || '';
                 document.getElementById('config-bot-phone').value = botPhone;
-                // Sync to Alpine scope for navbar reactivity
-                const alpineRoot = document.querySelector('[x-data]');
-                if (alpineRoot && alpineRoot.__x) {
-                    alpineRoot.__x.$data.botPhone = botPhone;
-                }
+                // Sync to Alpine store for navbar reactivity
+                Alpine.store('app').botPhone = botPhone;
 
             } catch (err) {
                 console.error("Error al cargar la configuración de contacto", err);
@@ -644,12 +633,8 @@
                 statusLabel.className = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
                 showToast(data.message, data.status === "success" ? 'success' : 'error');
 
-                // Sync botPhone to Alpine navbar on success
-                if (data.status === "success") {
-                    const alpineRoot = document.querySelector('[x-data]');
-                    if (alpineRoot && alpineRoot.__x) {
-                        alpineRoot.__x.$data.botPhone = botPhone;
-                    }
+                // Sync botPhone to Alpine store for navbar reactivity
+                Alpine.store('app').botPhone = botPhone;
                 }
             } catch (err) {
                 statusLabel.innerText = "❌ Error al guardar datos";
