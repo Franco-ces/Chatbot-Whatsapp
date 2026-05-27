@@ -56,7 +56,7 @@
          APP VIEW (autenticado)
          ═══════════════════════════════════════════════════════════════ -->
     <template x-if="$store.auth.token">
-        <div x-data="{ activeTab: 'config', switchTab(tab) { if (Alpine.store('csvEditor')?.dirty && !confirm('Tenés cambios sin guardar en el CSV. ¿Descartarlos?')) return; this.activeTab = tab; if (tab === 'config') loadContactConfig(); if (tab === 'docs') { loadPdfs(); loadCsvs(); } if (tab === 'logs') loadLogs(); } }" x-init="loadContactConfig()">
+        <div x-data="{ activeTab: 'config', init() { this.$nextTick(() => loadContactConfig()) }, switchTab(tab) { if (Alpine.store('csvEditor')?.dirty && !confirm('Tenés cambios sin guardar en el CSV. ¿Descartarlos?')) return; this.activeTab = tab; if (tab === 'config') loadContactConfig(); if (tab === 'docs') { loadPdfs(); loadCsvs(); } if (tab === 'logs') loadLogs(); } }">
 
             <!-- NAVBAR -->
             <nav class="bg-green-700 text-white shadow-lg">
