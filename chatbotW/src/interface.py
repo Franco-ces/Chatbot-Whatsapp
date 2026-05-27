@@ -7,6 +7,12 @@ import os
 import shutil
 from pathlib import Path
 from typing import List
+from jose import jwt, JWTError
+from datetime import datetime, timedelta
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from fastapi.responses import JSONResponse
+import secrets
 
 # Importamos tu clase ConfigManager (asegurate de que ConfigManager.py esté en la misma carpeta)
 from ConfigManager import ConfigManager
@@ -29,6 +35,42 @@ ENV_FILE = ROOT_DIR / ".env"
 
 PDF_FOLDER.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ─── Auth Configuration ────────────────────────────────────────────────
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    SECRET_KEY = secrets.token_urlsafe(32)
+    os.environ["SECRET_KEY"] = SECRET_KEY
+    set_key(str(ENV_FILE), "SECRET_KEY", SECRET_KEY)
+
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
+
+EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/"}
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        # Skip excluded paths and non-API paths
+        if path in EXCLUDED_PATHS or not path.startswith("/api/"):
+            return await call_next(request)
+
+        auth = request.headers.get("Authorization")
+        if not auth or not auth.startswith("Bearer "):
+            return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+        token = auth.split(" ", 1)[1]
+        try:
+            jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        except JWTError:
+            return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
+
+        return await call_next(request)
+
+
+app.add_middleware(AuthMiddleware)
+# ────────────────────────────────────────────────────────────────────────
 
 # Instanciamos el manager de configuración
 config_manager = ConfigManager()
@@ -118,6 +160,35 @@ async def leer_log(filename: str):
         return {"contenido": contenido}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ─── Auth Endpoints ────────────────────────────────────────────────────
+@app.post("/api/auth/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    if username != ADMIN_USER or password != ADMIN_PASS:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    exp = datetime.utcnow() + timedelta(hours=24)
+    token = jwt.encode(
+        {"sub": username, "exp": exp},
+        SECRET_KEY,
+        algorithm="HS256",
+    )
+    return {"token": token}
+
+
+@app.get("/api/auth/verify")
+async def verify_token(request: Request):
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return {"valid": False}
+
+    token = auth.split(" ", 1)[1]
+    try:
+        jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return {"valid": True}
+    except JWTError:
+        return {"valid": False}
+# ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

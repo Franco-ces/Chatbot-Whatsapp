@@ -3,147 +3,296 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Administrativo RAG</title>
+    <title>Panel Admin - Chatbot WhatsApp</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
-        /* Estilo para emular el fondo de WhatsApp */
         .bg-wpp {
             background-color: #efeae2;
             background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d3cec8' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
+        [x-cloak] { display: none !important; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans min-h-screen">
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen" x-data x-init="$store.auth.verify()" x-cloak>
 
-    <div class="max-w-5xl mx-auto py-10 px-4">
-        <h1 class="text-3xl font-bold text-gray-900 mb-8 flex items-center gap-2">
-            🛠️ Panel Administrativo RAG
-        </h1>
-
-        <div class="flex space-x-1 border-b border-gray-300 mb-6">
-            <button onclick="showTab('tab-api')" id="btn-tab-api" class="px-6 py-3 bg-white text-blue-600 font-semibold rounded-t-lg shadow-sm border-b-2 border-blue-600 focus:outline-none transition-colors">🔑 Configuración</button>
-            <button onclick="showTab('tab-pdf')" id="btn-tab-pdf" class="px-6 py-3 bg-gray-200 text-gray-600 hover:bg-gray-300 font-semibold rounded-t-lg focus:outline-none transition-colors">📁 Documentos</button>
-            <button onclick="showTab('tab-logs')" id="btn-tab-logs" class="px-6 py-3 bg-gray-200 text-gray-600 hover:bg-gray-300 font-semibold rounded-t-lg focus:outline-none transition-colors">📜 Logs</button>
-        </div>
-
-        <div id="tab-api" class="tab-content bg-white p-6 rounded-lg shadow-md">
-            <!-- SECCIÓN API KEY -->
-            <h2 class="text-xl font-semibold mb-4">Configuración de Google API Key</h2>
-            <div class="flex gap-4">
-                <input type="text" id="api-key-input" placeholder="Pega tu clave aquí..." class="flex-1 border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
-                <button onclick="saveApiKey()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded transition-colors">Guardar en .env</button>
-            </div>
-            <p id="api-status" class="mt-3 font-medium text-sm h-5"></p>
-
-            <hr class="my-8 border-gray-200">
-
-            <!-- SECCIÓN: DATOS DE CONTACTO -->
-            <h2 class="text-xl font-semibold mb-4 text-gray-800">☎️ Variables de Contacto (Bot)</h2>
-            <p class="text-sm text-gray-500 mb-4">Estos datos se inyectarán dinámicamente en las respuestas de la IA.</p>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Correo de Soporte</label>
-                    <input type="email" id="config-email" placeholder="soporte@tuempresa.com" class="w-full border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+    <!-- ═══════════════════════════════════════════════════════════════
+         LOGIN VIEW (sin token)
+         ═══════════════════════════════════════════════════════════════ -->
+    <template x-if="!$store.auth.token">
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-600 to-green-800">
+            <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+                <div class="text-center mb-8">
+                    <div class="text-5xl mb-4">💬</div>
+                    <h1 class="text-2xl font-bold text-gray-800">Panel Admin</h1>
+                    <p class="text-gray-500 text-sm mt-1">Chatbot WhatsApp</p>
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Teléfono de Contacto</label>
-                    <div class="flex shadow-sm rounded">
-                        <select id="config-country-code" class="border border-gray-300 rounded-l px-2 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 border-r-0 cursor-pointer max-w-[180px]">
-                            <option value="+54">(ARG) +54</option>
-                            <option value="+56">(CHL) +56</option>
-                            <option value="+57">(COL) +57</option>
-                            <option value="+52">(MEX) +52</option>
-                            <option value="+51">(PER) +51</option>
-                            <option value="+598">(URY) +598</option>
-                            <option value="+58">(VEN) +58</option>
-                            <option value="+591">(BOL) +591</option>
-                            <option value="+595">(PRY) +595</option>
-                            <option value="+593">(ECU) +593</option>
-                            <option value="+1">(USA) +1</option>
-                            <option value="+34">(ESP) +34</option>
-                        </select>
-                        <input type="text" id="config-phone" placeholder="11 1234-5678" class="flex-1 border border-gray-300 rounded-r px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+
+                <form @submit.prevent="doLogin" x-data="loginForm">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
+                        <input type="text" x-model="username" placeholder="Ingresá tu usuario"
+                               class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                        <input type="password" x-model="password" placeholder="••••••••"
+                               class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+
+                    <button type="submit"
+                            class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50"
+                            x-text="loading ? 'Ingresando...' : 'Ingresar'"
+                            :disabled="loading">
+                    </button>
+
+                    <p x-show="error" x-text="error" class="text-red-600 text-sm text-center mt-3 font-medium"></p>
+                </form>
+            </div>
+        </div>
+    </template>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         APP VIEW (autenticado)
+         ═══════════════════════════════════════════════════════════════ -->
+    <template x-if="$store.auth.token">
+        <div x-data="{ activeTab: 'config' }">
+
+            <!-- NAVBAR -->
+            <nav class="bg-green-700 text-white shadow-lg">
+                <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">💬</span>
+                        <span class="font-bold text-lg">Panel Admin</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button class="bg-green-600 hover:bg-green-500 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
+                            <span>📱</span> WhatsApp
+                        </button>
+                        <button @click="$store.auth.logout()"
+                                class="bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-sm transition-colors">
+                            Cerrar sesión
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- TAB BAR -->
+            <div class="max-w-5xl mx-auto py-6 px-4">
+                <div class="flex space-x-1 border-b border-gray-300 mb-6">
+                    <button @click="activeTab = 'config'; loadContactConfig()"
+                            :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
+                            class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
+                        🔑 Configuración
+                    </button>
+                    <button @click="activeTab = 'docs'; loadPdfs()"
+                            :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
+                            class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
+                        📁 Documentos
+                    </button>
+                    <button @click="activeTab = 'logs'; loadLogs()"
+                            :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
+                            class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
+                        📜 Logs
+                    </button>
+                </div>
+
+                <!-- ─── TAB: Configuración ─── -->
+                <div x-show="activeTab === 'config'" class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-semibold mb-4">Configuración de Google API Key</h2>
+                    <div class="flex gap-4">
+                        <input type="text" id="api-key-input" placeholder="Pega tu clave aquí..."
+                               class="flex-1 border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <button onclick="saveApiKey()"
+                                class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded transition-colors">
+                            Guardar en .env
+                        </button>
+                    </div>
+                    <p id="api-status" class="mt-3 font-medium text-sm h-5"></p>
+
+                    <hr class="my-8 border-gray-200">
+
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">☎️ Variables de Contacto (Bot)</h2>
+                    <p class="text-sm text-gray-500 mb-4">Estos datos se inyectarán dinámicamente en las respuestas de la IA.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Correo de Soporte</label>
+                            <input type="email" id="config-email" placeholder="soporte@tuempresa.com"
+                                   class="w-full border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Teléfono de Contacto</label>
+                            <div class="flex shadow-sm rounded">
+                                <select id="config-country-code"
+                                        class="border border-gray-300 rounded-l px-2 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 border-r-0 cursor-pointer max-w-[180px]">
+                                    <option value="+54">(ARG) +54</option>
+                                    <option value="+56">(CHL) +56</option>
+                                    <option value="+57">(COL) +57</option>
+                                    <option value="+52">(MEX) +52</option>
+                                    <option value="+51">(PER) +51</option>
+                                    <option value="+598">(URY) +598</option>
+                                    <option value="+58">(VEN) +58</option>
+                                    <option value="+591">(BOL) +591</option>
+                                    <option value="+595">(PRY) +595</option>
+                                    <option value="+593">(ECU) +593</option>
+                                    <option value="+1">(USA) +1</option>
+                                    <option value="+34">(ESP) +34</option>
+                                </select>
+                                <input type="text" id="config-phone" placeholder="11 1234-5678"
+                                       class="flex-1 border border-gray-300 rounded-r px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="saveContactConfig()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
+                        Guardar Datos
+                    </button>
+                    <p id="config-status" class="mt-3 font-medium text-sm h-5"></p>
+                </div>
+
+                <!-- ─── TAB: Documentos ─── -->
+                <div x-show="activeTab === 'docs'" class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                        <div>
+                            <h2 class="text-xl font-semibold mb-4">📤 Subir Nuevos</h2>
+                            <input type="file" id="pdf-upload" multiple accept=".pdf"
+                                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 rounded p-2">
+                            <button onclick="uploadPdfs()"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
+                                🚀 Cargar al servidor
+                            </button>
+                            <p id="upload-status" class="mt-3 font-medium text-sm h-5"></p>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-semibold mb-4 flex justify-between items-center">
+                                <span>📥 Archivos en Servidor</span>
+                                <button onclick="loadPdfs()"
+                                        class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded">
+                                    🔄 Refrescar
+                                </button>
+                            </h2>
+                            <ul id="pdf-list" class="border border-gray-200 rounded divide-y divide-gray-200 bg-gray-50">
+                                <li class="p-3 text-gray-500 italic">Cargando...</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ─── TAB: Logs ─── -->
+                <div x-show="activeTab === 'logs'" class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="md:col-span-1 border-r pr-4">
+                            <h2 class="text-lg font-semibold mb-4 flex justify-between items-center">
+                                <span>📋 Registros</span>
+                                <button onclick="loadLogs()"
+                                        class="text-xs bg-gray-200 hover:bg-gray-300 py-1 px-2 rounded">🔄</button>
+                            </h2>
+                            <ul id="log-list" class="space-y-2 max-h-96 overflow-y-auto">
+                                <li class="text-gray-500 italic">Cargando...</li>
+                            </ul>
+                        </div>
+                        <div class="md:col-span-2">
+                            <h2 id="log-title" class="text-lg font-semibold mb-4 text-gray-700">Selecciona un archivo para leer</h2>
+                            <div id="log-viewer"
+                                 class="w-full h-[500px] bg-wpp p-4 rounded overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-300">
+                                <div class="text-center text-gray-500 text-sm mt-4">Selecciona un log a la izquierda para visualizar la conversación.</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <button onclick="saveContactConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">Guardar Datos</button>
-            <p id="config-status" class="mt-3 font-medium text-sm h-5"></p>
         </div>
+    </template>
 
-        <div id="tab-pdf" class="tab-content hidden bg-white p-6 rounded-lg shadow-md">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                <div>
-                    <h2 class="text-xl font-semibold mb-4">📤 Subir Nuevos</h2>
-                    <input type="file" id="pdf-upload" multiple accept=".pdf" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 rounded p-2">
-                    <button onclick="uploadPdfs()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">🚀 Cargar al servidor</button>
-                    <p id="upload-status" class="mt-3 font-medium text-sm h-5"></p>
-                </div>
-                <div>
-                    <h2 class="text-xl font-semibold mb-4 flex justify-between items-center">
-                        <span>📥 Archivos en Servidor</span>
-                        <button onclick="loadPdfs()" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded">🔄 Refrescar</button>
-                    </h2>
-                    <ul id="pdf-list" class="border border-gray-200 rounded divide-y divide-gray-200 bg-gray-50">
-                        <li class="p-3 text-gray-500 italic">Cargando...</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <div id="tab-logs" class="tab-content hidden bg-white p-6 rounded-lg shadow-md">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="md:col-span-1 border-r pr-4">
-                    <h2 class="text-lg font-semibold mb-4 flex justify-between items-center">
-                        <span>📋 Registros</span>
-                        <button onclick="loadLogs()" class="text-xs bg-gray-200 hover:bg-gray-300 py-1 px-2 rounded">🔄</button>
-                    </h2>
-                    <ul id="log-list" class="space-y-2 max-h-96 overflow-y-auto">
-                        <li class="text-gray-500 italic">Cargando...</li>
-                    </ul>
-                </div>
-                <div class="md:col-span-2">
-                    <h2 id="log-title" class="text-lg font-semibold mb-4 text-gray-700">Selecciona un archivo para leer</h2>
-                    <!-- REEMPLAZO DEL TEXTAREA POR UN CONTENEDOR DE CHAT -->
-                    <div id="log-viewer" class="w-full h-[500px] bg-wpp p-4 rounded overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-300">
-                        <div class="text-center text-gray-500 text-sm mt-4">Selecciona un log a la izquierda para visualizar la conversación.</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
+    <!-- ═══════════════════════════════════════════════════════════════
+         ALPINE.JS STORE
+         ═══════════════════════════════════════════════════════════════ -->
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            loadContactConfig();
-        });
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('auth', {
+                token: localStorage.getItem('token'),
 
-        function showTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.getElementById(tabId).classList.remove('hidden');
-            const activeClasses = ['bg-white', 'text-blue-600', 'border-b-2', 'border-blue-600'];
-            const inactiveClasses = ['bg-gray-200', 'text-gray-600', 'hover:bg-gray-300'];
-            document.querySelectorAll('button[id^="btn-tab"]').forEach(btn => {
-                btn.classList.remove(...activeClasses);
-                btn.classList.add(...inactiveClasses);
+                async verify() {
+                    try {
+                        const res = await fetch('/api/auth/verify', {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        const data = await res.json();
+                        if (!data.valid) {
+                            this.token = null;
+                            localStorage.removeItem('token');
+                        }
+                    } catch {
+                        this.token = null;
+                        localStorage.removeItem('token');
+                    }
+                },
+
+                async login(username, password) {
+                    const fd = new FormData();
+                    fd.append('username', username);
+                    fd.append('password', password);
+                    const res = await fetch('/api/auth/login', { method: 'POST', body: fd });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Credenciales inválidas');
+                    }
+                    const data = await res.json();
+                    this.token = data.token;
+                    localStorage.setItem('token', data.token);
+                },
+
+                logout() {
+                    this.token = null;
+                    localStorage.removeItem('token');
+                }
             });
-            const activeBtn = document.getElementById('btn-' + tabId);
-            activeBtn.classList.remove(...inactiveClasses);
-            activeBtn.classList.add(...activeClasses);
-            
-            if(tabId === 'tab-pdf') loadPdfs();
-            if(tabId === 'tab-logs') loadLogs();
-            if(tabId === 'tab-api') loadContactConfig();
+        });
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         LOGIN FORM LOGIC (Alpine data)
+         ═══════════════════════════════════════════════════════════════ -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('loginForm', () => ({
+                username: '',
+                password: '',
+                loading: false,
+                error: '',
+                async doLogin() {
+                    this.loading = true;
+                    this.error = '';
+                    try {
+                        await Alpine.store('auth').login(this.username, this.password);
+                    } catch (e) {
+                        this.error = e.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            }));
+        });
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         FUNCIONES EXISTENTES (intactas)
+         ═══════════════════════════════════════════════════════════════ -->
+    <script>
+        function showTab(tabId) {
+            // Legacy function kept for compatibility — no longer used by Alpine UI
+            console.warn('showTab() is deprecated. Alpine manages tabs now.');
         }
 
         async function saveApiKey() {
             const key = document.getElementById('api-key-input').value;
             const statusLabel = document.getElementById('api-status');
-            if(!key) { 
-                statusLabel.innerText = "⚠️ Escribe una clave"; 
-                statusLabel.className = "mt-3 text-orange-500 font-medium h-5"; 
+            if(!key) {
+                statusLabel.innerText = "⚠️ Escribe una clave";
+                statusLabel.className = "mt-3 text-orange-500 font-medium h-5";
                 setTimeout(() => statusLabel.innerText = "", 3000);
-                return; 
+                return;
             }
             const formData = new FormData();
             formData.append("key", key);
@@ -163,15 +312,15 @@
             try {
                 const res = await fetch('/api/config');
                 const data = await res.json();
-                
+
                 document.getElementById('config-email').value = data.email || '';
-                
+
                 const telCompleto = data.telefono || '';
                 const selectCodigo = document.getElementById('config-country-code');
                 let numeroSinCodigo = telCompleto;
 
                 const options = Array.from(selectCodigo.options).sort((a, b) => b.value.length - a.value.length);
-                
+
                 for (let opt of options) {
                     if (telCompleto.startsWith(opt.value)) {
                         selectCodigo.value = opt.value;
@@ -301,16 +450,16 @@
         async function readLog(filename) {
             document.getElementById('log-title').innerText = `📄 Viendo: ${filename}`;
             const viewer = document.getElementById('log-viewer');
-            
+
             viewer.innerHTML = '<div class="text-center text-gray-500 text-sm mt-4">Cargando conversación...</div>';
-            
+
             try {
                 const res = await fetch(`/api/logs/${filename}`);
                 const data = await res.json();
-                
+
                 const lines = data.contenido.split('\n');
-                viewer.innerHTML = ""; // Limpiar visor
-                
+                viewer.innerHTML = "";
+
                 if (lines.length === 0 || (lines.length === 1 && lines[0] === "")) {
                     viewer.innerHTML = '<div class="text-center text-gray-500 text-sm mt-4">El log está vacío.</div>';
                     return;
@@ -320,17 +469,14 @@
                     const txt = line.trim();
                     if (!txt) return;
 
-                    // Formato: internal_id|||DisplayName|||Hora|||Mensaje
                     const parts = txt.split('|||');
-                    
+
                     if (parts.length >= 4) {
                         const internalId = parts[0];
                         const displayName = parts[1];
                         const time = parts[2];
-                        
-                        // --- ESTA ES LA PARTE QUE CAMBIA: REEMPLAZO DE [BR] POR SALTO DE LÍNEA ---
                         const msg = parts.slice(3).join('|||').split('[BR]').join('\n');
-                        
+
                         const isUser = (internalId === 'id_usuario');
 
                         const wrapper = document.createElement('div');
@@ -338,16 +484,15 @@
 
                         const bubble = document.createElement('div');
                         bubble.className = `max-w-[85%] rounded-lg px-3 py-2 shadow-sm relative text-[15px] ${isUser ? 'bg-[#dcf8c6] rounded-tr-none' : 'bg-white rounded-tl-none'}`;
-                        
+
                         const nameDiv = document.createElement('div');
                         nameDiv.className = `text-xs font-bold mb-0.5 ${isUser ? 'text-green-600' : 'text-blue-500'}`;
                         nameDiv.innerText = displayName;
-                        
+
                         const msgDiv = document.createElement('div');
-                        // Mantenemos whitespace-pre-wrap para que el navegador respete los \n
                         msgDiv.className = "text-gray-800 break-words whitespace-pre-wrap leading-tight";
                         msgDiv.innerText = msg;
-                        
+
                         const timeDiv = document.createElement('div');
                         timeDiv.className = "text-[10px] text-gray-500 text-right mt-1";
                         timeDiv.innerText = time;
@@ -357,7 +502,7 @@
                         bubble.appendChild(timeDiv);
                         wrapper.appendChild(bubble);
                         viewer.appendChild(wrapper);
-                        
+
                     } else {
                         const cleanSys = txt.replace(/=/g, '').trim();
                         if (cleanSys) {
@@ -373,7 +518,7 @@
                 });
 
                 viewer.scrollTop = viewer.scrollHeight;
-                
+
             } catch (err) {
                 viewer.innerHTML = '<div class="text-center text-red-500 font-bold mt-4">❌ Error al leer el archivo.</div>';
             }
