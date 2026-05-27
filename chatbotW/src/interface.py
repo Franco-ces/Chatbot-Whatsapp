@@ -124,6 +124,11 @@ async def listar_pdfs():
 @app.post("/api/pdfs")
 async def subir_pdfs(files: List[UploadFile] = File(...)):
     for file in files:
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"'{file.filename}' no es un archivo PDF. Solo se permiten archivos .pdf"
+            )
         file_location = PDF_FOLDER / file.filename
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)

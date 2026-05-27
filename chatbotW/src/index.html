@@ -231,14 +231,17 @@
                                 <table class="w-full border-collapse border border-gray-300">
                                     <thead>
                                         <tr>
+                                            <th class="border border-gray-300 bg-gray-200 px-2 py-2 text-center text-sm font-semibold w-10">#</th>
                                             <template x-for="(header, idx) in $store.csvEditor.headers" :key="idx">
                                                 <th class="border border-gray-300 bg-gray-200 px-3 py-2 text-left text-sm font-semibold" x-text="header"></th>
                                             </template>
+                                            <th class="border border-gray-300 bg-gray-200 px-2 py-2 text-center text-sm font-semibold w-12">🗑️</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <template x-for="(row, rowIdx) in $store.csvEditor.rows" :key="rowIdx">
                                             <tr>
+                                                <td class="border border-gray-300 px-2 py-2 text-center text-xs text-gray-500" x-text="rowIdx + 1"></td>
                                                 <template x-for="(cell, colIdx) in row" :key="colIdx">
                                                     <td class="border border-gray-300 p-1">
                                                         <input type="text" x-model="$store.csvEditor.rows[rowIdx][colIdx]"
@@ -246,6 +249,11 @@
                                                                class="w-full border-0 bg-transparent px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white rounded outline-none">
                                                     </td>
                                                 </template>
+                                                <td class="border border-gray-300 px-1 py-1 text-center">
+                                                    <button @click="$store.csvEditor.removeRow(rowIdx)"
+                                                            class="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded text-lg leading-none"
+                                                            title="Eliminar fila">✖</button>
+                                                </td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -264,7 +272,7 @@
                                 <button @click="$store.csvEditor.removeLastRow()"
                                         class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors"
                                         x-show="$store.csvEditor.rows.length > 0">
-                                    🗑️ Eliminar última fila
+                                    🗑️ Eliminar última
                                 </button>
                                 <button @click="$store.csvEditor.cancel()"
                                         class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded transition-colors">
@@ -454,11 +462,15 @@
                     this.markDirty();
                 },
 
+                removeRow(index) {
+                    if (this.dirty && !confirm('¿Eliminar esta fila?')) return;
+                    this.rows.splice(index, 1);
+                    this.markDirty();
+                },
+
                 removeLastRow() {
                     if (this.rows.length === 0) return;
-                    if (this.dirty && !confirm('¿Eliminar la última fila?')) return;
-                    this.rows.pop();
-                    this.markDirty();
+                    this.removeRow(this.rows.length - 1);
                 },
 
                 cancel() {
@@ -683,6 +695,14 @@
                 statusLabel.className = "mt-3 text-orange-500 text-sm font-medium h-5";
                 showToast('Seleccioná al menos un archivo PDF', 'error');
                 return;
+            }
+            for (let f of fileInput.files) {
+                if (!f.name.toLowerCase().endsWith('.pdf')) {
+                    statusLabel.innerText = "❌ Solo se permiten archivos .pdf";
+                    statusLabel.className = "mt-3 text-red-600 text-sm font-medium h-5";
+                    showToast(`"${f.name}" no es un archivo PDF`, 'error');
+                    return;
+                }
             }
             btn.disabled = true;
             btn.innerText = 'Subiendo...';
