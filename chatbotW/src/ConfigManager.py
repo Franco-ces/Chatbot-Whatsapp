@@ -14,7 +14,8 @@ class ConfigManager:
             # Valores iniciales solo si el archivo es nuevo
             self.config = {
                 "email": "soporte@empresa.com",
-                "telefono": "+54 11 1234-5678"
+                "telefono": "+54 11 1234-5678",
+                "bot_phone": ""
             }
             self.guardar() # Lo creamos físicamente de entrada
 
@@ -27,14 +28,16 @@ class ConfigManager:
             print(f"⚠️ Error al cargar configuración: {e}")
             # Si falla la lectura, aseguramos valores mínimos para que no rompa el RAG
             if not self.config:
-                self.config = {"email": "", "telefono": ""}
+                self.config = {"email": "", "telefono": "", "bot_phone": ""}
 
-    def guardar(self, nuevo_email=None, nuevo_tel=None):
+    def guardar(self, nuevo_email=None, nuevo_tel=None, nuevo_bot_phone=None):
         """Actualiza los valores en memoria y los persiste en el disco."""
         if nuevo_email: 
             self.config["email"] = nuevo_email
         if nuevo_tel: 
             self.config["telefono"] = nuevo_tel
+        if nuevo_bot_phone is not None:
+            self.config["bot_phone"] = nuevo_bot_phone
         
         try:
             with open(self.path, "w", encoding="utf-8") as f:
