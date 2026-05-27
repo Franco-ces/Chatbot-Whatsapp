@@ -3,7 +3,7 @@ import numpy as np
 import json
 import time
 
-from langchain_community.document_loaders import PyMuPDFLoader
+from langchain_community.document_loaders import PyMuPDFLoader, CSVLoader
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -59,15 +59,28 @@ class RAGLangchain:
         vectorstore = VectorStoreManager.cargar(self.embeddings_model, self.folder_path)
 
         if vectorstore is None:
-            print("Creando vectorstore desde PDFs...")
+            print("Creando vectorstore desde documentos...")
             pdf_files = list(self.folder_path.glob("*.pdf"))
-            if not pdf_files:
-                raise RAGError(ErrorCode.RAG_NO_PDFS, detail="No hay PDFs en la carpeta")
+            csv_folder = self.folder_path.parent / "CSVs"
+            csv_files = list(csv_folder.glob("*.csv")) if csv_folder.exists() else []
+
+            if not pdf_files and not csv_files:
+                raise RAGError(ErrorCode.RAG_NO_PDFS, detail="No hay PDFs ni CSVs en las carpetas")
 
             docs = []
+            
+            # Cargar PDFs
             for pdf in pdf_files:
                 loader = PyMuPDFLoader(str(pdf))
                 docs.extend(loader.load())
+            
+            # Cargar CSVs
+            for csv_file in csv_files:
+                try:
+                    loader = CSVLoader(str(csv_file))
+                    docs.extend(loader.load())
+                except Exception as e:
+                    print(f"Error cargando CSV {csv_file}: {e}")
 
             # Subimos a 1000 el chunk de los manuales para mejor contexto narrativo
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
@@ -132,8 +145,17 @@ class RAGLangchain:
         cadena_entrada = ChatPromptTemplate.from_template(PROMPT_GUARDRAIL_ENTRADA) | self.llm_guardrail | StrOutputParser()
         evaluacion_entrada = cadena_entrada.invoke({"input": texto_para_buscar if texto_para_buscar else "audio"}).strip().upper()
         
-        if "INSEGURO" in evaluacion_entrada:
-            return transcripcion_detectada, "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso."
+        if evaluacion_entrada.startswith("INSEGURO"):
+            categoria = evaluacion_entrada.split("-")[-1].strip() if "-" in evaluacion_entrada else "GENERAL"
+            if categoria == "INSULTO":
+                mensaje_rechazo = "Por favor, mantengamos el respeto en la conversación."
+            elif categoria == "PROMPT_INJECTION":
+                mensaje_rechazo = "Lo siento, no puedo procesar esa solicitud."
+            elif categoria == "TEMA_ILEGAL":
+                mensaje_rechazo = "No puedo hablar sobre esos temas por políticas de uso."
+            else:
+                mensaje_rechazo = "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso."
+            return transcripcion_detectada, mensaje_rechazo
         # ----------------------------
 
         # 1. BÚSQUEDA EN RAG (Para manuales e información conceptual de los PDFs)
@@ -211,9 +233,16 @@ class RAGLangchain:
             "context": contexto_total
         }).strip().upper()
         
-        if "RECHAZADO" in evaluacion_salida:
-            print(respuesta_texto)  # Log para debugging
-            return transcripcion_detectada, "Lo siento, generé una respuesta que no cumple con mis parámetros de calidad. ¿Podés reformular tu consulta?"
+        if evaluacion_salida.startswith("RECHAZADO"):
+            print(f"Respuesta rechazada ({evaluacion_salida}): {respuesta_texto}")  # Log para debugging
+            categoria_salida = evaluacion_salida.split("-")[-1].strip() if "-" in evaluacion_salida else "GENERAL"
+            if categoria_salida == "ALUCINACION":
+                mensaje_rechazo_salida = "Disculpa, generé información que no puedo verificar en este momento. ¿Podrías ser más específico con tu consulta?"
+            elif categoria_salida == "LENGUAJE_INAPROPIADO":
+                mensaje_rechazo_salida = "Lo siento, mi respuesta generada no cumplió con los estándares de profesionalismo. ¿Podemos intentar de nuevo?"
+            else:
+                mensaje_rechazo_salida = "Lo siento, generé una respuesta que no cumple con mis parámetros de calidad. ¿Podés reformular tu consulta?"
+            return transcripcion_detectada, mensaje_rechazo_salida
         # ---------------------------
 
         return transcripcion_detectada, respuesta_texto

@@ -30,6 +30,10 @@ class VectorStoreManager:
         for ext in extensiones:
             archivos.extend(Path(folder_path).glob(ext))
             
+        csv_folder = Path(folder_path).parent / "CSVs"
+        if csv_folder.exists():
+            archivos.extend(csv_folder.glob("*.csv"))
+            
         archivos = sorted(archivos)
         hash_total = hashlib.md5()
 
