@@ -1,21 +1,32 @@
 import base64
+import traceback
+
+from exceptions import AppError, CommunicationError
+from error_codes import ErrorCode
+
+
+_USER_ERROR_MSG = (
+    "Ocurrió un error al procesar tu mensaje.\n"
+    "Código: {code}\n\n"
+    "Por favor, intentá de nuevo más tarde o contactá al soporte con este código."
+)
+
 
 def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: str, mensaje_data: dict, es_audio: bool):
     """
     Ejecuta el ciclo de vida del bot: obtiene audio (si aplica), consulta al RAG y envía la respuesta.
+    Ante un error, envía un mensaje amigable al usuario con un código de error.
     """
     print(f"--> [1] Iniciando consulta para: {remitente}")
     try:
         audio_bytes = None
         
-        # Procesamiento de audio bajo demanda
         if es_audio:
             print("--> [Audio detectado] Descargando desde Evolution API en memoria...")
             audio_b64 = wa_client.obtener_audio_base64(mensaje_data)
             if audio_b64:
                 audio_bytes = base64.b64decode(audio_b64)
 
-        # Invocamos al RAG
         transcripcion, respuesta_texto = rag_instance.preguntar(
             query_text=texto, 
             audio_bytes=audio_bytes, 
@@ -24,10 +35,36 @@ def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: str, me
         
         print(f"--> [2] Gemini respondió exitosamente: {respuesta_texto}")
         
-        # Enviamos la respuesta
         print("--> [3] Enviando petición a Evolution API...")
         resultado = wa_client.enviar_mensaje(remitente, respuesta_texto)
         print(f"--> [4] Resultado final: {resultado}")
-        
+
+    except CommunicationError as e:
+        error_code = e.code.value
+        print(f"--> [ERROR {error_code}] {e.detail}")
+        print(traceback.format_exc())
+        _notificar_error(wa_client, remitente, e)
+
+    except AppError as e:
+        error_code = e.code.value
+        print(f"--> [ERROR {error_code}] {e.detail}")
+        print(traceback.format_exc())
+        _notificar_error(wa_client, remitente, e)
+
     except Exception as e:
-        print(f"--> [ERROR CRÍTICO] Falló el proceso de fondo: {e}")
+        error_code = ErrorCode.SYS_UNEXPECTED.value
+        print(f"--> [ERROR {error_code}] {e}")
+        print(traceback.format_exc())
+        app_error = AppError(ErrorCode.SYS_UNEXPECTED, detail=str(e), cause=e)
+        _notificar_error(wa_client, remitente, app_error)
+
+
+def _notificar_error(wa_client, remitente: str, error: AppError):
+    """Envía un mensaje con el código de error al usuario por WhatsApp."""
+    try:
+        wa_client.enviar_mensaje(
+            remitente,
+            _USER_ERROR_MSG.format(code=error.code.value)
+        )
+    except Exception as e:
+        print(f"--> [ERROR] No se pudo notificar al usuario del error {error.code.value}: {e}")

@@ -1,4 +1,7 @@
 import requests
+from exceptions import CommunicationError
+from error_codes import ErrorCode
+
 
 class WhatsAppClient:
     def __init__(self, api_url: str, api_key: str, instance_name: str):
@@ -16,7 +19,6 @@ class WhatsAppClient:
         """
         url = f"{self.api_url}/chat/getBase64FromMediaMessage/{self.instance_name}"
         
-        # Evolution API requiere el bloque 'message' original para ubicar el archivo
         payload = {
             "message": mensaje_data
         }
@@ -25,15 +27,15 @@ class WhatsAppClient:
             response = requests.post(url, json=payload, headers=self.headers)
             if response.status_code in [200, 201]:
                 return response.json().get("base64")
-            return None
-        except Exception as e:
-            print(f"Error al obtener audio de Evolution API: {e}")
-            return None
+            detail = f"Evolution API respondió con código {response.status_code}: {response.text}"
+            raise CommunicationError(ErrorCode.COM_GET_AUDIO_FAILED, detail=detail)
+        except requests.RequestException as e:
+            detail = f"Error de conexión con Evolution API: {e}"
+            raise CommunicationError(ErrorCode.COM_CONNECTION_FAILED, detail=detail, cause=e)
 
     def enviar_mensaje(self, numero: str, texto: str):
         url = f"{self.api_url}/message/sendText/{self.instance_name}"
         
-        # Estructura actualizada para Evolution API v2
         payload = {
             "number": numero,
             "text": texto,
@@ -43,13 +45,12 @@ class WhatsAppClient:
         try:
             response = requests.post(url, json=payload, headers=self.headers)
             
-            # Capturamos y mostramos el error exacto si Evolution API rechaza el payload
             if response.status_code not in [200, 201]:
-                print(f"\n[ERROR EVOLUTION API] Código {response.status_code}")
-                print(f"Detalle del rechazo: {response.text}\n")
-                return None
+                print(f"[DEBUG] Evolution API respondió: {response.status_code} - {response.text[:500]}")
+                detail = f"Evolution API rechazó el mensaje (código {response.status_code}): {response.text[:200]}"
+                raise CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED, detail=detail)
                 
             return response.json()
-        except Exception as e:
-            print(f"Error en WhatsAppClient al conectar con Evolution: {e}")
-            return None
+        except requests.RequestException as e:
+            detail = f"Error de conexión con Evolution API: {e}"
+            raise CommunicationError(ErrorCode.COM_CONNECTION_FAILED, detail=detail, cause=e)

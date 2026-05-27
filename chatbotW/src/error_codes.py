@@ -1,0 +1,59 @@
+from enum import Enum
+
+
+class ErrorCode(str, Enum):
+    # Communication errors (E-COM)
+    COM_CONNECTION_FAILED = "E-COM-001"
+    COM_SEND_MESSAGE_FAILED = "E-COM-002"
+    COM_GET_AUDIO_FAILED = "E-COM-003"
+
+    # RAG errors (E-RAG)
+    RAG_NO_PDFS = "E-RAG-001"
+    RAG_QUERY_FAILED = "E-RAG-002"
+    RAG_AUDIO_FAILED = "E-RAG-003"
+
+    # Config errors (E-CFG)
+    CFG_READ_FAILED = "E-CFG-001"
+    CFG_WRITE_FAILED = "E-CFG-002"
+
+    # API errors (E-API)
+    API_INVALID_PAYLOAD = "E-API-001"
+    API_NOT_FOUND = "E-API-002"
+    API_SERVER_ERROR = "E-API-003"
+
+    # System errors (E-SYS)
+    SYS_UNEXPECTED = "E-SYS-001"
+    SYS_DEPENDENCY_MISSING = "E-SYS-002"
+
+    @property
+    def user_message(self) -> str:
+        return _USER_MESSAGES[self]
+
+    @property
+    def http_status(self) -> int:
+        return _HTTP_STATUSES.get(self, 500)
+
+
+_USER_MESSAGES = {
+    ErrorCode.COM_CONNECTION_FAILED: "No se pudo conectar con el servicio de mensajería.",
+    ErrorCode.COM_SEND_MESSAGE_FAILED: "No se pudo enviar el mensaje. Intente de nuevo más tarde.",
+    ErrorCode.COM_GET_AUDIO_FAILED: "No se pudo procesar el mensaje de audio.",
+    ErrorCode.RAG_NO_PDFS: "El sistema no tiene manuales cargados para consultar.",
+    ErrorCode.RAG_QUERY_FAILED: "Ocurrió un error al procesar su consulta.",
+    ErrorCode.RAG_AUDIO_FAILED: "No se pudo procesar el audio.",
+    ErrorCode.CFG_READ_FAILED: "Error interno de configuración.",
+    ErrorCode.CFG_WRITE_FAILED: "Error interno al guardar configuración.",
+    ErrorCode.API_INVALID_PAYLOAD: "Solicitud inválida.",
+    ErrorCode.API_NOT_FOUND: "Recurso no encontrado.",
+    ErrorCode.API_SERVER_ERROR: "Error interno del servidor.",
+    ErrorCode.SYS_UNEXPECTED: "Ocurrió un error inesperado.",
+    ErrorCode.SYS_DEPENDENCY_MISSING: "El sistema no está correctamente inicializado.",
+}
+
+_HTTP_STATUSES = {
+    ErrorCode.API_INVALID_PAYLOAD: 400,
+    ErrorCode.API_NOT_FOUND: 404,
+    ErrorCode.API_SERVER_ERROR: 500,
+    ErrorCode.RAG_NO_PDFS: 503,
+    ErrorCode.SYS_DEPENDENCY_MISSING: 503,
+}
