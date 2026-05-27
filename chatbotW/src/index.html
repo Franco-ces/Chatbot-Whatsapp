@@ -56,7 +56,7 @@
          APP VIEW (autenticado)
          ═══════════════════════════════════════════════════════════════ -->
     <template x-if="$store.auth.token">
-        <div x-data="{ activeTab: 'config', botPhone: '' }">
+        <div x-data="{ activeTab: 'config', botPhone: '', switchTab(tab) { if (Alpine.store('csvEditor')?.dirty && !confirm('Tenés cambios sin guardar en el CSV. ¿Descartarlos?')) return; this.activeTab = tab; if (tab === 'config') loadContactConfig(); if (tab === 'docs') { loadPdfs(); loadCsvs(); } if (tab === 'logs') loadLogs(); } }">
 
             <!-- NAVBAR -->
             <nav class="bg-green-700 text-white shadow-lg">
@@ -84,17 +84,17 @@
             <!-- TAB BAR -->
             <div class="max-w-5xl mx-auto py-6 px-4">
                 <div class="flex space-x-1 border-b border-gray-300 mb-6">
-                    <button @click="activeTab = 'config'; loadContactConfig()"
+                    <button @click="switchTab('config')"
                             :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
                             class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
                         🔑 Configuración
                     </button>
-                    <button @click="activeTab = 'docs'; loadPdfs(); loadCsvs()"
+                    <button @click="switchTab('docs')"
                             :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
                             class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
                         📁 Documentos
                     </button>
-                    <button @click="activeTab = 'logs'; loadLogs()"
+                    <button @click="switchTab('logs')"
                             :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
                             class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
                         📜 Logs
