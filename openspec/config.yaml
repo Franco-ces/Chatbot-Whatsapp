@@ -1,0 +1,63 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.12, FastAPI, Uvicorn, LangChain, Google Generative AI (Gemini),
+    FAISS vectorstore, Evolution API (WhatsApp), PyMuPDF, Pydantic
+  Architecture: Monolithic FastAPI webhook-based chatbot with RAG pipeline over PDFs.
+    Inbound webhook via Evolution API → payload_parser → bot_service → RAGLangchain →
+    WhatsAppClient outbound. Optional audio processing via Gemini. Admin UI via interface.py.
+  Testing: No testing infrastructure detected (no pytest, no unittest config, no test files)
+  Style: No formatting or linting conventions detected
+  Dependencies: requerimientos.txt (no pyproject.toml or setup.py)
+  Deployment: Docker Compose (whatsapp-bot + evolution-api + postgres + redis)
+
+strict_tdd: false
+
+testing:
+  runner:
+    available: false
+    command: ""
+    framework: ""
+  layers:
+    unit: false
+    integration: false
+    e2e: false
+  coverage:
+    available: false
+    command: ""
+  quality:
+    linter:
+      available: false
+      command: ""
+    type_checker:
+      available: false
+      command: ""
+    formatter:
+      available: false
+      command: ""
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Clarify scope before estimating effort
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    - Follow existing code patterns (Python 3.12, FastAPI style)
+    - Add tests alongside implementation (TDD recommended going forward)
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas

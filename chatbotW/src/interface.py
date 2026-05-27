@@ -108,9 +108,9 @@ async def obtener_config():
     return config_manager.config
 
 @app.post("/api/config")
-async def guardar_config(email: str = Form(None), telefono: str = Form(None)):
+async def guardar_config(email: str = Form(None), telefono: str = Form(None), bot_phone: str = Form(None)):
     try:
-        config_manager.guardar(nuevo_email=email, nuevo_tel=telefono)
+        config_manager.guardar(nuevo_email=email, nuevo_tel=telefono, nuevo_bot_phone=bot_phone)
         return {"status": "success", "message": "✅ Datos de contacto actualizados"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -232,8 +232,30 @@ async def listar_logs():
     archivos = [f.name for f in LOGS_DIR.glob("*.txt") if not f.name.startswith("temp_")]
     return {"logs": archivos}
 
+@app.get("/api/logs/{filename}/phones")
+async def obtener_phones_log(filename: str):
+    """Extrae números de teléfono únicos (display_name) de un archivo de log."""
+    ruta = LOGS_DIR / filename
+    if not ruta.exists():
+        raise HTTPException(status_code=404, detail="Log no encontrado")
+    try:
+        temp_log = LOGS_DIR / f"temp_v_{filename}"
+        shutil.copy2(ruta, temp_log)
+        phones = set()
+        with open(temp_log, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                parts = line.split("|||")
+                if len(parts) >= 2 and parts[0].strip() == "id_usuario":
+                    display_name = parts[1].strip()
+                    if display_name:
+                        phones.add(display_name)
+        os.remove(temp_log)
+        return {"phones": sorted(list(phones))}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/logs/{filename}")
-async def leer_log(filename: str):
+async def leer_log(filename: str, phone: str = None):
     ruta = LOGS_DIR / filename
     if not ruta.exists():
         raise HTTPException(status_code=404, detail="Log no encontrado")
@@ -241,8 +263,24 @@ async def leer_log(filename: str):
         temp_log = LOGS_DIR / f"temp_v_{filename}"
         shutil.copy2(ruta, temp_log)
         with open(temp_log, "r", encoding="utf-8", errors="ignore") as f:
-            contenido = f.read()
+            lines = f.readlines()
         os.remove(temp_log)
+
+        if phone:
+            # Filtrar líneas donde display_name contenga el valor phone
+            # e incluir líneas adyacentes de bot
+            filtered = []
+            for i, line in enumerate(lines):
+                parts = line.split("|||")
+                if len(parts) >= 2 and phone in parts[1]:
+                    filtered.append(line)
+                    # Incluir la siguiente línea si es del bot
+                    if i + 1 < len(lines) and "id_bot" in lines[i + 1]:
+                        filtered.append(lines[i + 1])
+            contenido = "".join(filtered)
+        else:
+            contenido = "".join(lines)
+
         return {"contenido": contenido}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

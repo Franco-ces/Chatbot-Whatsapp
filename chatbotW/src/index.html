@@ -56,7 +56,7 @@
          APP VIEW (autenticado)
          ═══════════════════════════════════════════════════════════════ -->
     <template x-if="$store.auth.token">
-        <div x-data="{ activeTab: 'config' }">
+        <div x-data="{ activeTab: 'config', botPhone: '' }">
 
             <!-- NAVBAR -->
             <nav class="bg-green-700 text-white shadow-lg">
@@ -66,8 +66,12 @@
                         <span class="font-bold text-lg">Panel Admin</span>
                     </div>
                     <div class="flex items-center gap-3">
-                        <button class="bg-green-600 hover:bg-green-500 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
-                            <span>📱</span> WhatsApp
+                        <button @click="botPhone && window.open('https://wa.me/' + botPhone, '_blank')"
+                                :class="botPhone ? 'bg-green-600 hover:bg-green-500 cursor-pointer' : 'bg-green-800 opacity-50 cursor-not-allowed'"
+                                class="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+                                :title="botPhone ? 'Abrir WhatsApp' : 'Configurá el número del bot'">
+                            <span>📱</span>
+                            <span x-text="botPhone ? 'WhatsApp' : 'Sin configurar'"></span>
                         </button>
                         <button @click="$store.auth.logout()"
                                 class="bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-sm transition-colors">
@@ -103,7 +107,7 @@
                     <div class="flex gap-4">
                         <input type="text" id="api-key-input" placeholder="Pega tu clave aquí..."
                                class="flex-1 border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
-                        <button onclick="saveApiKey()"
+                        <button id="save-api-key-btn" onclick="saveApiKey()"
                                 class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded transition-colors">
                             Guardar en .env
                         </button>
@@ -144,10 +148,18 @@
                             </div>
                         </div>
                     </div>
-                    <button onclick="saveContactConfig()"
-                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
-                        Guardar Datos
-                    </button>
+                    <div class="mt-4">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">📱 Número de WhatsApp del Bot</label>
+                        <input type="text" id="config-bot-phone" placeholder="5491112345678 (sin + ni espacios)"
+                               class="w-full border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <p class="text-xs text-gray-400 mt-1">Se usa para el link directo a WhatsApp en el navbar.</p>
+                    </div>
+                    <div class="flex gap-3 mt-2">
+                        <button id="save-config-btn" onclick="saveContactConfig()"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
+                            Guardar Datos
+                        </button>
+                    </div>
                     <p id="config-status" class="mt-3 font-medium text-sm h-5"></p>
                 </div>
 
@@ -158,7 +170,7 @@
                             <h2 class="text-xl font-semibold mb-4">📤 Subir Nuevos</h2>
                             <input type="file" id="pdf-upload" multiple accept=".pdf"
                                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 rounded p-2">
-                            <button onclick="uploadPdfs()"
+                            <button id="upload-pdf-btn" onclick="uploadPdfs()"
                                     class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
                                 🚀 Cargar al servidor
                             </button>
@@ -188,7 +200,7 @@
                             <h3 class="text-lg font-semibold mb-3">📤 Subir CSV</h3>
                             <input type="file" id="csv-upload" accept=".csv"
                                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-4 cursor-pointer border border-gray-200 rounded p-2">
-                            <button onclick="uploadCsvs()"
+                            <button id="upload-csv-btn" onclick="uploadCsvs()"
                                     class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded transition-colors">
                                 🚀 Subir CSV
                             </button>
@@ -230,6 +242,7 @@
                                                 <template x-for="(cell, colIdx) in row" :key="colIdx">
                                                     <td class="border border-gray-300 p-1">
                                                         <input type="text" x-model="$store.csvEditor.rows[rowIdx][colIdx]"
+                                                               @input="$store.csvEditor.markDirty()"
                                                                class="w-full border-0 bg-transparent px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white rounded outline-none">
                                                     </td>
                                                 </template>
@@ -271,6 +284,16 @@
                         </div>
                         <div class="md:col-span-2">
                             <h2 id="log-title" class="text-lg font-semibold mb-4 text-gray-700">Selecciona un archivo para leer</h2>
+
+                            <!-- Phone filter — hidden until a log file is selected -->
+                            <div id="log-filter" class="hidden mb-4 p-3 bg-gray-50 rounded border border-gray-200">
+                                <label class="text-sm font-medium text-gray-700 mr-2">Filtrar por teléfono:</label>
+                                <select id="phone-filter" class="border border-gray-300 rounded px-3 py-1.5 text-sm"
+                                        onchange="applyPhoneFilter()">
+                                    <option value="">Todos los mensajes</option>
+                                </select>
+                            </div>
+
                             <div id="log-viewer"
                                  class="w-full h-[500px] bg-wpp p-4 rounded overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-300">
                                 <div class="text-center text-gray-500 text-sm mt-4">Selecciona un log a la izquierda para visualizar la conversación.</div>
@@ -340,6 +363,10 @@
                 }
             });
 
+            Alpine.store('app', {
+                botPhone: '',
+            });
+
             Alpine.store('csvEditor', {
                 show: false,
                 filename: '',
@@ -349,8 +376,17 @@
                 saving: false,
                 status: '',
                 statusClass: '',
+                dirty: false,
+
+                markDirty() {
+                    this.dirty = true;
+                },
 
                 async edit(filename) {
+                    if (this.show && this.dirty) {
+                        if (!confirm('Tenés cambios sin guardar. ¿Seguro que querés descartarlos?')) return;
+                    }
+                    this.dirty = false;
                     this.show = true;
                     this.filename = filename;
                     this.loading = true;
@@ -385,6 +421,7 @@
                         if (res.ok) {
                             this.status = '✅ Cambios guardados';
                             this.statusClass = 'text-green-600';
+                            this.dirty = false;
                         } else {
                             this.status = `❌ ${data.detail || 'Error al guardar'}`;
                             this.statusClass = 'text-red-600';
@@ -399,6 +436,10 @@
                 },
 
                 cancel() {
+                    if (this.dirty) {
+                        if (!confirm('Tenés cambios sin guardar. ¿Seguro que querés descartarlos?')) return;
+                    }
+                    this.dirty = false;
                     this.show = false;
                     this.filename = '';
                     this.headers = [];
@@ -435,8 +476,35 @@
     </script>
 
     <!-- ═══════════════════════════════════════════════════════════════
-         FUNCIONES EXISTENTES (intactas)
-         ═══════════════════════════════════════════════════════════════ -->
+          TOAST CONTAINER
+          ═══════════════════════════════════════════════════════════════ -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const colors = {
+                success: 'bg-green-600 text-white',
+                error: 'bg-red-600 text-white',
+                info: 'bg-blue-600 text-white'
+            };
+            const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+            const toast = document.createElement('div');
+            toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 flex items-center gap-2`;
+            toast.innerHTML = `${icons[type] || 'ℹ️'} ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+          FUNCIONES EXISTENTES (intactas)
+          ═══════════════════════════════════════════════════════════════ -->
     <script>
         function showTab(tabId) {
             // Legacy function kept for compatibility — no longer used by Alpine UI
@@ -444,14 +512,18 @@
         }
 
         async function saveApiKey() {
+            const btn = document.getElementById('save-api-key-btn');
+            const originalText = btn.innerText;
             const key = document.getElementById('api-key-input').value;
             const statusLabel = document.getElementById('api-status');
             if(!key) {
                 statusLabel.innerText = "⚠️ Escribe una clave";
                 statusLabel.className = "mt-3 text-orange-500 font-medium h-5";
-                setTimeout(() => statusLabel.innerText = "", 3000);
                 return;
             }
+            btn.disabled = true;
+            btn.innerText = 'Guardando...';
+
             const formData = new FormData();
             formData.append("key", key);
             try {
@@ -459,10 +531,13 @@
                 const data = await res.json();
                 statusLabel.innerText = data.message;
                 statusLabel.className = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
-                setTimeout(() => statusLabel.innerText = "", 3000);
+                showToast(data.message, data.status === "success" ? 'success' : 'error');
             } catch (err) {
                 statusLabel.innerText = "❌ Error de conexión";
-                setTimeout(() => statusLabel.innerText = "", 3000);
+                showToast('Error de conexión al guardar API Key', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
             }
         }
 
@@ -488,15 +563,29 @@
                 }
                 document.getElementById('config-phone').value = numeroSinCodigo;
 
+                const botPhone = data.bot_phone || '';
+                document.getElementById('config-bot-phone').value = botPhone;
+                // Sync to Alpine scope for navbar reactivity
+                const alpineRoot = document.querySelector('[x-data]');
+                if (alpineRoot && alpineRoot.__x) {
+                    alpineRoot.__x.$data.botPhone = botPhone;
+                }
+
             } catch (err) {
                 console.error("Error al cargar la configuración de contacto", err);
             }
         }
 
         async function saveContactConfig() {
+            const btn = document.getElementById('save-config-btn');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = 'Guardando...';
+
             const email = document.getElementById('config-email').value;
             const countryCode = document.getElementById('config-country-code').value;
             const phoneStr = document.getElementById('config-phone').value;
+            const botPhone = document.getElementById('config-bot-phone').value;
             const statusLabel = document.getElementById('config-status');
 
             const telefonoFinal = `${countryCode} ${phoneStr}`.trim();
@@ -507,17 +596,29 @@
             const formData = new FormData();
             if(email) formData.append("email", email);
             if(phoneStr) formData.append("telefono", telefonoFinal);
+            formData.append("bot_phone", botPhone);
 
             try {
                 const res = await apiFetch('/api/config', { method: 'POST', body: formData });
                 const data = await res.json();
                 statusLabel.innerText = data.message;
                 statusLabel.className = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
-                setTimeout(() => statusLabel.innerText = "", 3000);
+                showToast(data.message, data.status === "success" ? 'success' : 'error');
+
+                // Sync botPhone to Alpine navbar on success
+                if (data.status === "success") {
+                    const alpineRoot = document.querySelector('[x-data]');
+                    if (alpineRoot && alpineRoot.__x) {
+                        alpineRoot.__x.$data.botPhone = botPhone;
+                    }
+                }
             } catch (err) {
                 statusLabel.innerText = "❌ Error al guardar datos";
                 statusLabel.className = "mt-3 text-red-600 font-medium h-5";
-                setTimeout(() => statusLabel.innerText = "", 3000);
+                showToast('Error al guardar datos de contacto', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
             }
         }
 
@@ -546,14 +647,18 @@
         }
 
         async function uploadPdfs() {
+            const btn = document.getElementById('upload-pdf-btn');
+            const originalText = btn.innerText;
             const fileInput = document.getElementById('pdf-upload');
             const statusLabel = document.getElementById('upload-status');
             if(fileInput.files.length === 0) {
                 statusLabel.innerText = "⚠️ Selecciona al menos un archivo";
                 statusLabel.className = "mt-3 text-orange-500 text-sm font-medium h-5";
-                setTimeout(() => statusLabel.innerText = "", 3000);
+                showToast('Seleccioná al menos un archivo PDF', 'error');
                 return;
             }
+            btn.disabled = true;
+            btn.innerText = 'Subiendo...';
             statusLabel.innerText = "⏳ Subiendo...";
             statusLabel.className = "mt-3 text-blue-500 text-sm font-medium h-5";
             const formData = new FormData();
@@ -564,13 +669,16 @@
                 await apiFetch('/api/pdfs', { method: 'POST', body: formData });
                 statusLabel.innerText = "✅ Subida exitosa";
                 statusLabel.className = "mt-3 text-green-600 text-sm font-medium h-5";
+                showToast('PDFs subidos correctamente', 'success');
                 fileInput.value = "";
                 loadPdfs();
-                setTimeout(() => statusLabel.innerText = "", 3000);
             } catch (err) {
                 statusLabel.innerText = "❌ Error al subir";
                 statusLabel.className = "mt-3 text-red-600 text-sm font-medium h-5";
-                setTimeout(() => statusLabel.innerText = "", 3000);
+                showToast('Error al subir PDFs', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
             }
         }
 
@@ -605,14 +713,42 @@
             }
         }
 
-        async function readLog(filename) {
-            document.getElementById('log-title').innerText = `📄 Viendo: ${filename}`;
-            const viewer = document.getElementById('log-viewer');
+        let currentLogFile = '';
 
+        async function loadPhones(filename) {
+            try {
+                const res = await apiFetch(`/api/logs/${filename}/phones`);
+                const data = await res.json();
+                const select = document.getElementById('phone-filter');
+                select.innerHTML = '<option value="">Todos los mensajes</option>';
+                data.phones.forEach(phone => {
+                    const opt = document.createElement('option');
+                    opt.value = phone;
+                    opt.textContent = phone;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                console.error('Error al cargar teléfonos:', err);
+            }
+        }
+
+        function applyPhoneFilter() {
+            const phone = document.getElementById('phone-filter').value;
+            if (currentLogFile) {
+                renderLog(currentLogFile, phone);
+            }
+        }
+
+        async function renderLog(filename, phone) {
+            const viewer = document.getElementById('log-viewer');
             viewer.innerHTML = '<div class="text-center text-gray-500 text-sm mt-4">Cargando conversación...</div>';
 
             try {
-                const res = await apiFetch(`/api/logs/${filename}`);
+                let url = `/api/logs/${filename}`;
+                if (phone) {
+                    url += `?phone=${encodeURIComponent(phone)}`;
+                }
+                const res = await apiFetch(url);
                 const data = await res.json();
 
                 const lines = data.contenido.split('\n');
@@ -682,6 +818,19 @@
             }
         }
 
+        async function readLog(filename) {
+            currentLogFile = filename;
+            document.getElementById('log-title').innerText = `📄 Viendo: ${filename}`;
+
+            // Show filter and load phones
+            const filterDiv = document.getElementById('log-filter');
+            filterDiv.classList.remove('hidden');
+            document.getElementById('phone-filter').value = '';
+            await loadPhones(filename);
+
+            await renderLog(filename, '');
+        }
+
         /* ─── Download helper (blob via apiFetch) ──────────────────── */
         async function downloadFile(url, filename) {
             try {
@@ -727,14 +876,18 @@
         }
 
         async function uploadCsvs() {
+            const btn = document.getElementById('upload-csv-btn');
+            const originalText = btn.innerText;
             const fileInput = document.getElementById('csv-upload');
             const statusLabel = document.getElementById('csv-upload-status');
             if(fileInput.files.length === 0) {
                 statusLabel.innerText = "⚠️ Selecciona al menos un archivo";
                 statusLabel.className = "mt-3 text-orange-500 text-sm font-medium h-5";
-                setTimeout(() => statusLabel.innerText = "", 3000);
+                showToast('Seleccioná al menos un archivo CSV', 'error');
                 return;
             }
+            btn.disabled = true;
+            btn.innerText = 'Subiendo...';
             statusLabel.innerText = "⏳ Subiendo...";
             statusLabel.className = "mt-3 text-blue-500 text-sm font-medium h-5";
             const formData = new FormData();
@@ -745,13 +898,16 @@
                 await apiFetch('/api/csvs', { method: 'POST', body: formData });
                 statusLabel.innerText = "✅ Subida exitosa";
                 statusLabel.className = "mt-3 text-green-600 text-sm font-medium h-5";
+                showToast('CSV subido correctamente', 'success');
                 fileInput.value = "";
                 loadCsvs();
-                setTimeout(() => statusLabel.innerText = "", 3000);
             } catch (err) {
                 statusLabel.innerText = "❌ Error al subir";
                 statusLabel.className = "mt-3 text-red-600 text-sm font-medium h-5";
-                setTimeout(() => statusLabel.innerText = "", 3000);
+                showToast('Error al subir CSV', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
             }
         }
 
