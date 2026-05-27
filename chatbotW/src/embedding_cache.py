@@ -17,8 +17,12 @@ class EmbeddingCache:
 
         # CARGAR CACHE
         if self.cache_file.exists():
-            with open(self.cache_file, "r", encoding="utf-8") as f:
-                self.cache = json.load(f)
+            try:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
+                    self.cache = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                print("Advertencia: cache de embeddings corrupto. Reseteando...")
+                self.cache = {}
         else:
             self.cache = {}
 

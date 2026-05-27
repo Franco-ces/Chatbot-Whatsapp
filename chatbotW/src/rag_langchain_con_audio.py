@@ -16,6 +16,8 @@ from vectorstore_manager import VectorStoreManager
 from embedding_cache import EmbeddingCache
 from ConfigManager import ConfigManager
 from audio_handler import AudioProcessor
+from exceptions import RAGError
+from error_codes import ErrorCode
 # SDK GEMINI
 from google import genai
 from google.genai import types
@@ -60,7 +62,7 @@ class RAGLangchain:
             print("Creando vectorstore desde PDFs...")
             pdf_files = list(self.folder_path.glob("*.pdf"))
             if not pdf_files:
-                raise Exception("No hay PDFs en la carpeta")
+                raise RAGError(ErrorCode.RAG_NO_PDFS, detail="No hay PDFs en la carpeta")
 
             docs = []
             for pdf in pdf_files:
@@ -82,6 +84,7 @@ class RAGLangchain:
                     emb = self.embeddings_model.embed_query(text)
                     self.cache.set(text, emb)
                     vectors.append(emb)
+                    time.sleep(0.5)
             
             self.cache.save()
             vectorstore = FAISS.from_embeddings(list(zip(texts, vectors)), self.embeddings_model)
