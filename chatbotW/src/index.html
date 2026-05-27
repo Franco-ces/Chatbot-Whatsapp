@@ -14,7 +14,7 @@
         [x-cloak] { display: none !important; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans min-h-screen" x-data x-init="$store.auth.verify()" x-cloak>
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen" x-data x-cloak>
 
     <!-- ═══════════════════════════════════════════════════════════════
          LOGIN VIEW (sin token)
@@ -352,6 +352,10 @@
                     }
                 },
 
+                init() {
+                    // Alpine stores don't auto-call init — we call verify below
+                },
+
                 async login(username, password) {
                     const fd = new FormData();
                     fd.append('username', username);
@@ -466,14 +470,10 @@
                     this.dirty = false;
                     this.status = '';
                 }
-                    this.dirty = false;
-                    this.show = false;
-                    this.filename = '';
-                    this.headers = [];
-                    this.rows = [];
-                    this.status = '';
-                }
             });
+
+            // Verify token on page load
+            Alpine.store('auth').verify();
         });
     </script>
 
