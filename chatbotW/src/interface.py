@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import set_key
@@ -8,8 +8,10 @@ import shutil
 from pathlib import Path
 from typing import List
 
-# Importamos tu clase ConfigManager (asegurate de que ConfigManager.py esté en la misma carpeta)
 from ConfigManager import ConfigManager
+from error_handler import register_error_handlers
+from error_codes import ErrorCode
+from exceptions import APIError
 
 app = FastAPI()
 
@@ -20,6 +22,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_error_handlers(app)
 
 FILE_PATH = Path(__file__).resolve()
 ROOT_DIR = FILE_PATH.parent.parent
@@ -42,19 +46,11 @@ async def serve_frontend():
 @app.post("/api/apikey")
 async def guardar_api_key(key: str = Form(...)):
     try:
-        # 1. dotenv se encarga de actualizar el archivo físico de forma segura
-        # Preserva todas las demás variables existentes.
         dotenv.set_key(str(ENV_FILE), "GOOGLE_API_KEY", key)
-        
-        # 2. ACTUALIZACIÓN EN VIVO (Hot-Reload)
-        # Seteamos la variable en la memoria del proceso actual para que el bot
-        # la lea de inmediato en la próxima consulta sin tener que reiniciar.
         os.environ["GOOGLE_API_KEY"] = key
-        
         return {"status": "success", "message": "API Key guardada y actualizada en vivo"}
-        
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
 
 # --- NUEVOS ENDPOINTS PARA EL MANAGER DE CONFIGURACIÓN ---
 @app.get("/api/config")
@@ -66,9 +62,9 @@ async def obtener_config():
 async def guardar_config(email: str = Form(None), telefono: str = Form(None)):
     try:
         config_manager.guardar(nuevo_email=email, nuevo_tel=telefono)
-        return {"status": "success", "message": "✅ Datos de contacto actualizados"}
+        return {"status": "success", "message": "Datos de contacto actualizados"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
 # ---------------------------------------------------------
 
 @app.get("/api/pdfs")
@@ -90,13 +86,13 @@ async def eliminar_pdf(filename: str):
     if ruta.exists():
         os.remove(ruta)
         return {"status": "success"}
-    raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    raise APIError(ErrorCode.API_NOT_FOUND, detail="Archivo no encontrado")
 
 @app.get("/api/pdfs/{filename}")
 async def descargar_pdf(filename: str):
     ruta = PDF_FOLDER / filename
     if not ruta.exists():
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        raise APIError(ErrorCode.API_NOT_FOUND, detail="Archivo no encontrado")
     return FileResponse(ruta, filename=filename, media_type='application/pdf')
 
 @app.get("/api/logs")
@@ -108,7 +104,7 @@ async def listar_logs():
 async def leer_log(filename: str):
     ruta = LOGS_DIR / filename
     if not ruta.exists():
-        raise HTTPException(status_code=404, detail="Log no encontrado")
+        raise APIError(ErrorCode.API_NOT_FOUND, detail="Log no encontrado")
     try:
         temp_log = LOGS_DIR / f"temp_v_{filename}"
         shutil.copy2(ruta, temp_log)
@@ -117,7 +113,7 @@ async def leer_log(filename: str):
         os.remove(temp_log)
         return {"contenido": contenido}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise APIError(ErrorCode.API_SERVER_ERROR, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
