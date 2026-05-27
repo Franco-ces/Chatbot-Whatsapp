@@ -153,6 +153,11 @@ async def listar_csvs():
 @app.post("/api/csvs")
 async def subir_csvs(files: List[UploadFile] = File(...)):
     for file in files:
+        if not file.filename.lower().endswith(".csv"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"'{file.filename}' no es un archivo CSV. Solo se permiten archivos .csv"
+            )
         file_location = CSV_FOLDER / file.filename
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)

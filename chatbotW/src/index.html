@@ -862,8 +862,9 @@
                     const li = document.createElement('li');
                     li.className = "p-3 flex justify-between items-center hover:bg-white transition-colors";
                     li.innerHTML = `
-                        <span class="font-medium text-gray-700 mr-2 cursor-pointer hover:text-blue-600" onclick="editCsv('${csv}')">📄 ${csv}</span>
+                        <span class="font-medium text-gray-700 mr-2">📄 ${csv}</span>
                         <div class="flex gap-2 shrink-0">
+                            <button onclick="editCsv('${csv}')" class="text-green-600 hover:text-green-800 hover:bg-green-100 p-1 rounded transition-colors text-sm font-medium" title="Editar">✏️ Editar</button>
                             <button onclick="downloadFile('/api/csvs/${csv}', '${csv}')" class="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1 rounded transition-colors text-xl leading-none" title="Descargar">⬇️</button>
                             <button onclick="deleteCsv('${csv}')" class="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded transition-colors text-xl leading-none" title="Eliminar">✖</button>
                         </div>
