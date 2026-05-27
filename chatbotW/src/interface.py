@@ -13,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from fastapi.responses import JSONResponse
 import secrets
+import csv
 
 # Importamos tu clase ConfigManager (asegurate de que ConfigManager.py esté en la misma carpeta)
 from ConfigManager import ConfigManager
@@ -35,6 +36,8 @@ ENV_FILE = ROOT_DIR / ".env"
 
 PDF_FOLDER.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+CSV_FOLDER = ROOT_DIR / "CSVs"
+CSV_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # ─── Auth Configuration ────────────────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -140,6 +143,89 @@ async def descargar_pdf(filename: str):
     if not ruta.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(ruta, filename=filename, media_type='application/pdf')
+
+# ─── CSV CRUD Endpoints ────────────────────────────────────────────────
+@app.get("/api/csvs")
+async def listar_csvs():
+    archivos = [f.name for f in CSV_FOLDER.glob("*.csv")]
+    return {"csvs": archivos}
+
+@app.post("/api/csvs")
+async def subir_csvs(files: List[UploadFile] = File(...)):
+    for file in files:
+        file_location = CSV_FOLDER / file.filename
+        with open(file_location, "wb+") as file_object:
+            shutil.copyfileobj(file.file, file_object)
+    return {"status": "success", "message": "Archivos subidos correctamente"}
+
+@app.delete("/api/csvs/{filename}")
+async def eliminar_csv(filename: str):
+    ruta = CSV_FOLDER / filename
+    if ruta.exists():
+        os.remove(ruta)
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Archivo no encontrado")
+
+@app.get("/api/csvs/{filename}")
+async def descargar_csv(filename: str):
+    ruta = CSV_FOLDER / filename
+    if not ruta.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(ruta, filename=filename, media_type='text/csv')
+
+@app.get("/api/csvs/{filename}/data")
+async def leer_csv_data(filename: str):
+    ruta = CSV_FOLDER / filename
+    if not ruta.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    try:
+        with open(ruta, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+            rows = [[row[h] for h in headers] for row in reader]
+        return {"headers": headers, "rows": rows}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/csvs/{filename}/data")
+async def escribir_csv_data(filename: str, data: dict):
+    if not filename.endswith(".csv"):
+        raise HTTPException(status_code=422, detail="El archivo debe tener extensión .csv")
+
+    headers = data.get("headers")
+    rows = data.get("rows")
+
+    if not headers or not rows:
+        raise HTTPException(status_code=400, detail="headers y rows no pueden estar vacíos")
+
+    ruta = CSV_FOLDER / filename
+    if not ruta.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+
+    # Validate column count matches headers
+    num_cols = len(headers)
+    for i, row in enumerate(rows):
+        if len(row) != num_cols:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La fila {i+1} tiene {len(row)} columnas, se esperaban {num_cols}"
+            )
+
+    # Backup original before write
+    backup_path = CSV_FOLDER / f"{filename}.bak"
+    shutil.copy2(ruta, backup_path)
+
+    try:
+        with open(ruta, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            writer.writerows(rows)
+        return {"status": "success", "message": "CSV actualizado correctamente"}
+    except Exception as e:
+        # Restore backup on write failure
+        shutil.copy2(backup_path, ruta)
+        raise HTTPException(status_code=500, detail=f"Error al escribir CSV: {str(e)}")
+# ────────────────────────────────────────────────────────────────────────
 
 @app.get("/api/logs")
 async def listar_logs():
