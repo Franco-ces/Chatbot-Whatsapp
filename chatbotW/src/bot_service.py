@@ -38,7 +38,8 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         transcripcion, respuesta_texto = await rag_instance.preguntar(
             query_text=texto,
             audio_bytes=audio_bytes,
-            remitente=remitente
+            remitente=remitente,
+            session_manager=session_manager
         )
 
         print(f"--> [2] Gemini respondió exitosamente: {respuesta_texto}")

@@ -1,5 +1,6 @@
 import re
 import time
+from pathlib import Path
 from chat_logger import ChatLogger
 
 
@@ -78,13 +79,64 @@ class SessionManager:
         sesion["last_activity"] = time.time()
 
     def obtener_contexto(self, telefono):
-        """Retorna el string de contexto acumulado."""
+        """Retorna el string de contexto acumulado en memoria."""
         sesion = self.obtener_sesion(telefono)
 
         if not sesion or not sesion["contexto"]:
             return ""
 
         return "\n".join(sesion["contexto"]) + "\n"
+
+    def leer_ultimos_mensajes(self, telefono, cantidad=10):
+        """Lee los últimos N mensajes: los del disco + los del buffer en memoria.
+
+        Formato de cada línea del log/buffer:
+            {role}|||{identifier}|||{time}|||{message}
+
+        Retorna una lista de dicts:
+            [{"role": "USER", "message": "...", "time": "..."}, ...]
+        """
+        sesion = self.obtener_sesion(telefono)
+        if not sesion:
+            return []
+
+        mensajes = []
+
+        # 1. Leer mensajes del disco (sesiones anteriores)
+        log_file = sesion["logger"].log_file
+        if log_file.exists():
+            try:
+                lineas = log_file.read_text(encoding="utf-8").splitlines()
+                for linea in lineas:
+                    parsed = self._parsear_linea_log(linea)
+                    if parsed:
+                        mensajes.append(parsed)
+            except Exception:
+                pass
+
+        # 2. Agregar mensajes del buffer en memoria (sesión actual)
+        for linea in sesion["logger"].buffer:
+            parsed = self._parsear_linea_log(linea)
+            if parsed:
+                mensajes.append(parsed)
+
+        # Retornar los últimos N
+        return mensajes[-cantidad:] if len(mensajes) > cantidad else mensajes
+
+    @staticmethod
+    def _parsear_linea_log(linea):
+        """Parsea una línea del log con formato {role}|||{ident}|||{time}|||{msg}."""
+        partes = linea.strip().split("|||")
+        if len(partes) < 4:
+            return None
+        role_raw, _ident, hora, mensaje = partes[0], partes[1], partes[2], partes[3]
+        if role_raw == "id_usuario":
+            role = "USER"
+        elif role_raw == "id_bot":
+            role = "BOT"
+        else:
+            return None
+        return {"role": role, "message": mensaje, "time": hora}
 
     def limpiar_sesiones_expiradas(self):
         """Recorre el mapa y finaliza sesiones inactivas (> timeout sin mensajes)."""

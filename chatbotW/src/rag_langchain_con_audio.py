@@ -127,9 +127,10 @@ class RAGLangchain:
         
         return False
 
-    async def preguntar(self, query_text=None, audio_bytes=None, remitente=None):
+    async def preguntar(self, query_text=None, audio_bytes=None, remitente=None, session_manager=None):
         """
         Maneja entradas de texto, de audio en memoria o ambas de forma híbrida (RAG + JSON).
+        Si se provee session_manager, inyecta el historial de conversación en el prompt.
         """
         texto_para_buscar = query_text if query_text else ""
         transcripcion_detectada = query_text
@@ -190,11 +191,23 @@ class RAGLangchain:
         # 3. COMBINAMOS AMBOS CONTEXTOS
         contexto_total = f"--- MANUALES TÉCNICOS Y DETALLES ---\n{contexto_docs}\n\n--- INFORMACIÓN COMERCIAL (PRECIOS Y STOCK) ---\n{contexto_precios}"
 
+        # 4. HISTORIAL DE CONVERSACIÓN (últimos 10 mensajes del log en disco)
+        historial_texto = ""
+        if session_manager and remitente:
+            historial = session_manager.leer_ultimos_mensajes(remitente, cantidad=10)
+            if historial:
+                lineas = []
+                for msg in historial:
+                    rol = "Usuario" if msg["role"] == "USER" else "Asistente"
+                    lineas.append(f"[{msg['time']}] {rol}: {msg['message']}")
+                historial_texto = "\n".join(lineas)
+
         # lee el disco por si la interfaz cambió algo
         self.config_manager.cargar()
 
         # Preparamos las instrucciones de sistema pasándole el contexto unificado
         instrucciones_sistema = self.prompt_template.format(
+            history=historial_texto if historial_texto else "Sin historial previo.",
             context=contexto_total,
             input=texto_para_buscar if texto_para_buscar else "Responde a la duda del audio.",
             email=self.config_manager.config["email"],     
