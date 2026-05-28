@@ -29,11 +29,16 @@ class SessionManager:
     def crear_sesion(self, telefono, push_name=""):
         """Inicializa una nueva sesión para un número dado."""
         numero_limpio = self._limpiar_numero(telefono)
-        contact_name = push_name or numero_limpio  # fallback: el número si no hay nombre
 
-        # El nombre del archivo usa solo el nombre (sin número)
+        # Usar push_name si tiene contenido real (no solo guiones, espacios, etc.)
+        if push_name and self._es_nombre_valido(push_name):
+            contact_name = push_name
+        else:
+            contact_name = numero_limpio
+
+        # El nombre del archivo usa el formato: chat_{numero}_{nombre}.txt
         self.sessions[telefono] = {
-            "logger": ChatLogger(contact_name=contact_name),
+            "logger": ChatLogger(phone_number=numero_limpio, contact_name=contact_name),
             "contexto": [],
             "last_activity": time.time(),
             "contact_name": contact_name,
@@ -107,3 +112,13 @@ class SessionManager:
         Ej: '2262337131@s.whatsapp.net' → '2262337131'
         """
         return re.sub(r'@.*$', '', jid).strip()
+
+    @staticmethod
+    def _es_nombre_valido(nombre: str) -> bool:
+        """Verifica que el nombre tenga al menos un carácter alfanumérico.
+
+        Filtra push_names que solo contienen guiones, puntos, guiones bajos, etc.
+        Ej: '-', '_', '.', '---' → False
+        Ej: 'Juan', 'Juan Pérez', 'A' → True
+        """
+        return bool(re.search(r'[a-zA-Z0-9áéíóúñÁÉÍÓÚÑ]', nombre))

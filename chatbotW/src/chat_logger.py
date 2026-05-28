@@ -6,18 +6,24 @@ from datetime import datetime
 class ChatLogger:
     """Logger con buffer en memoria que escribe a disco al hacer flush().
 
-    Cada persona tiene su propio archivo: chat_{contact_name}.txt
+    Cada persona tiene su propio archivo: chat_{numero}_{nombre}.txt
     El buffer se acumula en memoria y se persigue cuando se llama a flush()
     (por ejemplo, después de 5 minutos de inactividad).
     """
 
-    def __init__(self, contact_name="unknown"):
+    def __init__(self, phone_number="0000000000", contact_name="unknown"):
         base_path = Path(__file__).resolve().parent.parent
         self.logs_dir = base_path / "logs"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
         safe_name = self._sanitize_filename(contact_name)
-        self.log_file = self.logs_dir / f"chat_{safe_name}.txt"
+        safe_number = self._sanitize_filename(phone_number)
+
+        # Si no hay nombre válido, solo el número
+        if safe_name == safe_number:
+            self.log_file = self.logs_dir / f"chat_{safe_number}.txt"
+        else:
+            self.log_file = self.logs_dir / f"chat_{safe_name}_{safe_number}.txt"
 
         # Buffer de líneas en memoria (se escribe a disco en flush)
         self.buffer = []
