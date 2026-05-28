@@ -2,12 +2,15 @@
 import asyncio
 import os
 import sys
+import uuid
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 from collections import defaultdict
 
+from logging_config import setup_logging, get_logger, request_id_ctx
 from rag_langchain_con_audio import RAGLangchain
 from whatsapp_client import WhatsAppClient
 from payload_parser import EvolutionWebhook, extraer_datos_limpios
@@ -16,10 +19,12 @@ from error_handler import register_error_handlers
 from error_codes import ErrorCode
 from exceptions import AppError
 from sesionLoggerManager import SessionManager
+from health import run_health_probes
 
 rag = None
 wa_client = None
 session_manager = None
+logger = None
 
 # ---- CONFIGURACIÓN DE RATE LIMITING ----
 MAX_MENSAJES = 5        # Máximo de mensajes permitidos
@@ -66,8 +71,11 @@ async def cleanup_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global rag, wa_client, session_manager
-    print("Iniciando dependencias pesadas (RAG, FAISS)...")
+    global rag, wa_client, session_manager, logger
+    setup_logging()
+    logger = get_logger("main")
+
+    logger.info("Iniciando dependencias pesadas (RAG, FAISS)...")
 
     load_dotenv()
 
@@ -78,7 +86,7 @@ async def lifespan(app: FastAPI):
 
     try:
         if not google_key or not evolution_key or not evolution_url or not instance:
-            print(f"[ERROR {ErrorCode.SYS_DEPENDENCY_MISSING.value}] Faltan variables de entorno requeridas")
+            logger.error("Faltan variables de entorno requeridas", error_code=ErrorCode.SYS_DEPENDENCY_MISSING.value)
             sys.exit(1)
 
         wa_client = WhatsAppClient(
@@ -89,8 +97,8 @@ async def lifespan(app: FastAPI):
 
         rag = RAGLangchain(google_key)
     except Exception as e:
-        print(f"[ERROR {ErrorCode.SYS_DEPENDENCY_MISSING.value}] Fallo al inicializar RAG: {e}")
-        print("[WARN] El bot arrancará SIN RAG. Las consultas a PDFs no estarán disponibles.")
+        logger.error("Fallo al inicializar RAG", error_code=ErrorCode.SYS_DEPENDENCY_MISSING.value, detail=str(e))
+        logger.warning("El bot arrancará SIN RAG. Las consultas a PDFs no estarán disponibles.")
         rag = None
 
     # Inicializamos el SessionManager (logger con buffer + timeout)
@@ -99,7 +107,7 @@ async def lifespan(app: FastAPI):
     # Arrancamos el loop de limpieza de sesiones expiradas
     task = asyncio.create_task(cleanup_loop())
 
-    print("Dependencias cargadas. Servidor listo para recibir mensajes.")
+    logger.info("Dependencias cargadas. Servidor listo para recibir mensajes.")
     yield
 
     # Shutdown: cancelamos el loop y finalizamos sesiones activas
@@ -112,12 +120,53 @@ async def lifespan(app: FastAPI):
     if session_manager:
         session_manager.limpiar_sesiones_expiradas()
 
-    print("Apagando servidor y liberando recursos...")
+    logger.info("Apagando servidor y liberando recursos...")
 
 
 app = FastAPI(title="Gemini WhatsApp Bot", lifespan=lifespan)
 
 register_error_handlers(app)
+
+
+# ---- ASGI MIDDLEWARE: Request Logging ----
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    """Auto-log every HTTP request with method, path, status, duration, request_id."""
+    rid = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    token = request_id_ctx.set(rid)
+
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        logger.error("Request failed", method=request.method, path=request.url.path, duration_ms=duration_ms, status_code=500)
+        raise
+    finally:
+        request_id_ctx.reset(token)
+
+    duration_ms = int((time.perf_counter() - start) * 1000)
+    status = response.status_code
+
+    log_data = {"method": request.method, "path": request.url.path, "status_code": status, "duration_ms": duration_ms}
+
+    if status >= 500:
+        logger.error("Request completed", **log_data)
+    elif status >= 400:
+        logger.warning("Request completed", **log_data)
+    else:
+        logger.info("Request completed", **log_data)
+
+    response.headers["X-Request-ID"] = rid
+    return response
+
+
+# ---- HEALTH ENDPOINT ----
+@app.get("/health")
+async def health_check():
+    """Deep health check probing RAG and Evolution API."""
+    result = await run_health_probes(wa_client, rag)
+    return JSONResponse(content=result, status_code=200)
 
 
 @app.post("/webhook")
@@ -133,13 +182,13 @@ async def webhook(payload: EvolutionWebhook):
         # Deduplicación: ignorar si ya procesamos este mensaje
         msg_id = payload.data.key.id
         if msg_id in mensajes_procesados:
-            print(f"[DEDUP] Mensaje {msg_id} ya procesado, ignorando.")
+            logger.info("Mensaje duplicado ignorado", message_id=msg_id)
             return {"status": "duplicate"}
         mensajes_procesados[msg_id] = time.time()
 
         # Validar Rate Limit por usuario
         if usuario_excedido(remitente):
-            print(f"[RATE LIMIT] Usuario {push_name or remitente} ignorado por exceso de mensajes.")
+            logger.warning("Rate limit exceeded", user=push_name or remitente)
             await wa_client.enviar_mensaje(remitente, "Estás enviando mensajes muy rápido. Por favor, espera un minuto.")
             return {"status": "rate_limited"}
 

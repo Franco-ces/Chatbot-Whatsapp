@@ -1,6 +1,9 @@
 from pathlib import Path
 import json
 import hashlib
+from logging_config import get_logger
+
+logger = get_logger("embedding_cache")
 
 
 class EmbeddingCache:
@@ -21,7 +24,7 @@ class EmbeddingCache:
                 with open(self.cache_file, "r", encoding="utf-8") as f:
                     self.cache = json.load(f)
             except (json.JSONDecodeError, OSError):
-                print("Advertencia: cache de embeddings corrupto. Reseteando...")
+                logger.warning("Embedding cache corrupt, resetting")
                 self.cache = {}
         else:
             self.cache = {}

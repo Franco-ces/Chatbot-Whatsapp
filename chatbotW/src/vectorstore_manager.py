@@ -2,6 +2,9 @@ from pathlib import Path
 import json
 import hashlib
 from langchain_community.vectorstores import FAISS
+from logging_config import get_logger
+
+logger = get_logger("vectorstore_manager")
 
 
 class VectorStoreManager:
@@ -69,17 +72,17 @@ class VectorStoreManager:
             with open(metadata_path, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
-            print(f"Advertencia: metadata.json corrupto ({e}). Reconstruyendo...")
+            logger.warning("metadata.json corrupt, rebuilding", detail=str(e))
             return None
 
         hash_guardado = metadata.get("hash")
         hash_actual = VectorStoreManager.calcular_hash_archivos(folder_path)
 
         if hash_guardado != hash_actual:
-            print("Cambios detectados en PDFs. Reconstruyendo índice...")
+            logger.info("Changes detected in PDFs, rebuilding index")
             return None
 
-        print("Vectorstore actualizado. Cargando desde disco...")
+        logger.info("Vectorstore up to date, loading from disk")
 
         try:
             return FAISS.load_local(
@@ -88,5 +91,5 @@ class VectorStoreManager:
                 allow_dangerous_deserialization=True
             )
         except Exception as e:
-            print(f"Advertencia: no se pudo cargar el vectorstore ({e}). Reconstruyendo...")
+            logger.warning("Could not load vectorstore, rebuilding", detail=str(e))
             return None

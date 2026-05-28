@@ -23,6 +23,9 @@ from error_codes import ErrorCode
 from google import genai
 from google.genai import types
 from prompts import PROMPT_GUARDRAIL_ENTRADA, PROMPT_GUARDRAIL_SALIDA, PROMPT_ASISTENTE_VIRTUAL
+from logging_config import get_logger
+
+logger = get_logger("rag")
 
 class RAGLangchain:
     def __init__(self, api_key, folder_path="PDFs"):
@@ -60,7 +63,7 @@ class RAGLangchain:
         vectorstore = VectorStoreManager.cargar(self.embeddings_model, self.folder_path)
 
         if vectorstore is None:
-            print("Creando vectorstore desde documentos...")
+            logger.info("Creating vectorstore from documents...")
             pdf_files = list(self.folder_path.glob("*.pdf"))
             csv_folder = self.folder_path.parent / "CSVs"
             csv_files = list(csv_folder.glob("*.csv")) if csv_folder.exists() else []
@@ -81,7 +84,7 @@ class RAGLangchain:
                     loader = CSVLoader(str(csv_file))
                     docs.extend(loader.load())
                 except Exception as e:
-                    print(f"Error cargando CSV {csv_file}: {e}")
+                    logger.warning("Error loading CSV", file=str(csv_file), detail=str(e))
 
             # Subimos a 1000 el chunk de los manuales para mejor contexto narrativo
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
@@ -89,7 +92,7 @@ class RAGLangchain:
             
             texts = [doc.page_content for doc in splits]
             vectors = []
-            print(f"Procesando {len(texts)} fragmentos de texto. Esto puede demorar por los límites de la cuenta gratuita...")
+            logger.info("Processing text fragments", count=len(texts))
             for i, text in enumerate(texts):
                 cached = self.cache.get(text)
                 if cached is not None:
@@ -120,9 +123,9 @@ class RAGLangchain:
                 hash_guardado = metadata.get("hash")
         
         if hash_actual != hash_guardado:
-            print("🔄 Cambio detectado en los archivos. Actualizando memoria del RAG...")
+            logger.info("Change detected in files, updating RAG memory")
             self.retriever = self._setup_retriever()
-            print("✅ Memoria RAG actualizada con éxito.")
+            logger.info("RAG memory updated successfully")
             return True
         
         return False
@@ -186,7 +189,7 @@ class RAGLangchain:
                     # Si no hay coincidencia directa, inyectamos la lista completa de referencia
                     contexto_precios = "\nLista completa de Precios, Stock y Productos de la empresa:\n" + json.dumps(lista_precios, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"⚠️ Error al leer el archivo precios.json: {e}")
+                logger.warning("Error reading precios.json", detail=str(e))
 
         # 3. COMBINAMOS AMBOS CONTEXTOS
         contexto_total = f"--- MANUALES TÉCNICOS Y DETALLES ---\n{contexto_docs}\n\n--- INFORMACIÓN COMERCIAL (PRECIOS Y STOCK) ---\n{contexto_precios}"
@@ -238,7 +241,7 @@ class RAGLangchain:
         })).strip().upper()
         
         if evaluacion_salida.startswith("RECHAZADO"):
-            print(f"Respuesta rechazada ({evaluacion_salida}): {respuesta_texto}")  # Log para debugging
+            logger.info("Response rejected by guardrail", reason=evaluacion_salida)
             categoria_salida = evaluacion_salida.split("-")[-1].strip() if "-" in evaluacion_salida else "GENERAL"
             if categoria_salida == "ALUCINACION":
                 mensaje_rechazo_salida = "Disculpa, generé información que no puedo verificar en este momento. ¿Podrías ser más específico con tu consulta?"

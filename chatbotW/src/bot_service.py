@@ -1,8 +1,12 @@
 import base64
+import time
 import traceback
 
 from exceptions import AppError, CommunicationError
 from error_codes import ErrorCode
+from logging_config import get_logger
+
+logger = get_logger("bot_service")
 
 
 _USER_ERROR_MSG = (
@@ -20,7 +24,7 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
     consulta al RAG, log respuesta y envía el mensaje.
     Ante un error, envía un mensaje amigable al usuario con un código de error.
     """
-    print(f"--> [1] Iniciando consulta para: {remitente} (push_name: {push_name or 'N/A'})")
+    logger.info("Starting bot processing", remitente=remitente, push_name=push_name or "N/A")
 
     # Log del mensaje del usuario (antes de procesar, para no perderlo si falla)
     if session_manager:
@@ -30,44 +34,45 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         audio_bytes = None
 
         if es_audio:
-            print("--> [Audio detectado] Descargando desde Evolution API en memoria...")
+            logger.info("Audio detected, downloading from Evolution API")
             audio_b64 = await wa_client.obtener_audio_base64(mensaje_data)
             if audio_b64:
                 audio_bytes = base64.b64decode(audio_b64)
 
+        rag_start = time.perf_counter()
         transcripcion, respuesta_texto = await rag_instance.preguntar(
             query_text=texto,
             audio_bytes=audio_bytes,
             remitente=remitente,
             session_manager=session_manager
         )
+        rag_duration_ms = int((time.perf_counter() - rag_start) * 1000)
 
-        print(f"--> [2] Gemini respondió exitosamente: {respuesta_texto}")
+        logger.info("RAG responded successfully", rag_duration_ms=rag_duration_ms)
 
         # Log de la respuesta del bot
         if session_manager:
             session_manager.agregar_mensaje(remitente, respuesta_texto, es_bot=True, push_name=push_name)
 
-        print("--> [3] Enviando petición a Evolution API...")
+        logger.info("Sending message to Evolution API")
+        send_start = time.perf_counter()
         resultado = await wa_client.enviar_mensaje(remitente, respuesta_texto)
-        print(f"--> [4] Resultado final: {resultado}")
+        send_duration_ms = int((time.perf_counter() - send_start) * 1000)
+        logger.info("Message sent", send_duration_ms=send_duration_ms, resultado=str(resultado)[:200])
 
     except CommunicationError as e:
         error_code = e.code.value
-        print(f"--> [ERROR {error_code}] {e.detail}")
-        print(traceback.format_exc())
+        logger.error("Communication error", error_code=error_code, detail=e.detail)
         await _notificar_error(wa_client, remitente, e)
 
     except AppError as e:
         error_code = e.code.value
-        print(f"--> [ERROR {error_code}] {e.detail}")
-        print(traceback.format_exc())
+        logger.error("Application error", error_code=error_code, detail=e.detail)
         await _notificar_error(wa_client, remitente, e)
 
     except Exception as e:
         error_code = ErrorCode.SYS_UNEXPECTED.value
-        print(f"--> [ERROR {error_code}] {e}")
-        print(traceback.format_exc())
+        logger.error("Unexpected error", error_code=error_code, detail=str(e))
         app_error = AppError(ErrorCode.SYS_UNEXPECTED, detail=str(e), cause=e)
         await _notificar_error(wa_client, remitente, app_error)
 
@@ -80,4 +85,4 @@ async def _notificar_error(wa_client, remitente: str, error: AppError):
             _USER_ERROR_MSG.format(code=error.code.value)
         )
     except Exception as e:
-        print(f"--> [ERROR] No se pudo notificar al usuario del error {error.code.value}: {e}")
+        logger.error("Failed to notify user of error", error_code=error.code.value, detail=str(e))

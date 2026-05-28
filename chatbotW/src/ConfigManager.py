@@ -1,5 +1,8 @@
 import json
 from pathlib import Path
+from logging_config import get_logger
+
+logger = get_logger("config_manager")
 
 class ConfigManager:
     def __init__(self, filename="config_bot.json"):
@@ -25,7 +28,7 @@ class ConfigManager:
             with open(self.path, "r", encoding="utf-8") as f:
                 self.config = json.load(f)
         except Exception as e:
-            print(f"⚠️ Error al cargar configuración: {e}")
+            logger.warning("Error loading configuration", detail=str(e))
             if not self.config:
                 self.config = {"email": "", "telefono": "", "bot_phone": ""}
         finally:
@@ -46,4 +49,4 @@ class ConfigManager:
             with open(self.path, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=4)
         except Exception as e:
-            print(f"⚠️ Error al guardar configuración: {e}")
+            logger.warning("Error saving configuration", detail=str(e))

@@ -1,6 +1,10 @@
+import time
 import httpx_idle_client
 from exceptions import CommunicationError
 from error_codes import ErrorCode
+from logging_config import get_logger
+
+logger = get_logger("whatsapp_client")
 
 
 class WhatsAppClient:
@@ -46,18 +50,25 @@ class WhatsAppClient:
             "delay": 2500
         }
         
+        start = time.perf_counter()
         try:
             response = await self._client.request("POST", url, json=payload, headers=self.headers)
+            duration_ms = int((time.perf_counter() - start) * 1000)
             
             if response.status_code not in [200, 201]:
-                print(f"[DEBUG] Evolution API respondió: {response.status_code} - {response.text[:500]}")
+                logger.debug("Evolution API response error", status_code=response.status_code, send_duration_ms=duration_ms)
                 detail = f"Evolution API rechazó el mensaje (código {response.status_code}): {response.text[:200]}"
                 raise CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED, detail=detail)
                 
+            logger.info("Message sent successfully", send_duration_ms=duration_ms)
             return response.json()
         except httpx_idle_client.httpx.HTTPStatusError as e:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.error("Evolution API HTTP error", send_duration_ms=duration_ms, status_code=e.response.status_code)
             detail = f"Evolution API respondió con código {e.response.status_code}: {e.response.text}"
             raise CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED, detail=detail, cause=e)
         except httpx_idle_client.httpx.RequestError as e:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.error("Evolution API connection error", send_duration_ms=duration_ms, detail=str(e))
             detail = f"Error de conexión con Evolution API: {e}"
             raise CommunicationError(ErrorCode.COM_CONNECTION_FAILED, detail=detail, cause=e)
