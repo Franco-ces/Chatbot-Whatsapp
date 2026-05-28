@@ -153,16 +153,48 @@ async def listar_csvs():
 
 @app.post("/api/csvs")
 async def subir_csvs(files: List[UploadFile] = File(...)):
+    import subprocess
     for file in files:
         if not file.filename.lower().endswith(".csv"):
             raise HTTPException(
                 status_code=422,
-                detail=f"'{file.filename}' no es un archivo CSV. Solo se permiten archivos .csv"
+                detail=f"'{file.filename}' no es válido. Solo se permiten archivos .csv"
             )
         file_location = CSV_FOLDER / file.filename
+        
+        # Guardar archivo original si existe para hacer rollback
+        backup_path = None
+        if file_location.exists():
+            backup_path = CSV_FOLDER / f"{file.filename}.bak"
+            shutil.copy2(file_location, backup_path)
+            
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)
-    return {"status": "success", "message": "Archivos subidos correctamente"}
+            
+        # Correr la validación con verificar_datos.py
+        result = subprocess.run(
+            ["python", str(ROOT_DIR / "src" / "verificar_datos.py")],
+            capture_output=True, text=True
+        )
+        
+        if result.returncode != 0:
+            # Si falla, borrar el archivo malo y restaurar backup si había
+            os.remove(file_location)
+            if backup_path:
+                shutil.move(backup_path, file_location)
+                
+            error_msg = result.stdout.strip()
+            # Limpiar ANSI codes por las dudas y devolver mensaje claro
+            raise HTTPException(
+                status_code=422,
+                detail=f"Error en {file.filename}:\n{error_msg}"
+            )
+            
+        # Si fue exitoso y había backup, borrar el backup
+        if backup_path and backup_path.exists():
+            os.remove(backup_path)
+            
+    return {"status": "success", "message": "Archivos subidos y validados correctamente"}
 
 @app.delete("/api/csvs/{filename}")
 async def eliminar_csv(filename: str):

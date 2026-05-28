@@ -26,8 +26,8 @@ class VectorStoreManager:
 
     @staticmethod
     def calcular_hash_archivos(folder_path):
-        # Busca dinámicamente tanto PDFs como el JSON de precios
-        extensiones = ["*.pdf", "*.json"]
+        # Busca dinámicamente PDFs y CSVs
+        extensiones = ["*.pdf"]
         archivos = []
         
         for ext in extensiones:

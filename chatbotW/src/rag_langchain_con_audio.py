@@ -1,9 +1,6 @@
 from pathlib import Path
 import asyncio
 import numpy as np
-import json
-import time
-
 from langchain_community.document_loaders import PyMuPDFLoader, CSVLoader
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -163,36 +160,23 @@ class RAGLangchain:
             return transcripcion_detectada, mensaje_rechazo
         # ----------------------------
 
-        # 1. BÚSQUEDA EN RAG (Para manuales e información conceptual de los PDFs)
+        # 1. BÚSQUEDA EN RAG (Para manuales, CSVs e información comercial)
         busqueda_final = texto_para_buscar if texto_para_buscar else "productos"
         docs = await asyncio.to_thread(self.retriever.invoke, busqueda_final)
         contexto_docs = "\n\n".join(doc.page_content for doc in docs)
 
-        # 2. BÚSQUEDA DIRECTA EN EL JSON DE PRECIOS
-        contexto_precios = ""
-        ruta_precios = self.folder_path / "precios.json"
-        
-        if ruta_precios.exists():
-            try:
-                with open(ruta_precios, "r", encoding="utf-8") as f:
-                    lista_precios = json.load(f)
-                
-                # Buscamos coincidencias de palabras clave en el texto del usuario
-                coincidencias = []
-                for item in lista_precios:
-                    if item["producto"].lower() in texto_para_buscar.lower():
-                        coincidencias.append(f"- {item['producto']}: Precio: ${item['precio']} | Stock: {item['stock']} unidades.")
-                
-                if coincidencias:
-                    contexto_precios = "\nPrecios y Stock vigentes encontrados para la consulta:\n" + "\n".join(coincidencias)
-                else:
-                    # Si no hay coincidencia directa, inyectamos la lista completa de referencia
-                    contexto_precios = "\nLista completa de Precios, Stock y Productos de la empresa:\n" + json.dumps(lista_precios, ensure_ascii=False, indent=2)
-            except Exception as e:
-                logger.warning("Error reading precios.json", detail=str(e))
+        # ====== LOG EN TIEMPO REAL PARA DEBUGGING ======
+        print("\n" + "="*60, flush=True)
+        print(f"🔍 BÚSQUEDA EN MEMORIA RAG: '{busqueda_final}'", flush=True)
+        print(f"📄 FRAGMENTOS ENCONTRADOS: {len(docs)}", flush=True)
+        for i, doc in enumerate(docs):
+            print(f"\n--- CHUNK {i+1} ---", flush=True)
+            print(doc.page_content, flush=True)
+        print("="*60 + "\n", flush=True)
+        # ===============================================
 
-        # 3. COMBINAMOS AMBOS CONTEXTOS
-        contexto_total = f"--- MANUALES TÉCNICOS Y DETALLES ---\n{contexto_docs}\n\n--- INFORMACIÓN COMERCIAL (PRECIOS Y STOCK) ---\n{contexto_precios}"
+        # CONTEXTO FINAL (Todo proviene del RAG ahora)
+        contexto_total = f"--- INFORMACIÓN RECUPERADA (MANUALES Y PRECIOS) ---\n{contexto_docs}"
 
         # 4. HISTORIAL DE CONVERSACIÓN (últimos 10 mensajes del log en disco)
         historial_texto = ""
