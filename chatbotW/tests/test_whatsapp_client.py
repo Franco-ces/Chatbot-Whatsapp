@@ -28,82 +28,93 @@ class TestInit:
 
 class TestEnviarMensaje:
 
-    def test_exitoso_retorna_json(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_exitoso_retorna_json(self, mocker, client):
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"key": {"id": "wa123"}}
-        mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        mocker.patch.object(client._client, "request", return_value=mock_resp)
 
-        result = client.enviar_mensaje("54911", "Hola")
+        result = await client.enviar_mensaje("54911", "Hola")
 
         assert result == {"key": {"id": "wa123"}}
         mock_resp.json.assert_called_once()
 
-    def test_201_tambien_exitoso(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_201_tambien_exitoso(self, mocker, client):
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 201
         mock_resp.json.return_value = {"key": {"id": "wa456"}}
-        mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        mocker.patch.object(client._client, "request", return_value=mock_resp)
 
-        result = client.enviar_mensaje("54911", "Hola")
+        result = await client.enviar_mensaje("54911", "Hola")
 
         assert result == {"key": {"id": "wa456"}}
 
-    def test_http_error_400_lanza_communication_error(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_http_error_400_lanza_communication_error(self, mocker, client):
+        import httpx
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 400
         mock_resp.text = "Bad Request"
-        mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        http_error = httpx.HTTPStatusError("Bad Request", request=mocker.MagicMock(), response=mock_resp)
+        mocker.patch.object(client._client, "request", side_effect=http_error)
 
         with pytest.raises(CommunicationError) as exc_info:
-            client.enviar_mensaje("54911", "Hola")
+            await client.enviar_mensaje("54911", "Hola")
 
         assert exc_info.value.code == ErrorCode.COM_SEND_MESSAGE_FAILED
 
-    def test_http_error_500_lanza_communication_error(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_http_error_500_lanza_communication_error(self, mocker, client):
+        import httpx
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 500
         mock_resp.text = "Internal Error"
-        mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        http_error = httpx.HTTPStatusError("Internal Error", request=mocker.MagicMock(), response=mock_resp)
+        mocker.patch.object(client._client, "request", side_effect=http_error)
 
         with pytest.raises(CommunicationError) as exc_info:
-            client.enviar_mensaje("54911", "Hola")
+            await client.enviar_mensaje("54911", "Hola")
 
         assert exc_info.value.code == ErrorCode.COM_SEND_MESSAGE_FAILED
 
-    def test_connection_error_lanza_communication_error(self, mocker, client):
-        from requests.exceptions import ConnectionError as ReqConnectionError
-
-        mocker.patch(
-            "whatsapp_client.requests.post",
-            side_effect=ReqConnectionError("DNS failure"),
+    @pytest.mark.asyncio
+    async def test_connection_error_lanza_communication_error(self, mocker, client):
+        import httpx
+        mocker.patch.object(
+            client._client,
+            "request",
+            side_effect=httpx.ConnectError("DNS failure"),
         )
 
         with pytest.raises(CommunicationError) as exc_info:
-            client.enviar_mensaje("54911", "Hola")
+            await client.enviar_mensaje("54911", "Hola")
 
         assert exc_info.value.code == ErrorCode.COM_CONNECTION_FAILED
 
-    def test_timeout_lanza_communication_error(self, mocker, client):
-        from requests.exceptions import Timeout
-
-        mocker.patch(
-            "whatsapp_client.requests.post",
-            side_effect=Timeout("timed out"),
+    @pytest.mark.asyncio
+    async def test_timeout_lanza_communication_error(self, mocker, client):
+        import httpx
+        mocker.patch.object(
+            client._client,
+            "request",
+            side_effect=httpx.TimeoutException("timed out"),
         )
 
         with pytest.raises(CommunicationError) as exc_info:
-            client.enviar_mensaje("54911", "Hola")
+            await client.enviar_mensaje("54911", "Hola")
 
         assert exc_info.value.code == ErrorCode.COM_CONNECTION_FAILED
 
-    def test_envia_payload_correcto(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_envia_payload_correcto(self, mocker, client):
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {}
-        mock_post = mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        mock_request = mocker.patch.object(client._client, "request", return_value=mock_resp)
 
-        client.enviar_mensaje("5491123456789", "texto de prueba")
+        await client.enviar_mensaje("5491123456789", "texto de prueba")
 
         expected_url = "https://evolution.api/message/sendText/instancia-test"
         expected_payload = {
@@ -111,68 +122,94 @@ class TestEnviarMensaje:
             "text": "texto de prueba",
             "delay": 2500,
         }
-        mock_post.assert_called_once_with(
-            expected_url, json=expected_payload, headers=client.headers
+        mock_request.assert_called_once_with(
+            "POST", expected_url, json=expected_payload, headers=client.headers
         )
+
+
+class TestConnectionPooling:
+
+    @pytest.mark.asyncio
+    async def test_same_client_reused_across_calls(self, mocker, client):
+        """REQ-7: Multiple requests share the same AsyncClient instance."""
+        mock_resp = mocker.MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"key": {"id": "wa123"}}
+        mock_request = mocker.patch.object(client._client, "request", return_value=mock_resp)
+
+        await client.enviar_mensaje("54911", "Hola 1")
+        await client.enviar_mensaje("54911", "Hola 2")
+
+        # Both calls use the same _client instance
+        assert mock_request.call_count == 2
+        # Verify the same _client object is used (connection pooling)
+        assert client._client is client._client
 
 
 class TestObtenerAudioBase64:
 
-    def test_exitoso_retorna_base64(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_exitoso_retorna_base64(self, mocker, client):
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"base64": "YXVkaW8="}
-        mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        mocker.patch.object(client._client, "request", return_value=mock_resp)
 
-        result = client.obtener_audio_base64({"key": {"id": "msg1"}})
+        result = await client.obtener_audio_base64({"key": {"id": "msg1"}})
 
         assert result == "YXVkaW8="
 
-    def test_http_error_lanza_communication_error(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_http_error_lanza_communication_error(self, mocker, client):
+        import httpx
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 404
         mock_resp.text = "Not Found"
-        mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        http_error = httpx.HTTPStatusError("Not Found", request=mocker.MagicMock(), response=mock_resp)
+        mocker.patch.object(client._client, "request", side_effect=http_error)
 
         with pytest.raises(CommunicationError) as exc_info:
-            client.obtener_audio_base64({"key": {"id": "msg1"}})
+            await client.obtener_audio_base64({"key": {"id": "msg1"}})
 
         assert exc_info.value.code == ErrorCode.COM_GET_AUDIO_FAILED
 
-    def test_connection_error_lanza_communication_error(self, mocker, client):
-        from requests.exceptions import ConnectionError as ReqConnectionError
-
-        mocker.patch(
-            "whatsapp_client.requests.post",
-            side_effect=ReqConnectionError("connection refused"),
+    @pytest.mark.asyncio
+    async def test_connection_error_lanza_communication_error(self, mocker, client):
+        import httpx
+        mocker.patch.object(
+            client._client,
+            "request",
+            side_effect=httpx.ConnectError("connection refused"),
         )
 
         with pytest.raises(CommunicationError) as exc_info:
-            client.obtener_audio_base64({"key": {"id": "msg1"}})
+            await client.obtener_audio_base64({"key": {"id": "msg1"}})
 
         assert exc_info.value.code == ErrorCode.COM_CONNECTION_FAILED
 
-    def test_response_sin_base64_retorna_none(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_response_sin_base64_retorna_none(self, mocker, client):
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {}
-        mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        mocker.patch.object(client._client, "request", return_value=mock_resp)
 
-        result = client.obtener_audio_base64({"key": {"id": "msg1"}})
+        result = await client.obtener_audio_base64({"key": {"id": "msg1"}})
 
         assert result is None
 
-    def test_envia_payload_correcto(self, mocker, client):
+    @pytest.mark.asyncio
+    async def test_envia_payload_correcto(self, mocker, client):
         mock_resp = mocker.MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"base64": "data"}
-        mock_post = mocker.patch("whatsapp_client.requests.post", return_value=mock_resp)
+        mock_request = mocker.patch.object(client._client, "request", return_value=mock_resp)
 
         mensaje_data = {"key": {"id": "abc123"}}
-        client.obtener_audio_base64(mensaje_data)
+        await client.obtener_audio_base64(mensaje_data)
 
         expected_url = "https://evolution.api/chat/getBase64FromMediaMessage/instancia-test"
         expected_payload = {"message": mensaje_data}
-        mock_post.assert_called_once_with(
-            expected_url, json=expected_payload, headers=client.headers
+        mock_request.assert_called_once_with(
+            "POST", expected_url, json=expected_payload, headers=client.headers
         )
