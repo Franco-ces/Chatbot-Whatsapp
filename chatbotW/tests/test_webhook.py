@@ -37,6 +37,20 @@ def _make_audio_payload(from_me=False):
 
 class TestWebhookValidPayload:
 
+    @pytest.fixture(autouse=True)
+    def _mock_logger(self):
+        """Ensure main.logger is not None during tests."""
+        from unittest.mock import MagicMock
+        import main
+        original_logger = main.logger
+        original_dedup = main.mensajes_procesados.copy()
+        main.logger = MagicMock()
+        main.mensajes_procesados.clear()
+        yield
+        main.logger = original_logger
+        main.mensajes_procesados.clear()
+        main.mensajes_procesados.update(original_dedup)
+
     @pytest.mark.asyncio
     async def test_returns_ok_and_spawns_task(self):
         """REQ-6: Valid payload → returns ok, spawns background task."""

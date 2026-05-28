@@ -1,9 +1,17 @@
 import pytest
 from unittest.mock import AsyncMock
 
-from bot_service import procesar_mensaje_bot, _notificar_error
+from bot_service import procesar_mensaje_bot, _notificar_error, _question_cache
 from exceptions import AppError, CommunicationError, RAGError
 from error_codes import ErrorCode
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Reset LRU cache between tests."""
+    _question_cache.clear()
+    yield
+    _question_cache.clear()
 
 
 @pytest.fixture
@@ -34,7 +42,7 @@ class TestProcesarMensajeExitoso:
         rag_instance.preguntar.return_value = ("transcripcion", RESPUESTA_OK)
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
         rag_instance.preguntar.assert_called_once_with(
-            query_text=TEXTO, audio_bytes=None, remitente=REMITTENTE
+            query_text=TEXTO, audio_bytes=None, remitente=REMITTENTE, session_manager=None
         )
         wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
 
@@ -109,7 +117,7 @@ class TestAudioFallos:
         rag_instance.preguntar.return_value = ("transcripcion", RESPUESTA_OK)
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=True)
         rag_instance.preguntar.assert_called_once_with(
-            query_text=TEXTO, audio_bytes=None, remitente=REMITTENTE
+            query_text=TEXTO, audio_bytes=None, remitente=REMITTENTE, session_manager=None
         )
         wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
 

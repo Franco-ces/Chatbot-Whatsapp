@@ -5,8 +5,11 @@ import traceback
 from exceptions import AppError, CommunicationError
 from error_codes import ErrorCode
 from logging_config import get_logger
+from cache import LRUCache
 
 logger = get_logger("bot_service")
+
+_question_cache = LRUCache(maxsize=100)
 
 
 _USER_ERROR_MSG = (
@@ -31,6 +34,15 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         session_manager.agregar_mensaje(remitente, texto, es_bot=False, push_name=push_name)
 
     try:
+        # --- CACHE CHECK (exact match, text-only) ---
+        if texto and not es_audio:
+            cached = _question_cache.get(texto)
+            if cached:
+                if session_manager:
+                    session_manager.agregar_mensaje(remitente, cached, es_bot=True, push_name=push_name)
+                await wa_client.enviar_mensaje(remitente, cached)
+                return
+
         audio_bytes = None
 
         if es_audio:
@@ -49,6 +61,10 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         rag_duration_ms = int((time.perf_counter() - rag_start) * 1000)
 
         logger.info("RAG responded successfully", rag_duration_ms=rag_duration_ms)
+
+        # --- CACHE STORE (text-only, successful responses) ---
+        if texto and not es_audio and respuesta_texto:
+            _question_cache.set(texto, respuesta_texto)
 
         # Log de la respuesta del bot
         if session_manager:
