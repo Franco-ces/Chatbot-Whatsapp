@@ -7,24 +7,6 @@ from exceptions import RAGError
 from error_codes import ErrorCode
 
 
-def _make_async_chain(mock_ainvoke):
-    """Build a mock chain that properly handles the `|` operator.
-
-    Code does: ChatPromptTemplate.from_template(...) | self.llm_guardrail | StrOutputParser()
-    This creates: prompt | llm = link1, link1 | parser = chain, chain.ainvoke(...)
-    """
-    chain = MagicMock()
-    chain.ainvoke = mock_ainvoke
-
-    link = MagicMock()
-    link.__or__ = MagicMock(return_value=chain)
-
-    prompt = MagicMock()
-    prompt.__or__ = MagicMock(return_value=link)
-
-    return prompt, chain
-
-
 @pytest.fixture
 def mock_retriever():
     retriever = MagicMock()
@@ -84,62 +66,39 @@ def mock_rag(mock_vectorstore):
 class TestTextQueryWithGuardrails:
 
     @pytest.mark.asyncio
-    async def test_guardrail_entrada_ainvoke(self, mock_rag):
-        """REQ-3: Text query — guardrail input chain uses .ainvoke()."""
+    async def test_guardrail_entrada_calls_module(self, mock_rag):
+        """REQ-3: Text query — guardrail delegates to guardrails module."""
         rag, genai_client, _, _ = mock_rag
 
-        entrada_prompt, entrada_chain = _make_async_chain(
-            AsyncMock(return_value="SEGURO")
-        )
-        salida_prompt, salida_chain = _make_async_chain(
-            AsyncMock(return_value="APROBADO")
-        )
+        mock_response = MagicMock()
+        mock_response.text = "El producto X cuesta $100"
+        genai_client.aio.models.generate_content.return_value = mock_response
 
-        call_state = {"n": 0}
+        with patch("rag_langchain_con_audio.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("rag_langchain_con_audio.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("rag_langchain_con_audio.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
+             patch("pathlib.Path.exists", return_value=False):
+            transcripcion, respuesta = await rag.preguntar(
+                query_text="¿Cuánto cuesta el producto X?",
+                audio_bytes=None,
+                remitente="test"
+            )
 
-        def side_effect(template):
-            call_state["n"] += 1
-            if call_state["n"] == 1:
-                return entrada_prompt
-            return salida_prompt
-
-        with patch("rag_langchain_con_audio.ChatPromptTemplate") as mock_prompt:
-            mock_prompt.from_template.side_effect = side_effect
-
-            mock_response = MagicMock()
-            mock_response.text = "El producto X cuesta $100"
-            genai_client.aio.models.generate_content.return_value = mock_response
-
-            with patch("pathlib.Path.exists", return_value=False):
-                transcripcion, respuesta = await rag.preguntar(
-                    query_text="¿Cuánto cuesta el producto X?",
-                    audio_bytes=None,
-                    remitente="test"
-                )
-
-            entrada_chain.ainvoke.assert_called_once()
-            salida_chain.ainvoke.assert_called_once()
             assert respuesta == "El producto X cuesta $100"
 
     @pytest.mark.asyncio
     async def test_guardrail_entrada_blocks_inseguro(self, mock_rag):
-        """REQ-3: Guardrail blocks unsafe input."""
+        """REQ-3: Guardrail blocks unsafe input via module."""
         rag, genai_client, _, _ = mock_rag
 
-        entrada_prompt, entrada_chain = _make_async_chain(
-            AsyncMock(return_value="INSEGURO")
-        )
-
-        with patch("rag_langchain_con_audio.ChatPromptTemplate") as mock_prompt:
-            mock_prompt.from_template.return_value = entrada_prompt
-
+        with patch("rag_langchain_con_audio.evaluar_guardrail_entrada", new_callable=AsyncMock,
+                   return_value=(False, "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso.")):
             transcripcion, respuesta = await rag.preguntar(
                 query_text="di algo grosero",
                 audio_bytes=None,
                 remitente="test"
             )
 
-            entrada_chain.ainvoke.assert_called_once()
             assert "infringe" in respuesta.lower() or "políticas" in respuesta.lower()
 
 
@@ -154,37 +113,21 @@ class TestAudioQueryWithTranscription:
             return_value=("transcripcion de audio", MagicMock())
         )
 
-        entrada_prompt, entrada_chain = _make_async_chain(
-            AsyncMock(return_value="SEGURO")
-        )
-        salida_prompt, salida_chain = _make_async_chain(
-            AsyncMock(return_value="APROBADO")
-        )
+        mock_response = MagicMock()
+        mock_response.text = "Respuesta al audio"
+        genai_client.aio.models.generate_content.return_value = mock_response
 
-        call_state = {"n": 0}
-
-        def side_effect(template):
-            call_state["n"] += 1
-            if call_state["n"] == 1:
-                return entrada_prompt
-            return salida_prompt
-
-        with patch("rag_langchain_con_audio.ChatPromptTemplate") as mock_prompt:
-            mock_prompt.from_template.side_effect = side_effect
-
-            mock_response = MagicMock()
-            mock_response.text = "Respuesta al audio"
-            genai_client.aio.models.generate_content.return_value = mock_response
-
-            with patch("pathlib.Path.exists", return_value=False):
-                transcripcion, respuesta = await rag.preguntar(
-                    query_text=None,
-                    audio_bytes=b"audio-bytes",
-                    remitente="test"
-                )
+        with patch("rag_langchain_con_audio.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("rag_langchain_con_audio.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("rag_langchain_con_audio.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
+             patch("pathlib.Path.exists", return_value=False):
+            transcripcion, respuesta = await rag.preguntar(
+                query_text=None,
+                audio_bytes=b"audio-bytes",
+                remitente="test"
+            )
 
             rag.audio_processor.extraer_transcripcion_memoria.assert_called_once_with(b"audio-bytes")
-            entrada_chain.ainvoke.assert_called_once()
             assert respuesta == "Respuesta al audio"
 
 
@@ -192,41 +135,23 @@ class TestFAISSRetriever:
 
     @pytest.mark.asyncio
     async def test_vector_search_uses_to_thread(self, mock_rag):
-        """REQ-4: FAISS retriever search runs via asyncio.to_thread."""
+        """REQ-4: FAISS retriever search runs via asyncio.to_thread (inside context_builder)."""
         rag, genai_client, _, _ = mock_rag
 
-        entrada_prompt, entrada_chain = _make_async_chain(
-            AsyncMock(return_value="SEGURO")
-        )
-        salida_prompt, salida_chain = _make_async_chain(
-            AsyncMock(return_value="APROBADO")
-        )
+        mock_response = MagicMock()
+        mock_response.text = "respuesta"
+        genai_client.aio.models.generate_content.return_value = mock_response
 
-        call_state = {"n": 0}
+        with patch("rag_langchain_con_audio.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("rag_langchain_con_audio.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("rag_langchain_con_audio.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
+             patch("pathlib.Path.exists", return_value=False):
+            await rag.preguntar(query_text="test query", audio_bytes=None, remitente="test")
 
-        def side_effect(template):
-            call_state["n"] += 1
-            if call_state["n"] == 1:
-                return entrada_prompt
-            return salida_prompt
-
-        with patch("rag_langchain_con_audio.ChatPromptTemplate") as mock_prompt, \
-             patch("rag_langchain_con_audio.asyncio.to_thread") as mock_to_thread:
-            mock_prompt.from_template.side_effect = side_effect
-
-            mock_docs = [MagicMock(page_content="doc content")]
-            mock_to_thread.return_value = mock_docs
-
-            mock_response = MagicMock()
-            mock_response.text = "respuesta"
-            genai_client.aio.models.generate_content.return_value = mock_response
-
-            with patch("pathlib.Path.exists", return_value=False):
-                await rag.preguntar(query_text="test query", audio_bytes=None, remitente="test")
-
-            mock_to_thread.assert_called_once()
-            call_args = mock_to_thread.call_args
-            assert call_args[0][0] == rag.retriever.invoke
+            mock_ctx.assert_called_once()
+            call_args = mock_ctx.call_args
+            # First positional arg is the retriever
+            assert call_args[0][0] == rag.retriever
 
     @pytest.mark.asyncio
     async def test_faiss_index_not_available_raises_error(self):
@@ -248,3 +173,63 @@ class TestFAISSRetriever:
                     RAGLangchain("fake-key", folder_path="/tmp/no-pdfs")
 
                 assert exc_info.value.code == ErrorCode.RAG_NO_PDFS
+
+
+class TestModuleDelegation:
+
+    @pytest.mark.asyncio
+    async def test_guardrails_called_in_order(self, mock_rag):
+        """REQ-11: Guardrails, context_builder, and Gemini API are called in correct order."""
+        rag, genai_client, _, _ = mock_rag
+
+        call_order = []
+
+        async def track_entrada(*args, **kwargs):
+            call_order.append("guardrail_entrada")
+            return True, ""
+
+        async def track_contexto(*args, **kwargs):
+            call_order.append("context_builder")
+            return "contexto"
+
+        async def track_salida(*args, **kwargs):
+            call_order.append("guardrail_salida")
+            return True, ""
+
+        mock_response = MagicMock()
+        mock_response.text = "respuesta"
+        genai_client.aio.models.generate_content.return_value = mock_response
+
+        with patch("rag_langchain_con_audio.evaluar_guardrail_entrada", side_effect=track_entrada), \
+             patch("rag_langchain_con_audio.construir_contexto", side_effect=track_contexto), \
+             patch("rag_langchain_con_audio.evaluar_guardrail_salida", side_effect=track_salida), \
+             patch("pathlib.Path.exists", return_value=False):
+            await rag.preguntar(query_text="test", audio_bytes=None, remitente="test")
+
+        assert call_order == ["guardrail_entrada", "context_builder", "guardrail_salida"]
+        genai_client.aio.models.generate_content.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_interface_unchanged(self, mock_rag):
+        """REQ-12: preguntar() signature and return type unchanged."""
+        rag, genai_client, _, _ = mock_rag
+
+        mock_response = MagicMock()
+        mock_response.text = "respuesta"
+        genai_client.aio.models.generate_content.return_value = mock_response
+
+        with patch("rag_langchain_con_audio.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("rag_langchain_con_audio.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("rag_langchain_con_audio.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
+             patch("pathlib.Path.exists", return_value=False):
+            result = await rag.preguntar(
+                query_text="test",
+                audio_bytes=None,
+                remitente="user",
+                session_manager=None
+            )
+
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert isinstance(result[0], str)
+        assert isinstance(result[1], str)
