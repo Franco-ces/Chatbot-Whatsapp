@@ -1,4 +1,4 @@
-import requests
+import httpx_idle_client
 from exceptions import CommunicationError
 from error_codes import ErrorCode
 
@@ -12,8 +12,9 @@ class WhatsAppClient:
             "apikey": self.api_key,
             "Content-Type": "application/json"
         }
+        self._client = httpx_idle_client.IdleTimeoutClient()
 
-    def obtener_audio_base64(self, mensaje_data: dict):
+    async def obtener_audio_base64(self, mensaje_data: dict):
         """
         Solicita a Evolution API que descargue el medio del mensaje y lo devuelva en Base64.
         """
@@ -24,16 +25,19 @@ class WhatsAppClient:
         }
         
         try:
-            response = requests.post(url, json=payload, headers=self.headers)
+            response = await self._client.request("POST", url, json=payload, headers=self.headers)
             if response.status_code in [200, 201]:
                 return response.json().get("base64")
             detail = f"Evolution API respondió con código {response.status_code}: {response.text}"
             raise CommunicationError(ErrorCode.COM_GET_AUDIO_FAILED, detail=detail)
-        except requests.RequestException as e:
+        except httpx_idle_client.httpx.HTTPStatusError as e:
+            detail = f"Evolution API respondió con código {e.response.status_code}: {e.response.text}"
+            raise CommunicationError(ErrorCode.COM_GET_AUDIO_FAILED, detail=detail, cause=e)
+        except httpx_idle_client.httpx.RequestError as e:
             detail = f"Error de conexión con Evolution API: {e}"
             raise CommunicationError(ErrorCode.COM_CONNECTION_FAILED, detail=detail, cause=e)
 
-    def enviar_mensaje(self, numero: str, texto: str):
+    async def enviar_mensaje(self, numero: str, texto: str):
         url = f"{self.api_url}/message/sendText/{self.instance_name}"
         
         payload = {
@@ -43,7 +47,7 @@ class WhatsAppClient:
         }
         
         try:
-            response = requests.post(url, json=payload, headers=self.headers)
+            response = await self._client.request("POST", url, json=payload, headers=self.headers)
             
             if response.status_code not in [200, 201]:
                 print(f"[DEBUG] Evolution API respondió: {response.status_code} - {response.text[:500]}")
@@ -51,6 +55,9 @@ class WhatsAppClient:
                 raise CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED, detail=detail)
                 
             return response.json()
-        except requests.RequestException as e:
+        except httpx_idle_client.httpx.HTTPStatusError as e:
+            detail = f"Evolution API respondió con código {e.response.status_code}: {e.response.text}"
+            raise CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED, detail=detail, cause=e)
+        except httpx_idle_client.httpx.RequestError as e:
             detail = f"Error de conexión con Evolution API: {e}"
             raise CommunicationError(ErrorCode.COM_CONNECTION_FAILED, detail=detail, cause=e)

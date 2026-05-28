@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 import numpy as np
 import json
 import time
@@ -126,7 +127,7 @@ class RAGLangchain:
         
         return False
 
-    def preguntar(self, query_text=None, audio_bytes=None, remitente=None):
+    async def preguntar(self, query_text=None, audio_bytes=None, remitente=None):
         """
         Maneja entradas de texto, de audio en memoria o ambas de forma híbrida (RAG + JSON).
         """
@@ -136,14 +137,14 @@ class RAGLangchain:
         
         # Procesamiento desacoplado enteramente en memoria
         if audio_bytes:
-            texto_extraido, audio_part = self.audio_processor.extraer_transcripcion_memoria(audio_bytes)
+            texto_extraido, audio_part = await self.audio_processor.extraer_transcripcion_memoria(audio_bytes)
             if not texto_para_buscar and texto_extraido:
                 texto_para_buscar = texto_extraido
                 transcripcion_detectada = texto_extraido
 
         # --- GUARDRAIL DE ENTRADA ---
         cadena_entrada = ChatPromptTemplate.from_template(PROMPT_GUARDRAIL_ENTRADA) | self.llm_guardrail | StrOutputParser()
-        evaluacion_entrada = cadena_entrada.invoke({"input": texto_para_buscar if texto_para_buscar else "audio"}).strip().upper()
+        evaluacion_entrada = (await cadena_entrada.ainvoke({"input": texto_para_buscar if texto_para_buscar else "audio"})).strip().upper()
         
         if evaluacion_entrada.startswith("INSEGURO"):
             categoria = evaluacion_entrada.split("-")[-1].strip() if "-" in evaluacion_entrada else "GENERAL"
@@ -160,18 +161,8 @@ class RAGLangchain:
 
         # 1. BÚSQUEDA EN RAG (Para manuales e información conceptual de los PDFs)
         busqueda_final = texto_para_buscar if texto_para_buscar else "productos"
-        docs = self.retriever.invoke(busqueda_final)
+        docs = await asyncio.to_thread(self.retriever.invoke, busqueda_final)
         contexto_docs = "\n\n".join(doc.page_content for doc in docs)
-
-        # ====== LOG EN TIEMPO REAL PARA DEBUGGING ======
-        print("\n" + "="*60, flush=True)
-        print(f"🔍 BÚSQUEDA EXACTA EN PDFs: '{busqueda_final}'", flush=True)
-        print(f"📄 FRAGMENTOS ENCONTRADOS EN PDFs: {len(docs)}", flush=True)
-        for i, doc in enumerate(docs):
-            print(f"\n--- CHUNK {i+1} ---", flush=True)
-            print(doc.page_content, flush=True)
-        print("="*60 + "\n", flush=True)
-        # ===============================================
 
         # 2. BÚSQUEDA DIRECTA EN EL JSON DE PRECIOS
         contexto_precios = ""
@@ -217,7 +208,7 @@ class RAGLangchain:
             contenidos_gemini.append(audio_part)
         contenidos_gemini.append(mensaje_usuario)
 
-        response = self.client.models.generate_content(
+        response = await self.client.aio.models.generate_content(
             model="gemini-3.1-flash-lite",
             contents=contenidos_gemini,
             config=types.GenerateContentConfig(
@@ -228,10 +219,10 @@ class RAGLangchain:
 
         # --- GUARDRAIL DE SALIDA ---
         cadena_salida = ChatPromptTemplate.from_template(PROMPT_GUARDRAIL_SALIDA) | self.llm_guardrail | StrOutputParser()
-        evaluacion_salida = cadena_salida.invoke({
+        evaluacion_salida = (await cadena_salida.ainvoke({
             "output": respuesta_texto,
             "context": contexto_total
-        }).strip().upper()
+        })).strip().upper()
         
         if evaluacion_salida.startswith("RECHAZADO"):
             print(f"Respuesta rechazada ({evaluacion_salida}): {respuesta_texto}")  # Log para debugging

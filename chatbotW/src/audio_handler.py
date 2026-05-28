@@ -4,7 +4,7 @@ class AudioProcessor:
     def __init__(self, client):
         self.client = client
 
-    def extraer_transcripcion_memoria(self, audio_bytes: bytes, mime_type: str = "audio/ogg"):
+    async def extraer_transcripcion_memoria(self, audio_bytes: bytes, mime_type: str = "audio/ogg"):
         """
         Recibe los bytes del audio directamente desde la RAM, 
         solicita la transcripción y devuelve el texto.
@@ -19,7 +19,7 @@ class AudioProcessor:
         )
         
         # Enviamos los bytes a la API de Google sin haber tocado el disco local
-        respuesta = self.client.models.generate_content(
+        respuesta = await self.client.aio.models.generate_content(
             model="gemini-3.1-flash-lite",
             contents=[audio_part, "Transcribe textualmente la consulta de este audio de forma clara y directa."]
         )

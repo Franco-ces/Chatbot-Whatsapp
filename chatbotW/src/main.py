@@ -3,7 +3,7 @@ import asyncio
 import os
 import sys
 from dotenv import load_dotenv
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import time
 from collections import defaultdict
@@ -29,6 +29,13 @@ TIEMPO_VENTANA = 60     # En un rango de X segundos
 # Formato: { "numero": [timestamp1, timestamp2, ...] }
 historial_mensajes = defaultdict(list)
 
+# ---- DEDUPLICACIÓN DE WEBHOOKS ----
+# Evolution API reenvía el webhook si no recibe 200 a tiempo.
+# Rastreamos los IDs de mensaje procesados para evitar respuestas duplicadas.
+# Formato: { "message_id": timestamp }
+mensajes_procesados: dict[str, float] = {}
+PROCESADOS_TTL = 300  # 5 minutos
+
 
 def usuario_excedido(remitente: str) -> bool:
     """Verifica si el usuario excedió el límite de mensajes por frecuencia."""
@@ -43,12 +50,18 @@ def usuario_excedido(remitente: str) -> bool:
 
 
 async def cleanup_loop():
-    """Limpia sesiones expiradas cada 60 segundos mientras el servidor esté activo."""
+    """Limpia sesiones expiradas y IDs de mensajes viejos cada 60 segundos."""
     global session_manager
     while True:
         await asyncio.sleep(60)
         if session_manager:
             session_manager.limpiar_sesiones_expiradas()
+
+        # Limpiar IDs de mensajes procesados viejos
+        ahora = time.time()
+        for msg_id in list(mensajes_procesados.keys()):
+            if ahora - mensajes_procesados[msg_id] > PROCESADOS_TTL:
+                del mensajes_procesados[msg_id]
 
 
 @asynccontextmanager
@@ -108,7 +121,7 @@ register_error_handlers(app)
 
 
 @app.post("/webhook")
-async def webhook(payload: EvolutionWebhook, background_tasks: BackgroundTasks):
+async def webhook(payload: EvolutionWebhook):
     global session_manager
 
     datos = extraer_datos_limpios(payload)
@@ -117,22 +130,30 @@ async def webhook(payload: EvolutionWebhook, background_tasks: BackgroundTasks):
         remitente = datos["remitente"]
         push_name = datos["push_name"]
 
+        # Deduplicación: ignorar si ya procesamos este mensaje
+        msg_id = payload.data.key.id
+        if msg_id in mensajes_procesados:
+            print(f"[DEDUP] Mensaje {msg_id} ya procesado, ignorando.")
+            return {"status": "duplicate"}
+        mensajes_procesados[msg_id] = time.time()
+
         # Validar Rate Limit por usuario
         if usuario_excedido(remitente):
             print(f"[RATE LIMIT] Usuario {push_name or remitente} ignorado por exceso de mensajes.")
-            wa_client.enviar_mensaje(remitente, "Estás enviando mensajes muy rápido. Por favor, espera un minuto.")
+            await wa_client.enviar_mensaje(remitente, "Estás enviando mensajes muy rápido. Por favor, espera un minuto.")
             return {"status": "rate_limited"}
 
-        background_tasks.add_task(
-            procesar_mensaje_bot,
-            rag_instance=rag,
-            wa_client=wa_client,
-            remitente=remitente,
-            texto=datos["texto"],
-            mensaje_data=datos["mensaje_data"],
-            es_audio=datos["es_audio"],
-            session_manager=session_manager,
-            push_name=push_name,
+        asyncio.create_task(
+            procesar_mensaje_bot(
+                rag_instance=rag,
+                wa_client=wa_client,
+                remitente=remitente,
+                texto=datos["texto"],
+                mensaje_data=datos["mensaje_data"],
+                es_audio=datos["es_audio"],
+                session_manager=session_manager,
+                push_name=push_name,
+            )
         )
 
     return {"status": "ok"}
