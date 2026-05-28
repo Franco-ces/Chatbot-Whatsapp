@@ -34,7 +34,6 @@ skills-lock.json
 chatbotW/cache/
 chatbotW/vectorstore/
 chatbotW/audios/
-chatbotW/logs/
 
 # Windows zone identifiers
 *:Zone.Identifier
