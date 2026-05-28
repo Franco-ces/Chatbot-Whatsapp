@@ -1,13 +1,13 @@
 from pathlib import Path
-import asyncio
 import numpy as np
+import json
+import time
+
 from langchain_community.document_loaders import PyMuPDFLoader, CSVLoader
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.output_parsers import StrOutputParser
 
 # Recursos locales
 from vectorstore_manager import VectorStoreManager
@@ -19,8 +19,10 @@ from error_codes import ErrorCode
 # SDK GEMINI
 from google import genai
 from google.genai import types
-from prompts import PROMPT_GUARDRAIL_ENTRADA, PROMPT_GUARDRAIL_SALIDA, PROMPT_ASISTENTE_VIRTUAL
+from prompts import PROMPT_ASISTENTE_VIRTUAL
 from logging_config import get_logger
+from guardrails import evaluar_guardrail_entrada, evaluar_guardrail_salida
+from context_builder import construir_contexto
 
 logger = get_logger("rag")
 
@@ -144,41 +146,19 @@ class RAGLangchain:
                 transcripcion_detectada = texto_extraido
 
         # --- GUARDRAIL DE ENTRADA ---
-        cadena_entrada = ChatPromptTemplate.from_template(PROMPT_GUARDRAIL_ENTRADA) | self.llm_guardrail | StrOutputParser()
-        evaluacion_entrada = (await cadena_entrada.ainvoke({"input": texto_para_buscar if texto_para_buscar else "audio"})).strip().upper()
-        
-        if evaluacion_entrada.startswith("INSEGURO"):
-            categoria = evaluacion_entrada.split("-")[-1].strip() if "-" in evaluacion_entrada else "GENERAL"
-            if categoria == "INSULTO":
-                mensaje_rechazo = "Por favor, mantengamos el respeto en la conversación."
-            elif categoria == "PROMPT_INJECTION":
-                mensaje_rechazo = "Lo siento, no puedo procesar esa solicitud."
-            elif categoria == "TEMA_ILEGAL":
-                mensaje_rechazo = "No puedo hablar sobre esos temas por políticas de uso."
-            else:
-                mensaje_rechazo = "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso."
+        es_seguro, mensaje_rechazo = await evaluar_guardrail_entrada(
+            texto_para_buscar if texto_para_buscar else "audio",
+            self.llm_guardrail
+        )
+        if not es_seguro:
             return transcripcion_detectada, mensaje_rechazo
-        # ----------------------------
 
-        # 1. BÚSQUEDA EN RAG (Para manuales, CSVs e información comercial)
-        busqueda_final = texto_para_buscar if texto_para_buscar else "productos"
-        docs = await asyncio.to_thread(self.retriever.invoke, busqueda_final)
-        contexto_docs = "\n\n".join(doc.page_content for doc in docs)
+        # --- CONTEXTO (RAG + PRECIOS) ---
+        contexto_total = await construir_contexto(
+            self.retriever, texto_para_buscar, self.folder_path
+        )
 
-        # ====== LOG EN TIEMPO REAL PARA DEBUGGING ======
-        print("\n" + "="*60, flush=True)
-        print(f"🔍 BÚSQUEDA EN MEMORIA RAG: '{busqueda_final}'", flush=True)
-        print(f"📄 FRAGMENTOS ENCONTRADOS: {len(docs)}", flush=True)
-        for i, doc in enumerate(docs):
-            print(f"\n--- CHUNK {i+1} ---", flush=True)
-            print(doc.page_content, flush=True)
-        print("="*60 + "\n", flush=True)
-        # ===============================================
-
-        # CONTEXTO FINAL (Todo proviene del RAG ahora)
-        contexto_total = f"--- INFORMACIÓN RECUPERADA (MANUALES Y PRECIOS) ---\n{contexto_docs}"
-
-        # 4. HISTORIAL DE CONVERSACIÓN (últimos 10 mensajes del log en disco)
+        # --- HISTORIAL DE CONVERSACIÓN (últimos 10 mensajes) ---
         historial_texto = ""
         if session_manager and remitente:
             historial = session_manager.leer_ultimos_mensajes(remitente, cantidad=10)
@@ -218,22 +198,10 @@ class RAGLangchain:
         respuesta_texto = response.text
 
         # --- GUARDRAIL DE SALIDA ---
-        cadena_salida = ChatPromptTemplate.from_template(PROMPT_GUARDRAIL_SALIDA) | self.llm_guardrail | StrOutputParser()
-        evaluacion_salida = (await cadena_salida.ainvoke({
-            "output": respuesta_texto,
-            "context": contexto_total
-        })).strip().upper()
-        
-        if evaluacion_salida.startswith("RECHAZADO"):
-            logger.info("Response rejected by guardrail", reason=evaluacion_salida)
-            categoria_salida = evaluacion_salida.split("-")[-1].strip() if "-" in evaluacion_salida else "GENERAL"
-            if categoria_salida == "ALUCINACION":
-                mensaje_rechazo_salida = "Disculpa, generé información que no puedo verificar en este momento. ¿Podrías ser más específico con tu consulta?"
-            elif categoria_salida == "LENGUAJE_INAPROPIADO":
-                mensaje_rechazo_salida = "Lo siento, mi respuesta generada no cumplió con los estándares de profesionalismo. ¿Podemos intentar de nuevo?"
-            else:
-                mensaje_rechazo_salida = "Lo siento, generé una respuesta que no cumple con mis parámetros de calidad. ¿Podés reformular tu consulta?"
+        es_aceptado, mensaje_rechazo_salida = await evaluar_guardrail_salida(
+            respuesta_texto, contexto_total, self.llm_guardrail
+        )
+        if not es_aceptado:
             return transcripcion_detectada, mensaje_rechazo_salida
-        # ---------------------------
 
         return transcripcion_detectada, respuesta_texto
