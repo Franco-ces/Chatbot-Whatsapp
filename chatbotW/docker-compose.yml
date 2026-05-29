@@ -19,6 +19,23 @@ services:
       - ./logs:/app/logs
       - ./config_bot.json:/app/config_bot.json
 
+  admin-ui:
+    build: .
+    container_name: admin_ui
+    restart: unless-stopped
+    working_dir: /app/src
+    command: uvicorn interface:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+      - ./PDFs:/app/PDFs
+      - ./logs:/app/logs
+      - ./config_bot.json:/app/config_bot.json
+      - ./.env:/app/.env
+
   evolution-api:
     image: evoapicloud/evolution-api:v2.3.7
     container_name: evolution_api
