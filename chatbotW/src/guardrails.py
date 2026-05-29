@@ -6,6 +6,42 @@ from logging_config import get_logger
 
 logger = get_logger("guardrails")
 
+# --- Handoff detection ---
+
+_FRASES_HANDOFF = [
+    "habla con un humano",
+    "hablá con un humano",
+    "hablar con un humano",
+    "quiero hablar con un humano",
+    "quiero hablar con una persona",
+    "habla con una persona",
+    "hablá con una persona",
+    "derivame",
+    "derivame con un agente",
+    "no me sirve",
+    "no me sirve la respuesta",
+    "necesito un agente",
+    "necesito ayuda humana",
+    "atencion al cliente",
+    "atención al cliente",
+    "soporte humano",
+    "agente humano",
+    "persona real",
+    "humano por favor",
+    "un humano por favor",
+    "quiero una persona",
+]
+
+_MSJ_HANDOFF = "Entendido. Te derivo con un agente humano. Tu consulta quedó registrada. Alguien te contactará pronto."
+
+
+def detectar_solicitud_humano(texto: str) -> bool:
+    """Detecta si el usuario solicita hablar con un humano."""
+    if not texto:
+        return False
+    texto_lower = texto.lower().strip()
+    return any(frase in texto_lower for frase in _FRASES_HANDOFF)
+
 # --- Rejection messages: input guardrail ---
 
 _MSJ_RECHAZO_ENTRADA = {

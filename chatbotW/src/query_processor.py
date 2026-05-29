@@ -6,7 +6,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from audio_handler import AudioProcessor
 from ConfigManager import ConfigManager
 from prompts import PROMPT_ASISTENTE_VIRTUAL
-from guardrails import evaluar_guardrail_entrada, evaluar_guardrail_salida
+from guardrails import evaluar_guardrail_entrada, evaluar_guardrail_salida, detectar_solicitud_humano, _MSJ_HANDOFF
 from context_builder import construir_contexto
 from logging_config import get_logger
 
@@ -15,6 +15,14 @@ from google import genai
 from google.genai import types
 
 logger = get_logger("query_processor")
+
+
+def notificar_handoff(remitente: str | None, texto: str, historial: str):
+    """Stub para notificar handoff a un sistema externo.
+    
+    TODO: Implementar notificacion real (email, Slack, ticket, etc.)
+    """
+    logger.info("Handoff registrado", remitente=remitente, texto=texto[:100])
 
 
 class QueryProcessor:
@@ -63,6 +71,12 @@ class QueryProcessor:
         )
         if not es_seguro:
             return transcripcion_detectada, mensaje_rechazo
+
+        # --- HANDOFF: deteccion de solicitud de humano ---
+        if detectar_solicitud_humano(texto_para_buscar):
+            logger.info("Handoff solicitado por usuario", remitente=remitente)
+            notificar_handoff(remitente, texto_para_buscar, "")
+            return transcripcion_detectada, _MSJ_HANDOFF
 
         # --- CONTEXTO (RAG + PRECIOS) ---
         contexto_total = await construir_contexto(
