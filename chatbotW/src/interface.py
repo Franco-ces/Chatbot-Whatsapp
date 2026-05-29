@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import set_key
 import uvicorn
@@ -37,11 +38,15 @@ ROOT_DIR = FILE_PATH.parent.parent
 PDF_FOLDER = ROOT_DIR / "PDFs"
 LOGS_DIR = ROOT_DIR / "logs"
 ENV_FILE = ROOT_DIR / ".env"
+STATIC_DIR = FILE_PATH.parent / "static"
 
 PDF_FOLDER.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 CSV_FOLDER = ROOT_DIR / "CSVs"
 CSV_FOLDER.mkdir(parents=True, exist_ok=True)
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # ─── Auth Configuration ────────────────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -91,7 +96,7 @@ async def serve_frontend():
 @app.post("/api/apikey")
 async def guardar_api_key(key: str = Form(...)):
     try:
-        dotenv.set_key(str(ENV_FILE), "GOOGLE_API_KEY", key)
+        set_key(str(ENV_FILE), "GOOGLE_API_KEY", key)
         os.environ["GOOGLE_API_KEY"] = key
         return {"status": "success", "message": "API Key guardada y actualizada en vivo"}
     except Exception as e:

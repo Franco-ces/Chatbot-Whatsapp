@@ -5,77 +5,78 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel Admin - Chatbot WhatsApp</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    
     <style>
-        .bg-wpp {
-            background-color: #efeae2;
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d3cec8' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-        }
-        [x-cloak] { display: none !important; }
+        body { font-family: 'Inter', sans-serif; }
     </style>
+    
+    <!-- Scripts -->
+    <script type="module" src="/static/js/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans min-h-screen" x-data x-cloak>
+<body class="bg-gray-100 text-gray-800 min-h-screen" x-data x-cloak>
 
-    <!-- ═══════════════════════════════════════════════════════════════
-         LOGIN VIEW (sin token)
-         ═══════════════════════════════════════════════════════════════ -->
+    <!-- TOAST CONTAINER -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2">
+        <template x-for="toast in $store.toasts.list" :key="toast.id">
+            <div :class="{
+                'bg-green-600': toast.type === 'success',
+                'bg-red-600': toast.type === 'error',
+                'bg-blue-600': toast.type === 'info'
+            }" class="px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white transition-all duration-300 flex items-center gap-2">
+                <span x-text="toast.type === 'success' ? '✅' : (toast.type === 'error' ? '❌' : 'ℹ️')"></span>
+                <span x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+
+    <!-- LOGIN VIEW -->
     <template x-if="!$store.auth.token">
         <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-600 to-green-800">
-            <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+            <div class="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 w-full max-w-md border border-white/20">
                 <div class="text-center mb-8">
                     <div class="text-5xl mb-4">💬</div>
                     <h1 class="text-2xl font-bold text-gray-800">Panel Admin</h1>
                     <p class="text-gray-500 text-sm mt-1">Chatbot WhatsApp</p>
                 </div>
-
                 <form @submit.prevent="doLogin" x-data="loginForm">
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
-                        <input type="text" x-model="username" placeholder="Ingresá tu usuario"
-                               class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none">
+                        <input type="text" x-model="username" placeholder="Ingresá tu usuario" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none transition-shadow">
                     </div>
                     <div class="mb-6">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-                        <input type="password" x-model="password" placeholder="••••••••"
-                               class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none">
+                        <input type="password" x-model="password" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none transition-shadow">
                     </div>
-
-                    <button type="submit"
-                            class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50"
-                            x-text="loading ? 'Ingresando...' : 'Ingresar'"
-                            :disabled="loading">
-                    </button>
-
+                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50 shadow-md" x-text="loading ? 'Ingresando...' : 'Ingresar'" :disabled="loading"></button>
                     <p x-show="error" x-text="error" class="text-red-600 text-sm text-center mt-3 font-medium"></p>
                 </form>
             </div>
         </div>
     </template>
 
-    <!-- ═══════════════════════════════════════════════════════════════
-         APP VIEW (autenticado)
-         ═══════════════════════════════════════════════════════════════ -->
+    <!-- APP VIEW -->
     <template x-if="$store.auth.token">
-        <div x-data="{ activeTab: 'config', init() { this.$nextTick(() => loadContactConfig()) }, switchTab(tab) { if (Alpine.store('csvEditor')?.dirty && !confirm('Tenés cambios sin guardar en el CSV. ¿Descartarlos?')) return; this.activeTab = tab; if (tab === 'config') loadContactConfig(); if (tab === 'docs') { loadPdfs(); loadCsvs(); } if (tab === 'logs') loadLogs(); } }">
-
+        <div x-data="adminPanel">
             <!-- NAVBAR -->
-            <nav class="bg-green-700 text-white shadow-lg">
+            <nav class="bg-green-700 text-white shadow-lg sticky top-0 z-40">
                 <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <span class="text-xl">💬</span>
-                        <span class="font-bold text-lg">Panel Admin</span>
+                        <span class="font-bold text-lg tracking-tight">Panel Admin</span>
                     </div>
                     <div class="flex items-center gap-3">
                         <button @click="$store.app.botPhone && window.open('https://wa.me/' + $store.app.botPhone, '_blank')"
-                                :class="$store.app.botPhone ? 'bg-green-600 hover:bg-green-500 cursor-pointer' : 'bg-green-800 opacity-50 cursor-not-allowed'"
+                                :class="$store.app.botPhone ? 'bg-green-600 hover:bg-green-500 cursor-pointer shadow-sm' : 'bg-green-800 opacity-50 cursor-not-allowed'"
                                 :disabled="!$store.app.botPhone"
                                 :title="$store.app.botPhone ? 'Abrir WhatsApp' : 'Configurá el número del bot'"
                                 class="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
                             <span>📱</span>
                             <span x-text="$store.app.botPhone ? 'WhatsApp' : 'Sin configurar'"></span>
                         </button>
-                        <button @click="$store.auth.logout()"
-                                class="bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-sm transition-colors">
+                        <button @click="$store.auth.logout()" class="bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-sm transition-colors shadow-sm">
                             Cerrar sesión
                         </button>
                     </div>
@@ -84,53 +85,35 @@
 
             <!-- TAB BAR -->
             <div class="max-w-5xl mx-auto py-6 px-4">
-                <div class="flex space-x-1 border-b border-gray-300 mb-6">
-                    <button @click="switchTab('config')"
-                            :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
-                            class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
-                        🔑 Configuración
-                    </button>
-                    <button @click="switchTab('docs')"
-                            :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
-                            class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
-                        📁 Documentos
-                    </button>
-                    <button @click="switchTab('logs')"
-                            :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'"
-                            class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors">
-                        📜 Logs
-                    </button>
+                <div class="flex space-x-1 border-b border-gray-300 mb-6 overflow-x-auto">
+                    <button @click="switchTab('config')" :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">🔑 Configuración</button>
+                    <button @click="switchTab('docs')" :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">📁 Documentos</button>
+                    <button @click="switchTab('logs')" :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">📜 Logs</button>
                 </div>
 
                 <!-- ─── TAB: Configuración ─── -->
-                <div x-show="activeTab === 'config'" class="bg-white p-6 rounded-lg shadow-md">
-                    <h2 class="text-xl font-semibold mb-4">Configuración de Google API Key</h2>
+                <div x-show="activeTab === 'config'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Configuración de Google API Key</h2>
                     <div class="flex gap-4">
-                        <input type="text" id="api-key-input" placeholder="Pega tu clave aquí..."
-                               class="flex-1 border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
-                        <button id="save-api-key-btn" onclick="saveApiKey()"
-                                class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded transition-colors">
-                            Guardar en .env
-                        </button>
+                        <input type="text" x-model="apiKey" placeholder="Pega tu clave aquí..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                        <button @click="saveApiKey()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
                     </div>
-                    <p id="api-status" class="mt-3 font-medium text-sm h-5"></p>
+                    <p x-text="apiStatus" :class="apiStatusClass" class="mt-3 font-medium text-sm h-5"></p>
 
-                    <hr class="my-8 border-gray-200">
+                    <hr class="my-8 border-gray-100">
 
                     <h2 class="text-xl font-semibold mb-4 text-gray-800">☎️ Variables de Contacto (Bot)</h2>
-                    <p class="text-sm text-gray-500 mb-4">Estos datos se inyectarán dinámicamente en las respuestas de la IA.</p>
+                    <p class="text-sm text-gray-500 mb-6">Estos datos se inyectarán dinámicamente en las respuestas de la IA.</p>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-2">Correo de Soporte</label>
-                            <input type="email" id="config-email" placeholder="soporte@tuempresa.com"
-                                   class="w-full border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <input type="email" x-model="configEmail" placeholder="soporte@tuempresa.com" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
                         </div>
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-2">Teléfono de Contacto</label>
-                            <div class="flex shadow-sm rounded">
-                                <select id="config-country-code"
-                                        class="border border-gray-300 rounded-l px-2 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 border-r-0 cursor-pointer max-w-[180px]">
+                            <div class="flex shadow-sm rounded-lg overflow-hidden border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                                <select x-model="configPhoneCode" class="px-2 py-2 bg-gray-50 border-r border-gray-300 cursor-pointer max-w-[180px] outline-none">
                                     <option value="+54">(ARG) +54</option>
                                     <option value="+56">(CHL) +56</option>
                                     <option value="+57">(COL) +57</option>
@@ -144,116 +127,113 @@
                                     <option value="+1">(USA) +1</option>
                                     <option value="+34">(ESP) +34</option>
                                 </select>
-                                <input type="text" id="config-phone" placeholder="11 1234-5678"
-                                       class="flex-1 border border-gray-300 rounded-r px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <input type="text" x-model="configPhoneNum" placeholder="11 1234-5678" class="flex-1 px-4 py-2 outline-none">
                             </div>
                         </div>
                     </div>
                     <div class="mt-4">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">📱 Número de WhatsApp del Bot</label>
-                        <input type="text" id="config-bot-phone" placeholder="5491112345678 (sin + ni espacios)"
-                               class="w-full border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="text" x-model="configBotPhone" placeholder="5491112345678 (sin + ni espacios)" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
                         <p class="text-xs text-gray-400 mt-1">Se usa para el link directo a WhatsApp en el navbar.</p>
                     </div>
-                    <div class="flex gap-3 mt-2">
-                        <button id="save-config-btn" onclick="saveContactConfig()"
-                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
-                            Guardar Datos
-                        </button>
+                    <div class="flex gap-3 mt-6">
+                        <button @click="saveContactConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Datos</button>
                     </div>
-                    <p id="config-status" class="mt-3 font-medium text-sm h-5"></p>
+                    <p x-text="configStatus" :class="configStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                 </div>
 
                 <!-- ─── TAB: Documentos ─── -->
-                <div x-show="activeTab === 'docs'" class="bg-white p-6 rounded-lg shadow-md">
+                <div x-show="activeTab === 'docs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div>
-                            <h2 class="text-xl font-semibold mb-4">📤 Subir Nuevos</h2>
-                            <input type="file" id="pdf-upload" multiple accept=".pdf"
-                                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 rounded p-2">
-                            <button id="upload-pdf-btn" onclick="uploadPdfs()"
-                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
-                                🚀 Cargar al servidor
-                            </button>
-                            <p id="upload-status" class="mt-3 font-medium text-sm h-5"></p>
+                            <h2 class="text-xl font-semibold mb-4 text-gray-800">📤 Subir Nuevos (PDF)</h2>
+                            <input type="file" multiple accept=".pdf" @change="uploadPdfs" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 rounded-lg p-2 transition-colors">
+                            <p x-text="pdfUploadStatus" :class="pdfUploadStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
                         <div>
-                            <h2 class="text-xl font-semibold mb-4 flex justify-between items-center">
+                            <h2 class="text-xl font-semibold mb-4 flex justify-between items-center text-gray-800">
                                 <span>📥 Archivos en Servidor</span>
-                                <button onclick="loadPdfs()"
-                                        class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded">
-                                    🔄 Refrescar
-                                </button>
+                                <button @click="loadPdfs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200">🔄 Refrescar</button>
                             </h2>
-                            <ul id="pdf-list" class="border border-gray-200 rounded divide-y divide-gray-200 bg-gray-50">
-                                <li class="p-3 text-gray-500 italic">Cargando...</li>
+                            <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 bg-gray-50 overflow-hidden shadow-inner max-h-[300px] overflow-y-auto custom-scrollbar">
+                                <template x-if="pdfs.length === 0">
+                                    <li class="p-4 text-gray-500 italic text-center text-sm">📁 Carpeta vacía</li>
+                                </template>
+                                <template x-for="pdf in pdfs" :key="pdf">
+                                    <li class="p-3 flex justify-between items-center hover:bg-white transition-colors group border-b border-gray-100 last:border-b-0">
+                                        <span class="font-medium text-gray-700 mr-2 flex items-center gap-2">📄 <span x-text="pdf" class="text-sm"></span></span>
+                                        <div class="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button @click="downloadFile('/api/pdfs/' + pdf, pdf)" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors leading-none" title="Descargar">⬇️</button>
+                                            <button @click="deletePdf(pdf)" class="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors leading-none" title="Eliminar">✖</button>
+                                        </div>
+                                    </li>
+                                </template>
                             </ul>
                         </div>
                     </div>
 
-                    <!-- ─── CSV Section ─── -->
-                    <hr class="my-8 border-gray-300">
+                    <hr class="my-8 border-gray-100">
 
-                    <h2 class="text-xl font-semibold mb-4">📊 Gestión de CSVs</h2>
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">📊 Gestión de CSVs</h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div>
-                            <h3 class="text-lg font-semibold mb-3">📤 Subir CSV</h3>
-                            <input type="file" id="csv-upload" accept=".csv"
-                                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-4 cursor-pointer border border-gray-200 rounded p-2">
-                            <button id="upload-csv-btn" onclick="uploadCsvs()"
-                                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded transition-colors">
-                                🚀 Subir CSV
-                            </button>
-                            <p id="csv-upload-status" class="mt-3 font-medium text-sm h-5"></p>
+                            <h3 class="text-lg font-semibold mb-3 text-gray-700">📤 Subir CSV</h3>
+                            <input type="file" accept=".csv" @change="uploadCsvs" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-4 cursor-pointer border border-gray-200 rounded-lg p-2 transition-colors">
+                            <p x-text="csvUploadStatus" :class="csvUploadStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
                         <div>
-                            <h3 class="text-lg font-semibold mb-3 flex justify-between items-center">
+                            <h3 class="text-lg font-semibold mb-3 flex justify-between items-center text-gray-700">
                                 <span>📥 Archivos CSV</span>
-                                <button onclick="loadCsvs()"
-                                        class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded">
-                                    🔄 Refrescar
-                                </button>
+                                <button @click="loadCsvs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200">🔄 Refrescar</button>
                             </h3>
-                            <ul id="csv-list" class="border border-gray-200 rounded divide-y divide-gray-200 bg-gray-50">
-                                <li class="p-3 text-gray-500 italic">Cargando...</li>
+                            <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 bg-gray-50 overflow-hidden shadow-inner max-h-[300px] overflow-y-auto custom-scrollbar">
+                                <template x-if="csvs.length === 0">
+                                    <li class="p-4 text-gray-500 italic text-center text-sm">📁 Carpeta vacía</li>
+                                </template>
+                                <template x-for="csv in csvs" :key="csv">
+                                    <li class="p-3 flex justify-between items-center hover:bg-white transition-colors group border-b border-gray-100 last:border-b-0">
+                                        <span class="font-medium text-gray-700 mr-2 flex items-center gap-2">📊 <span x-text="csv" class="text-sm truncate max-w-[200px]"></span></span>
+                                        <div class="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button @click="$store.csvEditor.edit(csv)" class="text-yellow-600 hover:bg-yellow-50 p-1.5 rounded-md transition-colors leading-none" title="Editar">✏️</button>
+                                            <button @click="downloadFile('/api/csvs/' + csv, csv)" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors leading-none" title="Descargar">⬇️</button>
+                                            <button @click="deleteCsv(csv)" class="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors leading-none" title="Eliminar">✖</button>
+                                        </div>
+                                    </li>
+                                </template>
                             </ul>
                         </div>
                     </div>
 
                     <!-- CSV Editor -->
-                    <div x-data x-show="$store.csvEditor.show" class="mt-8 border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h3 class="text-lg font-semibold mb-3" x-text="`✏️ Editando: ${$store.csvEditor.filename}`"></h3>
+                    <div x-show="$store.csvEditor.show" x-transition class="mt-8 border border-gray-200 rounded-xl p-6 bg-white shadow-sm">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-800" x-text="`✏️ Editando: ${$store.csvEditor.filename}`"></h3>
 
                         <div x-show="$store.csvEditor.loading" class="text-center py-8 text-gray-500">Cargando datos...</div>
 
                         <div x-show="!$store.csvEditor.loading">
-                            <div class="overflow-x-auto mb-4">
-                                <table class="w-full border-collapse border border-gray-300">
+                            <div class="overflow-x-auto mb-6 rounded-lg border border-gray-200">
+                                <table class="w-full border-collapse">
                                     <thead>
-                                        <tr>
-                                            <th class="border border-gray-300 bg-gray-200 px-2 py-2 text-center text-sm font-semibold w-10">#</th>
+                                        <tr class="bg-gray-50 border-b border-gray-200">
+                                            <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-10">#</th>
                                             <template x-for="(header, idx) in $store.csvEditor.headers" :key="idx">
-                                                <th class="border border-gray-300 bg-gray-200 px-3 py-2 text-left text-sm font-semibold" x-text="header"></th>
+                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-l border-gray-200" x-text="header"></th>
                                             </template>
-                                            <th class="border border-gray-300 bg-gray-200 px-2 py-2 text-center text-sm font-semibold w-12">🗑️</th>
+                                            <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider border-l border-gray-200 w-12">🗑️</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody class="bg-white divide-y divide-gray-100">
                                         <template x-for="(row, rowIdx) in $store.csvEditor.rows" :key="rowIdx">
-                                            <tr>
-                                                <td class="border border-gray-300 px-2 py-2 text-center text-xs text-gray-500" x-text="rowIdx + 1"></td>
+                                            <tr class="hover:bg-gray-50 transition-colors">
+                                                <td class="px-3 py-2 text-center text-xs text-gray-400 font-medium" x-text="rowIdx + 1"></td>
                                                 <template x-for="(cell, colIdx) in row" :key="colIdx">
-                                                    <td class="border border-gray-300 p-1">
-                                                        <input type="text" x-model="$store.csvEditor.rows[rowIdx][colIdx]"
-                                                               @input="$store.csvEditor.markDirty()"
-                                                               class="w-full border-0 bg-transparent px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white rounded outline-none">
+                                                    <td class="p-1 border-l border-gray-100">
+                                                        <input type="text" x-model="$store.csvEditor.rows[rowIdx][colIdx]" @input="$store.csvEditor.markDirty()" class="w-full border-0 bg-transparent px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white rounded-md outline-none transition-shadow text-gray-700">
                                                     </td>
                                                 </template>
-                                                <td class="border border-gray-300 px-1 py-1 text-center">
-                                                    <button @click="$store.csvEditor.removeRow(rowIdx)"
-                                                            class="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded text-lg leading-none"
-                                                            title="Eliminar fila">✖</button>
+                                                <td class="px-2 py-2 text-center border-l border-gray-100">
+                                                    <button @click="$store.csvEditor.removeRow(rowIdx)" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Eliminar fila">✖</button>
                                                 </td>
                                             </tr>
                                         </template>
@@ -261,50 +241,59 @@
                                 </table>
                             </div>
 
-                            <div class="flex gap-3 flex-wrap">
-                                <button @click="$store.csvEditor.save()" :disabled="$store.csvEditor.saving"
-                                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors disabled:opacity-50"
-                                        x-text="$store.csvEditor.saving ? 'Guardando...' : '💾 Guardar cambios'">
+                            <div class="flex gap-3 flex-wrap items-center">
+                                <button @click="$store.csvEditor.save()" :disabled="$store.csvEditor.saving" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2">
+                                    <span x-show="!$store.csvEditor.saving">💾 Guardar</span>
+                                    <span x-show="$store.csvEditor.saving">⏳ Guardando...</span>
                                 </button>
-                                <button @click="$store.csvEditor.addRow()"
-                                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">
-                                    ➕ Agregar fila
+                                <button @click="$store.csvEditor.addRow()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm">
+                                    ➕ Fila
                                 </button>
-
-                                <button @click="$store.csvEditor.cancel()"
-                                        class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded transition-colors">
+                                <button @click="$store.csvEditor.cancel()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">
                                     ❌ Cancelar
                                 </button>
-                                <span x-show="$store.csvEditor.status" x-text="$store.csvEditor.status"
-                                      class="ml-3 self-center text-sm font-medium"
-                                      :class="$store.csvEditor.statusClass"></span>
+                                <span x-show="$store.csvEditor.status" x-text="$store.csvEditor.status" class="ml-auto text-sm font-medium" :class="$store.csvEditor.statusClass"></span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- ─── TAB: Logs ─── -->
-                <div x-show="activeTab === 'logs'" class="bg-white p-6 rounded-lg shadow-md">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="md:col-span-1 border-r pr-4">
-                            <h2 class="text-lg font-semibold mb-4 flex justify-between items-center">
+                <div x-show="activeTab === 'logs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
+                        <div class="md:col-span-1 border-r border-gray-100 pr-6 flex flex-col h-full">
+                            <h2 class="text-lg font-semibold mb-4 flex justify-between items-center text-gray-800">
                                 <span>📋 Registros</span>
-                                <button onclick="loadLogs()"
-                                        class="text-xs bg-gray-200 hover:bg-gray-300 py-1 px-2 rounded">🔄</button>
+                                <button @click="loadLogs()" class="text-xs bg-gray-100 hover:bg-gray-200 py-1.5 px-2.5 rounded-lg transition-colors border border-gray-200">🔄</button>
                             </h2>
-                            <input id="log-search" type="text" placeholder="Buscar por nombre..."
-                                   class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm mb-3"
-                                   oninput="searchLogs(this.value)">
-                            <ul id="log-list" class="space-y-2 max-h-96 overflow-y-auto">
-                                <li class="text-gray-500 italic">Cargando...</li>
+                            <div class="relative mb-4">
+                                <input type="text" x-model="searchQuery" @input.debounce.300ms="performSearch" placeholder="Buscar por nombre..." class="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <span class="absolute left-3 top-2 text-gray-400">🔍</span>
+                            </div>
+                            <ul class="space-y-2 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                                <template x-if="displayLogs.length === 0">
+                                    <li class="text-gray-400 italic text-sm text-center mt-4">Sin resultados</li>
+                                </template>
+                                <template x-for="log in displayLogs" :key="log.filename">
+                                    <li>
+                                        <button @click="readLog(log.filename)" class="w-full text-left px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:shadow-sm transition-all text-sm text-gray-700 truncate group">
+                                            <span class="group-hover:translate-x-1 inline-block transition-transform duration-200">📂 <span x-text="log.filename"></span></span>
+                                        </button>
+                                    </li>
+                                </template>
                             </ul>
                         </div>
-                        <div class="md:col-span-2">
-                            <h2 id="log-title" class="text-lg font-semibold mb-4 text-gray-700">Selecciona un archivo para leer</h2>
-
-                            <div id="log-viewer"
-                                 class="w-full h-[500px] bg-wpp p-4 rounded overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-300">
-                                <div class="text-center text-gray-500 text-sm mt-4">Selecciona un log a la izquierda para visualizar la conversación.</div>
+                        <div class="md:col-span-2 flex flex-col h-full pl-2">
+                            <h2 x-text="currentLogTitle" class="text-lg font-semibold mb-4 text-gray-800"></h2>
+                            
+                            <div class="w-full flex-1 bg-wpp p-4 rounded-xl overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-200 custom-scrollbar relative">
+                                <div x-show="loadingLog" class="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
+                                    <div class="text-gray-500 font-medium">Cargando...</div>
+                                </div>
+                                <div x-show="!loadingLog && !currentLogContent" class="text-center text-gray-500 text-sm mt-auto mb-auto">
+                                    Selecciona un log a la izquierda para visualizar la conversación.
+                                </div>
+                                <div x-html="currentLogContent" class="flex flex-col gap-3 w-full pb-4"></div>
                             </div>
                         </div>
                     </div>
@@ -312,657 +301,17 @@
             </div>
         </div>
     </template>
-
-    <!-- ═══════════════════════════════════════════════════════════════
-         ALPINE.JS STORE
-         ═══════════════════════════════════════════════════════════════ -->
-    <!-- ═══════════════════════════════════════════════════════════════
-         API HELPER — agrega Bearer token a todas las llamadas
-         ═══════════════════════════════════════════════════════════════ -->
-    <script>
-        function apiFetch(url, options = {}) {
-            const token = localStorage.getItem('token');
-            const headers = options.headers || {};
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-            return fetch(url, { ...options, headers });
+    
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-    </script>
-
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.store('auth', {
-                token: localStorage.getItem('token'),
-
-                async verify() {
-                    try {
-                        const res = await apiFetch('/api/auth/verify', {
-                            headers: { 'Authorization': `Bearer ${this.token}` }
-                        });
-                        const data = await res.json();
-                        if (!data.valid) {
-                            this.token = null;
-                            localStorage.removeItem('token');
-                        }
-                    } catch {
-                        this.token = null;
-                        localStorage.removeItem('token');
-                    }
-                },
-
-                init() {
-                    // Alpine stores don't auto-call init — we call verify below
-                },
-
-                async login(username, password) {
-                    const fd = new FormData();
-                    fd.append('username', username);
-                    fd.append('password', password);
-                    const res = await apiFetch('/api/auth/login', { method: 'POST', body: fd });
-                    if (!res.ok) {
-                        const err = await res.json();
-                        throw new Error(err.detail || 'Credenciales inválidas');
-                    }
-                    const data = await res.json();
-                    this.token = data.token;
-                    localStorage.setItem('token', data.token);
-                },
-
-                logout() {
-                    this.token = null;
-                    localStorage.removeItem('token');
-                }
-            });
-
-            Alpine.store('app', {
-                botPhone: '',
-            });
-
-            Alpine.store('csvEditor', {
-                show: false,
-                filename: '',
-                headers: [],
-                rows: [],
-                loading: false,
-                saving: false,
-                status: '',
-                statusClass: '',
-                dirty: false,
-
-                markDirty() {
-                    this.dirty = true;
-                },
-
-                async edit(filename) {
-                    if (this.show && this.dirty) {
-                        if (!confirm('Tenés cambios sin guardar. ¿Seguro que querés descartarlos?')) return;
-                    }
-                    this.dirty = false;
-                    this.show = true;
-                    this.filename = filename;
-                    this.loading = true;
-                    this.status = '';
-                    try {
-                        const res = await apiFetch(`/api/csvs/${filename}/data`);
-                        const data = await res.json();
-                        this.headers = data.headers;
-                        this.rows = data.rows;
-                    } catch (err) {
-                        this.status = '❌ Error al cargar datos';
-                        this.statusClass = 'text-red-600';
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                async save() {
-                    this.saving = true;
-                    this.status = '⏳ Guardando...';
-                    this.statusClass = 'text-blue-500';
-                    try {
-                        const res = await apiFetch(`/api/csvs/${this.filename}/data`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                headers: this.headers,
-                                rows: this.rows
-                            })
-                        });
-                        const data = await res.json();
-                        if (res.ok) {
-                            this.status = '✅ Cambios guardados';
-                            this.statusClass = 'text-green-600';
-                            this.dirty = false;
-                        } else {
-                            this.status = `❌ ${data.detail || 'Error al guardar'}`;
-                            this.statusClass = 'text-red-600';
-                        }
-                    } catch (err) {
-                        this.status = '❌ Error de conexión';
-                        this.statusClass = 'text-red-600';
-                    } finally {
-                        this.saving = false;
-                        setTimeout(() => this.status = '', 3000);
-                    }
-                },
-
-                addRow() {
-                    const empty = new Array(this.headers.length).fill('');
-                    this.rows.push(empty);
-                    this.markDirty();
-                },
-
-                removeRow(index) {
-                    if (this.dirty && !confirm('¿Eliminar esta fila?')) return;
-                    this.rows.splice(index, 1);
-                    this.markDirty();
-                },
-
-                cancel() {
-                    if (this.dirty && !confirm('Descartar cambios?')) return;
-                    this.show = false;
-                    this.filename = '';
-                    this.headers = [];
-                    this.rows = [];
-                    this.dirty = false;
-                    this.status = '';
-                }
-            });
-
-            // Verify token on page load
-            Alpine.store('auth').verify();
-        });
-    </script>
-
-    <!-- ═══════════════════════════════════════════════════════════════
-         LOGIN FORM LOGIC (Alpine data)
-         ═══════════════════════════════════════════════════════════════ -->
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('loginForm', () => ({
-                username: '',
-                password: '',
-                loading: false,
-                error: '',
-                async doLogin() {
-                    this.loading = true;
-                    this.error = '';
-                    try {
-                        await Alpine.store('auth').login(this.username, this.password);
-                    } catch (e) {
-                        this.error = e.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                }
-            }));
-        });
-    </script>
-
-    <!-- ═══════════════════════════════════════════════════════════════
-          TOAST CONTAINER
-          ═══════════════════════════════════════════════════════════════ -->
-    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
-
-    <script>
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            if (!container) return;
-            const colors = {
-                success: 'bg-green-600 text-white',
-                error: 'bg-red-600 text-white',
-                info: 'bg-blue-600 text-white'
-            };
-            const icons = { success: '✅', error: '❌', info: 'ℹ️' };
-            const toast = document.createElement('div');
-            toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 flex items-center gap-2`;
-            toast.innerHTML = `${icons[type] || 'ℹ️'} ${message}`;
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateX(100%)';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-    </script>
-
-    <!-- ═══════════════════════════════════════════════════════════════
-          FUNCIONES EXISTENTES (intactas)
-          ═══════════════════════════════════════════════════════════════ -->
-    <script>
-        function showTab(tabId) {
-            // Legacy function kept for compatibility — no longer used by Alpine UI
-            console.warn('showTab() is deprecated. Alpine manages tabs now.');
-        }
-
-        async function saveApiKey() {
-            const btn = document.getElementById('save-api-key-btn');
-            const originalText = btn.innerText;
-            const key = document.getElementById('api-key-input').value;
-            const statusLabel = document.getElementById('api-status');
-            if(!key) {
-                statusLabel.innerText = "⚠️ Escribe una clave";
-                statusLabel.className = "mt-3 text-orange-500 font-medium h-5";
-                return;
-            }
-            btn.disabled = true;
-            btn.innerText = 'Guardando...';
-
-            const formData = new FormData();
-            formData.append("key", key);
-            try {
-                const res = await apiFetch('/api/apikey', { method: 'POST', body: formData });
-                const data = await res.json();
-                statusLabel.innerText = data.message;
-                statusLabel.className = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
-                showToast(data.message, data.status === "success" ? 'success' : 'error');
-            } catch (err) {
-                statusLabel.innerText = "❌ Error de conexión";
-                showToast('Error de conexión al guardar API Key', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
-            }
-        }
-
-        async function loadContactConfig() {
-            try {
-                const res = await apiFetch('/api/config');
-                const data = await res.json();
-
-                document.getElementById('config-email').value = data.email || '';
-
-                const telCompleto = data.telefono || '';
-                const selectCodigo = document.getElementById('config-country-code');
-                let numeroSinCodigo = telCompleto;
-
-                const options = Array.from(selectCodigo.options).sort((a, b) => b.value.length - a.value.length);
-
-                for (let opt of options) {
-                    if (telCompleto.startsWith(opt.value)) {
-                        selectCodigo.value = opt.value;
-                        numeroSinCodigo = telCompleto.substring(opt.value.length).trim();
-                        break;
-                    }
-                }
-                document.getElementById('config-phone').value = numeroSinCodigo;
-
-                const botPhone = data.bot_phone || '';
-                document.getElementById('config-bot-phone').value = botPhone;
-                // Sync to Alpine store for navbar reactivity
-                Alpine.store('app').botPhone = botPhone;
-
-            } catch (err) {
-                console.error("Error al cargar la configuración de contacto", err);
-            }
-        }
-
-        async function saveContactConfig() {
-            const btn = document.getElementById('save-config-btn');
-            const originalText = btn.innerText;
-            btn.disabled = true;
-            btn.innerText = 'Guardando...';
-
-            const email = document.getElementById('config-email').value;
-            const countryCode = document.getElementById('config-country-code').value;
-            const phoneStr = document.getElementById('config-phone').value;
-            const botPhone = document.getElementById('config-bot-phone').value;
-            const statusLabel = document.getElementById('config-status');
-
-            const telefonoFinal = `${countryCode} ${phoneStr}`.trim();
-
-            statusLabel.innerText = "⏳ Guardando...";
-            statusLabel.className = "mt-3 text-blue-500 text-sm font-medium h-5";
-
-            const formData = new FormData();
-            if(email) formData.append("email", email);
-            if(phoneStr) formData.append("telefono", telefonoFinal);
-            formData.append("bot_phone", botPhone);
-
-            try {
-                const res = await apiFetch('/api/config', { method: 'POST', body: formData });
-                const data = await res.json();
-                statusLabel.innerText = data.message;
-                statusLabel.className = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
-                showToast(data.message, data.status === "success" ? 'success' : 'error');
-
-                // Sync botPhone to Alpine store for navbar reactivity
-                Alpine.store('app').botPhone = botPhone;
-            } catch (err) {
-                statusLabel.innerText = "❌ Error al guardar datos";
-                statusLabel.className = "mt-3 text-red-600 font-medium h-5";
-                showToast('Error al guardar datos de contacto', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
-            }
-        }
-
-        async function loadPdfs() {
-            const list = document.getElementById('pdf-list');
-            try {
-                const res = await apiFetch('/api/pdfs');
-                const data = await res.json();
-                list.innerHTML = "";
-                if(data.pdfs.length === 0) { list.innerHTML = "<li class='p-3 text-gray-500 italic'>📁 Carpeta vacía</li>"; return; }
-                data.pdfs.forEach(pdf => {
-                    const li = document.createElement('li');
-                    li.className = "p-3 flex justify-between items-center hover:bg-white transition-colors";
-                    li.innerHTML = `
-                        <span class="font-medium text-gray-700 mr-2">📄 ${pdf}</span>
-                        <div class="flex gap-2 shrink-0">
-                            <button onclick="downloadFile('/api/pdfs/${pdf}', '${pdf}')" class="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1 rounded transition-colors text-xl leading-none" title="Descargar">⬇️</button>
-                            <button onclick="deletePdf('${pdf}')" class="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded transition-colors text-xl leading-none" title="Eliminar">✖</button>
-                        </div>
-                    `;
-                    list.appendChild(li);
-                });
-            } catch (err) {
-                list.innerHTML = "<li class='p-3 text-red-500'>Error al cargar</li>";
-            }
-        }
-
-        async function uploadPdfs() {
-            const btn = document.getElementById('upload-pdf-btn');
-            const originalText = btn.innerText;
-            const fileInput = document.getElementById('pdf-upload');
-            const statusLabel = document.getElementById('upload-status');
-            if(fileInput.files.length === 0) {
-                statusLabel.innerText = "⚠️ Selecciona al menos un archivo";
-                statusLabel.className = "mt-3 text-orange-500 text-sm font-medium h-5";
-                showToast('Seleccioná al menos un archivo PDF', 'error');
-                return;
-            }
-            for (let f of fileInput.files) {
-                if (!f.name.toLowerCase().endsWith('.pdf')) {
-                    statusLabel.innerText = "❌ Solo se permiten archivos .pdf";
-                    statusLabel.className = "mt-3 text-red-600 text-sm font-medium h-5";
-                    showToast(`"${f.name}" no es un archivo PDF`, 'error');
-                    return;
-                }
-            }
-            btn.disabled = true;
-            btn.innerText = 'Subiendo...';
-            statusLabel.innerText = "⏳ Subiendo...";
-            statusLabel.className = "mt-3 text-blue-500 text-sm font-medium h-5";
-            const formData = new FormData();
-            for(let i = 0; i < fileInput.files.length; i++) {
-                formData.append("files", fileInput.files[i]);
-            }
-            try {
-                await apiFetch('/api/pdfs', { method: 'POST', body: formData });
-                statusLabel.innerText = "✅ Subida exitosa";
-                statusLabel.className = "mt-3 text-green-600 text-sm font-medium h-5";
-                showToast('PDFs subidos correctamente', 'success');
-                fileInput.value = "";
-                loadPdfs();
-            } catch (err) {
-                statusLabel.innerText = "❌ Error al subir";
-                statusLabel.className = "mt-3 text-red-600 text-sm font-medium h-5";
-                showToast('Error al subir PDFs', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
-            }
-        }
-
-        async function deletePdf(filename) {
-            if(!confirm(`¿Seguro que deseas eliminar ${filename}?`)) return;
-            try {
-                await apiFetch(`/api/pdfs/${filename}`, { method: 'DELETE' });
-                loadPdfs();
-            } catch (err) {
-                alert("Error al borrar el archivo");
-            }
-        }
-
-        async function loadLogs() {
-            const list = document.getElementById('log-list');
-            try {
-                const res = await apiFetch('/api/logs');
-                if (!res.ok) {
-                    list.innerHTML = "<li class='p-2 text-red-500'>Error del servidor</li>";
-                    return;
-                }
-                const data = await res.json();
-                list.innerHTML = "";
-                if(!data.logs || data.logs.length === 0) { list.innerHTML = "<li class='p-2 text-gray-500 italic'>No hay logs</li>"; return; }
-                data.logs.forEach(log => {
-                    const li = document.createElement('li');
-                    const btn = document.createElement('button');
-                    btn.className = "w-full text-left px-4 py-2 bg-gray-50 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors text-sm text-gray-700 truncate";
-                    btn.innerText = `📂 ${log}`;
-                    btn.onclick = () => readLog(log);
-                    li.appendChild(btn);
-                    list.appendChild(li);
-                });
-            } catch (err) {
-                list.innerHTML = "<li class='p-2 text-red-500'>Error al cargar logs</li>";
-            }
-        }
-
-        let currentLogFile = '';
-
-        async function searchLogs(query) {
-            const list = document.getElementById('log-list');
-            if (!query.trim()) {
-                loadLogs();
-                return;
-            }
-
-            try {
-                const res = await apiFetch(`/api/logs/search?q=${encodeURIComponent(query)}`);
-                if (!res.ok) {
-                    list.innerHTML = '<li class="text-red-500 italic">Error del servidor</li>';
-                    return;
-                }
-                const data = await res.json();
-                list.innerHTML = '';
-                if (!data.results || data.results.length === 0) {
-                    list.innerHTML = '<li class="text-gray-500 italic">Sin resultados</li>';
-                    return;
-                }
-                data.results.forEach(r => {
-                    const li = document.createElement('li');
-                    li.className = 'p-2 bg-gray-100 rounded cursor-pointer hover:bg-blue-100 transition text-sm';
-                    li.textContent = r.filename;
-                    li.onclick = () => readLog(r.filename);
-                    list.appendChild(li);
-                });
-            } catch (err) {
-                list.innerHTML = '<li class="text-red-500 italic">Error al buscar</li>';
-                console.error('searchLogs error:', err);
-            }
-        }
-
-        async function renderLog(filename) {
-            const viewer = document.getElementById('log-viewer');
-            viewer.innerHTML = '<div class="text-center text-gray-500 text-sm mt-4">Cargando conversación...</div>';
-
-            try {
-                const res = await apiFetch(`/api/logs/${filename}`);
-                if (!res.ok) {
-                    viewer.innerHTML = '<div class="text-center text-red-500 font-bold mt-4">Error del servidor al leer el archivo.</div>';
-                    return;
-                }
-                const data = await res.json();
-
-                const lines = data.contenido.split('\n');
-                viewer.innerHTML = "";
-
-                if (lines.length === 0 || (lines.length === 1 && lines[0] === "")) {
-                    viewer.innerHTML = '<div class="text-center text-gray-500 text-sm mt-4">El log está vacío.</div>';
-                    return;
-                }
-
-                lines.forEach(line => {
-                    const txt = line.trim();
-                    if (!txt) return;
-
-                    const parts = txt.split('|||');
-
-                    if (parts.length >= 4) {
-                        const internalId = parts[0];
-                        const displayName = parts[1];
-                        const time = parts[2];
-                        const msg = parts.slice(3).join('|||').split('[BR]').join('\n');
-
-                        const isUser = (internalId === 'id_usuario');
-
-                        const wrapper = document.createElement('div');
-                        wrapper.className = `flex w-full ${isUser ? 'justify-end' : 'justify-start'}`;
-
-                        const bubble = document.createElement('div');
-                        bubble.className = `max-w-[85%] rounded-lg px-3 py-2 shadow-sm relative text-[15px] ${isUser ? 'bg-[#dcf8c6] rounded-tr-none' : 'bg-white rounded-tl-none'}`;
-
-                        const nameDiv = document.createElement('div');
-                        nameDiv.className = `text-xs font-bold mb-0.5 ${isUser ? 'text-green-600' : 'text-blue-500'}`;
-                        nameDiv.innerText = displayName;
-
-                        const msgDiv = document.createElement('div');
-                        msgDiv.className = "text-gray-800 break-words whitespace-pre-wrap leading-tight";
-                        msgDiv.innerText = msg;
-
-                        const timeDiv = document.createElement('div');
-                        timeDiv.className = "text-[10px] text-gray-500 text-right mt-1";
-                        timeDiv.innerText = time;
-
-                        bubble.appendChild(nameDiv);
-                        bubble.appendChild(msgDiv);
-                        bubble.appendChild(timeDiv);
-                        wrapper.appendChild(bubble);
-                        viewer.appendChild(wrapper);
-
-                    } else {
-                        const cleanSys = txt.replace(/=/g, '').trim();
-                        if (cleanSys) {
-                            const sysWrapper = document.createElement('div');
-                            sysWrapper.className = "flex w-full justify-center my-2";
-                            const sysBubble = document.createElement('div');
-                            sysBubble.className = "bg-[#d1d5db] text-gray-700 text-xs px-3 py-1 rounded-full opacity-80 text-center max-w-[90%]";
-                            sysBubble.innerText = cleanSys;
-                            sysWrapper.appendChild(sysBubble);
-                            viewer.appendChild(sysWrapper);
-                        }
-                    }
-                });
-
-                viewer.scrollTop = viewer.scrollHeight;
-
-            } catch (err) {
-                viewer.innerHTML = '<div class="text-center text-red-500 font-bold mt-4">❌ Error al leer el archivo.</div>';
-            }
-        }
-
-        async function readLog(filename) {
-            currentLogFile = filename;
-            document.getElementById('log-title').innerText = `📄 Viendo: ${filename}`;
-            await renderLog(filename);
-        }
-
-        /* ─── Download helper (blob via apiFetch) ──────────────────── */
-        async function downloadFile(url, filename) {
-            try {
-                const res = await apiFetch(url);
-                if (!res.ok) throw new Error('Error al descargar');
-                const blob = await res.blob();
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(a.href);
-            } catch (err) {
-                alert('Error al descargar: ' + err.message);
-            }
-        }
-
-        /* ─── CSV Functions ─────────────────────────────────────────── */
-
-        async function loadCsvs() {
-            const list = document.getElementById('csv-list');
-            try {
-                const res = await apiFetch('/api/csvs');
-                const data = await res.json();
-                list.innerHTML = "";
-                if(data.csvs.length === 0) { list.innerHTML = "<li class='p-3 text-gray-500 italic'>📁 Carpeta vacía</li>"; return; }
-                data.csvs.forEach(csv => {
-                    const li = document.createElement('li');
-                    li.className = "p-3 flex justify-between items-center hover:bg-white transition-colors";
-                    li.innerHTML = `
-                        <span class="font-medium text-gray-700 mr-2">📄 ${csv}</span>
-                        <div class="flex gap-2 shrink-0">
-                            <button onclick="editCsv('${csv}')" class="text-green-600 hover:text-green-800 hover:bg-green-100 p-1 rounded transition-colors text-sm font-medium" title="Editar">✏️ Editar</button>
-                            <button onclick="downloadFile('/api/csvs/${csv}', '${csv}')" class="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1 rounded transition-colors text-xl leading-none" title="Descargar">⬇️</button>
-                            <button onclick="deleteCsv('${csv}')" class="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded transition-colors text-xl leading-none" title="Eliminar">✖</button>
-                        </div>
-                    `;
-                    list.appendChild(li);
-                });
-            } catch (err) {
-                list.innerHTML = "<li class='p-3 text-red-500'>Error al cargar</li>";
-            }
-        }
-
-        async function uploadCsvs() {
-            const btn = document.getElementById('upload-csv-btn');
-            const originalText = btn.innerText;
-            const fileInput = document.getElementById('csv-upload');
-            const statusLabel = document.getElementById('csv-upload-status');
-            if(fileInput.files.length === 0) {
-                statusLabel.innerText = "⚠️ Selecciona al menos un archivo";
-                statusLabel.className = "mt-3 text-orange-500 text-sm font-medium h-5";
-                showToast('Seleccioná al menos un archivo CSV', 'error');
-                return;
-            }
-            for (let f of fileInput.files) {
-                if (!f.name.toLowerCase().endsWith('.csv')) {
-                    statusLabel.innerText = "❌ Solo se permiten archivos .csv";
-                    statusLabel.className = "mt-3 text-red-600 text-sm font-medium h-5";
-                    showToast(`"${f.name}" no es un archivo CSV`, 'error');
-                    return;
-                }
-            }
-            btn.disabled = true;
-            btn.innerText = 'Subiendo...';
-            statusLabel.innerText = "⏳ Subiendo...";
-            statusLabel.className = "mt-3 text-blue-500 text-sm font-medium h-5";
-            const formData = new FormData();
-            for(let i = 0; i < fileInput.files.length; i++) {
-                formData.append("files", fileInput.files[i]);
-            }
-            try {
-                await apiFetch('/api/csvs', { method: 'POST', body: formData });
-                statusLabel.innerText = "✅ Subida exitosa";
-                statusLabel.className = "mt-3 text-green-600 text-sm font-medium h-5";
-                showToast('CSV subido correctamente', 'success');
-                fileInput.value = "";
-                loadCsvs();
-            } catch (err) {
-                statusLabel.innerText = "❌ Error al subir";
-                statusLabel.className = "mt-3 text-red-600 text-sm font-medium h-5";
-                showToast('Error al subir CSV', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
-            }
-        }
-
-        async function deleteCsv(filename) {
-            if(!confirm(`¿Seguro que deseas eliminar ${filename}?`)) return;
-            try {
-                await apiFetch(`/api/csvs/${filename}`, { method: 'DELETE' });
-                loadCsvs();
-            } catch (err) {
-                alert("Error al borrar el archivo");
-            }
-        }
-
-        function editCsv(filename) {
-            Alpine.store('csvEditor').edit(filename);
-        }
-    </script>
+    </style>
 </body>
 </html>
