@@ -1,58 +1,178 @@
 #!/bin/bash
+set -euo pipefail
 
-# Nos aseguramos de entrar a la carpeta del proyecto donde está el docker-compose.yml
-cd "$(dirname "$0")/chatbotW"
+# =============================================================================
+# Primera Instalacion - Neuradocs
+# Configura containers, instancia de WhatsApp, QR y webhook automaticamente.
+# =============================================================================
 
-# Definimos algunos colores para que la consola se lea mejor
+# --- Configuracion (overrideable via env) --------------------------------
+INSTANCE_NAME="${INSTANCE_NAME:-rag_bot}"
+EVO_URL="${EVO_URL:-http://localhost:8080}"
+BOT_URL="${BOT_URL:-http://bot.local:5000/webhook}"
+EVO_API_KEY="${EVO_API_KEY:-franquitoGoat}"
+
+# --- Colores -------------------------------------------------------------
 CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 RED='\033[0;31m'
-NC='\033[0m' # Sin color
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-echo -e "${CYAN}1. Levantando y construyendo contenedores desde cero...${NC}"
-# Usamos el comando moderno con espacio que sí funciona con tu Python 3.12:
+log()  { echo -e "${CYAN}$1${NC}"; }
+ok()   { echo -e "${GREEN}[OK] $1${NC}"; }
+warn() { echo -e "${YELLOW}[!] $1${NC}"; }
+err()  { echo -e "${RED}[X] $1${NC}"; exit 1; }
+
+# --- Cleanup en error ----------------------------------------------------
+cleanup() {
+    local line=$1
+    if [[ -n "$line" && "$line" -gt 0 ]]; then
+        warn "Error en linea $line. Estado parcial - revisa los logs."
+    fi
+}
+trap cleanup ERR
+
+# --- Verificar prerequisitos ---------------------------------------------
+log "Verificando prerequisitos..."
+for cmd in docker curl openssl jq; do
+    if ! command -v "$cmd" &>/dev/null; then
+        err "Falta: $cmd\n  Instalalo con: sudo apt install $cmd"
+    fi
+done
+ok "Prerequisitos OK"
+
+# --- 1. Levantar containers ----------------------------------------------
+log "1/5 Levantando contenedores..."
 docker compose up -d --build
 
-echo -e "${YELLOW}2. Esperando 15 segundos para que Postgres y Evolution API se inicien correctamente...${NC}"
-sleep 15
+# --- 2. Esperar Evolution API (poll, no sleep) ---------------------------
+log "2/5 Esperando Evolution API..."
+for i in {1..30}; do
+    if curl -s -f "$EVO_URL/instance/fetchInstances" \
+         -H "apikey: $EVO_API_KEY" &>/dev/null; then
+        break
+    fi
+    if [[ $i -eq 30 ]]; then
+        err "Evolution API no respondio en 60 segundos.\n  Revisa: docker logs evolution_api"
+    fi
+    sleep 2
+done
+ok "Evolution API lista"
 
-echo -e "${CYAN}3. Creando la instancia 'rag_bot' en la base de datos...${NC}"
-if curl -s -f -X POST "http://localhost:8080/instance/create" \
-     -H "apikey: franquitoGoat" \
+# --- 3. Crear instancia de WhatsApp --------------------------------------
+log "3/5 Creando instancia '$INSTANCE_NAME'..."
+curl -s -f -X POST "$EVO_URL/instance/create" \
+     -H "apikey: $EVO_API_KEY" \
      -H "Content-Type: application/json" \
-     -d '{"instanceName": "rag_bot", "qrcode": true, "integration": "WHATSAPP-BAILEYS"}' > /dev/null; then
-    echo -e "${GREEN}Instancia creada con exito.${NC}"
-else
-    echo -e "${RED}Error al crear la instancia. Revisa que Evolution API haya levantado bien.${NC}"
-    exit 1
+     -d "{\"instanceName\": \"$INSTANCE_NAME\", \"qrcode\": true, \"integration\": \"WHATSAPP-BAILEYS\"}" \
+     > /dev/null || err "No se pudo crear la instancia.\n  Revisa: docker logs evolution_api"
+ok "Instancia creada"
+
+# --- 4. Obtener QR y abrir en browser ------------------------------------
+log "4/5 Generando codigo QR..."
+
+QR_BASE64=""
+for i in {1..20}; do
+    QR_RESPONSE=$(curl -s "$EVO_URL/instance/connect/$INSTANCE_NAME" \
+        -H "apikey: $EVO_API_KEY")
+
+    # Intentar extraer base64 del QR (varia segun version de Evolution API)
+    QR_BASE64=$(echo "$QR_RESPONSE" | jq -r '.base64 // .qrcode.base64 // empty' 2>/dev/null | cut -d',' -f2)
+
+    if [[ -n "$QR_BASE64" && "$QR_BASE64" != "null" && ${#QR_BASE64} -gt 100 ]]; then
+        break
+    fi
+    sleep 2
+done
+
+if [[ -z "$QR_BASE64" || "$QR_BASE64" == "null" ]]; then
+    err "No se pudo obtener el codigo QR.\n  Revisa: docker logs evolution_api"
 fi
 
-echo ""
-echo "================================================================="
-echo "PAUSA REQUERIDA: Vinculación de WhatsApp"
-echo "Abri tu archivo conectar.html y escanea el QR con el celular."
-echo "================================================================="
-echo ""
-read -p "Presiona ENTER únicamente cuando WhatsApp ya figure como conectado"
+# Generar HTML temporal con el QR
+QR_HTML="/tmp/qr_whatsapp_$$.html"
+cat > "$QR_HTML" << HTMLEOF
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Vincular WhatsApp</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background: #f4f4f9; }
+        img { max-width: 350px; border: 2px solid #ccc; border-radius: 10px; padding: 15px; background: white; }
+        p { color: #666; font-size: 15px; }
+    </style>
+</head>
+<body>
+    <h2>Vincular Bot de WhatsApp</h2>
+    <img src="data:image/png;base64,$QR_BASE64" alt="Codigo QR">
+    <p>Abrilo en <strong>WhatsApp - Dispositivos vinculados - Vincular dispositivo</strong></p>
+</body>
+</html>
+HTMLEOF
 
-echo -e "${CYAN}4. Configurando el Webhook para recibir los mensajes...${NC}"
-# Generar secret para autenticación del webhook
-WEBHOOK_SECRET=$(openssl rand -hex 32)
-echo -e "\nWEBHOOK_SECRET=${WEBHOOK_SECRET}" >> ../.env
-echo -e "${GREEN}Secret generado y guardado en .env.${NC}"
-
-if curl -s -f -X POST "http://localhost:8080/webhook/set/rag_bot" \
-     -H "apikey: franquitoGoat" \
-     -H "Content-Type: application/json" \
-     -d "{\"webhook\": {\"enabled\": true, \"url\": \"http://bot.local:5000/webhook\", \"byEvents\": false, \"base64\": false, \"headers\": {\"X-Webhook-Secret\": \"${WEBHOOK_SECRET}\"}, \"events\": [\"MESSAGES_UPSERT\"]}}" > /dev/null; then
-    echo -e "${GREEN}Webhook configurado con éxito.${NC}"
+# Abrir en browser (funciona en Linux, macOS, Windows)
+if xdg-open "$QR_HTML" 2>/dev/null || open "$QR_HTML" 2>/dev/null || start "$QR_HTML" 2>/dev/null; then
+    ok "QR abierto en el browser"
 else
-    echo -e "${RED}Error al configurar el webhook.${NC}"
-    exit 1
+    warn "No se pudo abrir el browser automaticamente.\n  Abri manualmente: $QR_HTML"
 fi
 
-echo ""
-echo -e "${GREEN}Todo listo. El bot ya está operativo en esta máquina.${NC}"
+# --- 5. Esperar conexion de WhatsApp -------------------------------------
+log "5/5 Esperando que escanees el QR..."
 
-read -p "Presioná ENTER para salir..."
+CONNECTED=false
+for i in {1..30}; do
+    STATUS=$(curl -s "$EVO_URL/instance/connectionState/$INSTANCE_NAME" \
+        -H "apikey: $EVO_API_KEY" | jq -r '.state // empty' 2>/dev/null)
+
+    if [[ "$STATUS" == "open" ]]; then
+        CONNECTED=true
+        break
+    fi
+    sleep 2
+done
+
+if [[ "$CONNECTED" != "true" ]]; then
+    err "Timeout - WhatsApp no se conecto en 60 segundos.\n  Escanea el QR y volve a ejecutar el script."
+fi
+ok "WhatsApp conectado"
+
+# --- 6. Configurar webhook -----------------------------------------------
+log "Configurando webhook..."
+
+# Generar secret (idempotente - no duplica si ya existe)
+WEBHOOK_SECRET=$(openssl rand -hex 32) || err "openssl fallo al generar secret"
+
+ENV_FILE="../.env"
+if grep -q "^WEBHOOK_SECRET=" "$ENV_FILE" 2>/dev/null; then
+    sed -i "s/^WEBHOOK_SECRET=.*/WEBHOOK_SECRET=${WEBHOOK_SECRET}/" "$ENV_FILE"
+else
+    echo "WEBHOOK_SECRET=${WEBHOOK_SECRET}" >> "$ENV_FILE"
+fi
+
+# Verificar que se escribio
+if ! grep -q "WEBHOOK_SECRET=${WEBHOOK_SECRET}" "$ENV_FILE" 2>/dev/null; then
+    err "No se pudo guardar el secret en .env"
+fi
+
+# Configurar webhook en Evolution API
+curl -s -f -X POST "$EVO_URL/webhook/set/$INSTANCE_NAME" \
+     -H "apikey: $EVO_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d "{\"webhook\": {\"enabled\": true, \"url\": \"$BOT_URL\", \"byEvents\": false, \"base64\": false, \"headers\": {\"X-Webhook-Secret\": \"${WEBHOOK_SECRET}\"}, \"events\": [\"MESSAGES_UPSERT\"]}}" \
+     > /dev/null || err "No se pudo configurar el webhook"
+
+ok "Webhook configurado"
+
+# --- Limpieza ------------------------------------------------------------
+rm -f "$QR_HTML"
+
+# --- Listo ---------------------------------------------------------------
+echo ""
+echo -e "${GREEN}========================================================${NC}"
+echo -e "${GREEN}  [OK] Bot operativo                                    ${NC}"
+echo -e "${GREEN}  WhatsApp conectado y webhook configurado.              ${NC}"
+echo -e "${GREEN}  Mandale un mensaje al numero de WhatsApp para probar. ${NC}"
+echo -e "${GREEN}========================================================${NC}"
