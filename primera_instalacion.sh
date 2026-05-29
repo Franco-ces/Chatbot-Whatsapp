@@ -37,10 +37,15 @@ echo ""
 read -p "Presiona ENTER únicamente cuando WhatsApp ya figure como conectado"
 
 echo -e "${CYAN}4. Configurando el Webhook para recibir los mensajes...${NC}"
+# Generar secret para autenticación del webhook
+WEBHOOK_SECRET=$(openssl rand -hex 32)
+echo -e "\nWEBHOOK_SECRET=${WEBHOOK_SECRET}" >> ../.env
+echo -e "${GREEN}Secret generado y guardado en .env.${NC}"
+
 if curl -s -f -X POST "http://localhost:8080/webhook/set/rag_bot" \
      -H "apikey: franquitoGoat" \
      -H "Content-Type: application/json" \
-     -d '{"webhook": {"enabled": true, "url": "http://bot.local:5000/webhook", "byEvents": false, "base64": false, "events": ["MESSAGES_UPSERT"]}}' > /dev/null; then
+     -d "{\"webhook\": {\"enabled\": true, \"url\": \"http://bot.local:5000/webhook\", \"byEvents\": false, \"base64\": false, \"headers\": {\"X-Webhook-Secret\": \"${WEBHOOK_SECRET}\"}, \"events\": [\"MESSAGES_UPSERT\"]}}" > /dev/null; then
     echo -e "${GREEN}Webhook configurado con éxito.${NC}"
 else
     echo -e "${RED}Error al configurar el webhook.${NC}"

@@ -20,6 +20,7 @@ class ErrorCode(str, Enum):
     API_INVALID_PAYLOAD = "E-API-001"
     API_NOT_FOUND = "E-API-002"
     API_SERVER_ERROR = "E-API-003"
+    API_UNAUTHORIZED = "E-API-004"
 
     # System errors (E-SYS)
     SYS_UNEXPECTED = "E-SYS-001"
@@ -46,6 +47,7 @@ _USER_MESSAGES = {
     ErrorCode.API_INVALID_PAYLOAD: "Solicitud inválida.",
     ErrorCode.API_NOT_FOUND: "Recurso no encontrado.",
     ErrorCode.API_SERVER_ERROR: "Error interno del servidor.",
+    ErrorCode.API_UNAUTHORIZED: "Acceso no autorizado.",
     ErrorCode.SYS_UNEXPECTED: "Ocurrió un error inesperado.",
     ErrorCode.SYS_DEPENDENCY_MISSING: "El sistema no está correctamente inicializado.",
 }
@@ -54,6 +56,7 @@ _HTTP_STATUSES = {
     ErrorCode.API_INVALID_PAYLOAD: 400,
     ErrorCode.API_NOT_FOUND: 404,
     ErrorCode.API_SERVER_ERROR: 500,
+    ErrorCode.API_UNAUTHORIZED: 401,
     ErrorCode.RAG_NO_PDFS: 503,
     ErrorCode.SYS_DEPENDENCY_MISSING: 503,
 }

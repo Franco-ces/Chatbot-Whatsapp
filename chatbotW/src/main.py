@@ -1,5 +1,6 @@
 # src/main.py
 import asyncio
+import hmac
 import os
 import sys
 import uuid
@@ -170,8 +171,16 @@ async def health_check():
 
 
 @app.post("/webhook")
-async def webhook(payload: EvolutionWebhook):
+async def webhook(request: Request, payload: EvolutionWebhook):
     global session_manager
+
+    # Verificación de secret del webhook (timing-safe)
+    webhook_secret = os.environ.get("WEBHOOK_SECRET", "")
+    if webhook_secret:
+        provided = request.headers.get("X-Webhook-Secret", "")
+        if not hmac.compare_digest(provided, webhook_secret):
+            logger.warning("Webhook secret inválido")
+            raise AppError(ErrorCode.API_UNAUTHORIZED, detail="Secret inválido")
 
     datos = extraer_datos_limpios(payload)
 
