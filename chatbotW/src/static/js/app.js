@@ -302,35 +302,86 @@ document.addEventListener('alpine:init', () => {
 
         formatLogContent(rawText) {
             if (!rawText) return '<div class="text-gray-500 text-sm text-center">Log vacío</div>';
-            const lines = rawText.split('\n').filter(l => l.trim() !== '' && l.includes('|||'));
+            
+            const lines = rawText.split('\n');
             let html = '';
-            lines.forEach(line => {
-                const parts = line.split('|||');
-                if (parts.length < 4) return;
-                const type = parts[0].trim();
-                const identifier = parts[1].trim();
-                const timeStr = parts[2].trim();
-                const content = parts.slice(3).join('|||').trim();
+            
+            let messages = [];
+            let currentMessage = null;
 
-                if (type === 'id_usuario' || type === 'id_audio') {
-                    html += `
-                        <div class="flex justify-end animate-fade-in">
-                            <div class="bg-[#d9fdd3] text-gray-800 rounded-lg py-2 px-3 max-w-[80%] shadow-sm relative text-sm font-medium">
-                                ${type === 'id_audio' ? '🎤 <i>Mensaje de audio</i>' : this.escapeHtml(content)}
-                                <div class="text-[10px] text-gray-500 text-right mt-1">${timeStr}</div>
-                            </div>
-                        </div>`;
-                } else if (type === 'id_bot' || type === 'asistente') {
-                    let formatted = this.escapeHtml(content).replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                    html += `
-                        <div class="flex justify-start animate-fade-in">
-                            <div class="bg-white text-gray-800 rounded-lg py-2 px-3 max-w-[80%] shadow-sm relative text-sm font-medium border border-gray-100">
-                                ${formatted}
-                                <div class="text-[10px] text-gray-400 text-right mt-1">${timeStr}</div>
-                            </div>
-                        </div>`;
+            // 1. Agrupar las líneas que pertenecen a un mismo mensaje multilínea
+            lines.forEach(line => {
+                if (line.startsWith('id_usuario|||') || 
+                    line.startsWith('id_bot|||') || 
+                    line.startsWith('id_audio|||') || 
+                    line.startsWith('asistente|||') ||
+                    line.startsWith('Chat iniciado') || 
+                    line.startsWith('Chat finalizado')) {
+                    
+                    if (currentMessage !== null) {
+                        messages.push(currentMessage);
+                    }
+                    currentMessage = line;
+                } else {
+                    // Es un salto de línea dentro del mensaje actual
+                    if (currentMessage !== null) {
+                        currentMessage += '\n' + line;
+                    }
                 }
             });
+            if (currentMessage !== null) {
+                messages.push(currentMessage);
+            }
+
+            // 2. Renderizar los mensajes agrupados
+            messages.forEach(fullMsg => {
+                fullMsg = fullMsg.trim();
+                if (!fullMsg) return;
+
+                const parts = fullMsg.split('|||');
+
+                // Si es un mensaje de chat normal
+                if (parts.length >= 4) {
+                    const type = parts[0].trim();
+                    const identifier = parts[1].trim();
+                    const timeStr = parts[2].trim();
+                    const content = parts.slice(3).join('|||').trim();
+
+                    if (type === 'id_usuario' || type === 'id_audio') {
+                        // Reemplazamos los verdaderos \n por <br> para que HTML los dibuje bien
+                        let formatted = type === 'id_audio' ? '🎤 <i>Mensaje de audio</i>' : this.escapeHtml(content).replace(/\n/g, '<br>');
+                        
+                        html += `
+                            <div class="flex justify-end animate-fade-in">
+                                <div class="bg-[#d9fdd3] text-gray-800 rounded-lg py-2 px-3 max-w-[80%] shadow-sm relative text-sm font-medium">
+                                    ${formatted}
+                                    <div class="text-[10px] text-gray-500 text-right mt-1">${timeStr}</div>
+                                </div>
+                            </div>`;
+                    } else if (type === 'id_bot' || type === 'asistente') {
+                        let formatted = this.escapeHtml(content).replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                        html += `
+                            <div class="flex justify-start animate-fade-in">
+                                <div class="bg-white text-gray-800 rounded-lg py-2 px-3 max-w-[80%] shadow-sm relative text-sm font-medium border border-gray-100">
+                                    ${formatted}
+                                    <div class="text-[10px] text-gray-400 text-right mt-1">${timeStr}</div>
+                                </div>
+                            </div>`;
+                    }
+                } else {
+                    // Si es un mensaje de sistema (ej: "Chat iniciado el...")
+                    const cleanSys = fullMsg.replace(/=/g, '').trim();
+                    if (cleanSys) {
+                        html += `
+                            <div class="flex justify-center animate-fade-in my-2">
+                                <div class="bg-[#e5e7eb] text-gray-500 text-[11px] px-3 py-1 rounded-md opacity-90 text-center max-w-[90%] font-medium">
+                                    ${this.escapeHtml(cleanSys)}
+                                </div>
+                            </div>`;
+                    }
+                }
+            });
+
             return html || '<div class="text-center text-gray-500 text-sm mt-auto mb-auto">No hay mensajes parseables en este log.</div>';
         },
 

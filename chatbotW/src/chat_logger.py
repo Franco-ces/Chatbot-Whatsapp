@@ -34,13 +34,13 @@ class ChatLogger:
 
     def guardar_usuario(self, mensaje, identificador="USER"):
         hora = datetime.now().strftime("%H:%M")
-        mensaje_limpio = mensaje.replace('\n', '[BR]')
-        self.buffer.append(f"id_usuario|||{identificador}|||{hora}|||{mensaje_limpio}\n")
+        
+        self.buffer.append(f"id_usuario|||{identificador}|||{hora}|||{mensaje}\n")
 
     def guardar_bot(self, mensaje, identificador="Neuradocs"):
         hora = datetime.now().strftime("%H:%M")
-        mensaje_limpio = mensaje.replace('\n', '[BR]')
-        self.buffer.append(f"id_bot|||{identificador}|||{hora}|||{mensaje_limpio}\n")
+        
+        self.buffer.append(f"id_bot|||{identificador}|||{hora}|||{mensaje}\n")
 
     def flush(self):
         """Escribe el buffer acumulado a disco y lo vacía."""

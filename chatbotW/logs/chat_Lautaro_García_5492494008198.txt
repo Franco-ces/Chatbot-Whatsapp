@@ -2,7 +2,14 @@ Chat iniciado el 28/05/2026 a las 18:07
 id_usuario|||Lautaro García (5492494008198)|||17:59|||Hola
 id_bot|||Neuradocs|||18:00|||¡Hola! Es un gusto saludarle. ¿En qué puedo ayudarle el día de hoy?
 id_usuario|||Lautaro García (5492494008198)|||18:00|||Me recuerdas el precio?
-id_bot|||Neuradocs|||18:01|||Para poder ayudarte, ¿podrías indicarme a qué producto específico te refieres? [BR][BR]Actualmente cuento con información de precios para los siguientes artículos:[BR]*   **Notebook HP Pavilion 15**: $850.000[BR]*   **Samsung Galaxy A54 5G**: $520.000[BR]*   **Auriculares Sony WH-1000XM6**: $410.000[BR]*   **Funda Silicona Samsung A54**: $12.000[BR]*   **Cargador Rápido Tipo C 25W**: $25.000
+id_bot|||Neuradocs|||18:01|||Para poder ayudarte, ¿podrías indicarme a qué producto específico te refieres? 
+
+Actualmente cuento con información de precios para los siguientes artículos:
+*   **Notebook HP Pavilion 15**: $850.000
+*   **Samsung Galaxy A54 5G**: $520.000
+*   **Auriculares Sony WH-1000XM6**: $410.000
+*   **Funda Silicona Samsung A54**: $12.000
+*   **Cargador Rápido Tipo C 25W**: $25.000
 id_usuario|||Lautaro García (5492494008198)|||18:01|||De los auriculares
 id_bot|||Neuradocs|||18:01|||El precio de los auriculares Sony WH-1000XM6 es de $410.000. ¿Hay algo más en lo que pueda ayudarte con respecto a este producto?
 Chat finalizado a las 18:07
