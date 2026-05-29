@@ -11,7 +11,7 @@ import time
 from collections import defaultdict
 
 from logging_config import setup_logging, get_logger, request_id_ctx
-from rag_langchain_con_audio import RAGLangchain
+from rag_orchestrator import RAGOrchestrator
 from whatsapp_client import WhatsAppClient
 from payload_parser import EvolutionWebhook, extraer_datos_limpios
 from bot_service import procesar_mensaje_bot
@@ -95,7 +95,7 @@ async def lifespan(app: FastAPI):
             instance_name=instance
         )
 
-        rag = RAGLangchain(google_key)
+        rag = RAGOrchestrator(google_key)
     except Exception as e:
         logger.error("Fallo al inicializar RAG", error_code=ErrorCode.SYS_DEPENDENCY_MISSING.value, detail=str(e))
         logger.warning("El bot arrancará SIN RAG. Las consultas a PDFs no estarán disponibles.")
