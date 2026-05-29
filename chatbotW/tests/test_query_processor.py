@@ -118,6 +118,48 @@ class TestQueryProcessorProcesar:
             assert respuesta == "Respuesta al audio"
 
     @pytest.mark.asyncio
+    async def test_hybrid_query_text_plus_audio(self, mock_qp):
+        """GIVEN query_text AND audio_bytes WHEN procesar() called THEN text used for search, audio part sent to Gemini."""
+        qp, genai_client = mock_qp
+
+        mock_retriever = MagicMock()
+        mock_audio_part = MagicMock()
+        qp.audio_processor.extraer_transcripcion_memoria = AsyncMock(
+            return_value=("transcripcion del audio", mock_audio_part)
+        )
+
+        mock_response = MagicMock()
+        mock_response.text = "Respuesta híbrida"
+        genai_client.aio.models.generate_content.return_value = mock_response
+
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
+             patch("pathlib.Path.exists", return_value=False):
+            transcripcion, respuesta = await qp.procesar(
+                query_text="¿Cuánto cuesta?",
+                audio_bytes=b"audio-bytes",
+                retriever=mock_retriever,
+                folder_path=Path("/tmp/test"),
+                remitente="test",
+                session_manager=None
+            )
+
+            # Audio transcrito
+            qp.audio_processor.extraer_transcripcion_memoria.assert_called_once_with(b"audio-bytes")
+            # Texto original usado para contexto (no la transcripción)
+            mock_ctx.assert_called_once_with(mock_retriever, "¿Cuánto cuesta?", Path("/tmp/test"))
+            # Transcripción es el text original (no se sobreescribe con audio)
+            assert transcripcion == "¿Cuánto cuesta?"
+            assert respuesta == "Respuesta híbrida"
+
+            # Verificar que el audio_part se incluye en contents de Gemini
+            call_args = genai_client.aio.models.generate_content.call_args
+            contents = call_args[1]["contents"] if "contents" in call_args[1] else call_args.kwargs["contents"]
+            # contents debe tener [audio_part, mensaje_usuario]
+            assert mock_audio_part in contents
+
+    @pytest.mark.asyncio
     async def test_guardrail_blocks_unsafe_input(self, mock_qp):
         """GIVEN input flagged as unsafe WHEN guardrail returns (False, msg) THEN early return."""
         qp, genai_client = mock_qp

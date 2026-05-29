@@ -13,12 +13,9 @@ class TestDocumentManagerConstructor:
         """GIVEN folder_path='PDFs' WHEN constructed THEN self.folder_path resolves to {project_root}/PDFs"""
         from document_manager import DocumentManager
 
-        with patch("document_manager.VectorStoreManager"), \
-             patch("document_manager.EmbeddingCache"), \
+        with patch("document_manager.EmbeddingCache"), \
              patch("document_manager.GoogleGenerativeAIEmbeddings"):
-            dm = DocumentManager.__new__(DocumentManager)
-            dm.api_key = "test-key"
-            dm.folder_path = Path(__file__).resolve().parent.parent / "PDFs"
+            dm = DocumentManager("test-key")
 
             assert dm.folder_path.name == "PDFs"
             assert dm.folder_path.is_absolute()
@@ -27,15 +24,33 @@ class TestDocumentManagerConstructor:
         """GIVEN folder_path='CustomDocs' WHEN constructed THEN self.folder_path resolves to custom path."""
         from document_manager import DocumentManager
 
-        with patch("document_manager.VectorStoreManager"), \
-             patch("document_manager.EmbeddingCache"), \
+        with patch("document_manager.EmbeddingCache"), \
              patch("document_manager.GoogleGenerativeAIEmbeddings"):
-            dm = DocumentManager.__new__(DocumentManager)
-            dm.api_key = "test-key"
-            dm.folder_path = Path(__file__).resolve().parent.parent / "CustomDocs"
+            dm = DocumentManager("test-key", folder_path="CustomDocs")
 
             assert dm.folder_path.name == "CustomDocs"
             assert dm.folder_path.is_absolute()
+
+    def test_constructor_stores_api_key(self):
+        """GIVEN api_key='my-key' WHEN constructed THEN api_key attribute stored."""
+        from document_manager import DocumentManager
+
+        with patch("document_manager.EmbeddingCache"), \
+             patch("document_manager.GoogleGenerativeAIEmbeddings"):
+            dm = DocumentManager("my-key")
+
+            assert dm.api_key == "my-key"
+
+    def test_constructor_creates_cache_instance(self):
+        """GIVEN valid api_key WHEN constructed THEN cache is an EmbeddingCache instance."""
+        from document_manager import DocumentManager
+
+        with patch("document_manager.EmbeddingCache") as mock_cache_cls, \
+             patch("document_manager.GoogleGenerativeAIEmbeddings"):
+            dm = DocumentManager("test-key")
+
+            mock_cache_cls.assert_called_once()
+            assert dm.cache is mock_cache_cls.return_value
 
 
 class TestDocumentManagerRetrieverSetup:
@@ -54,11 +69,7 @@ class TestDocumentManagerRetrieverSetup:
              patch("document_manager.GoogleGenerativeAIEmbeddings"):
             mock_vs_mgr.cargar.return_value = mock_vectorstore
 
-            dm = DocumentManager.__new__(DocumentManager)
-            dm.api_key = "test-key"
-            dm.folder_path = Path("/tmp/test-pdfs")
-            dm.embeddings_model = MagicMock()
-            dm.cache = MagicMock()
+            dm = DocumentManager("test-key", folder_path="PDFs")
 
             retriever = dm.setup_retriever()
 
@@ -106,11 +117,7 @@ class TestDocumentManagerRetrieverSetup:
             mock_emb_cls.return_value = mock_emb
             mock_fais_mod.from_embeddings.return_value = mock_vectorstore
 
-            dm = DocumentManager.__new__(DocumentManager)
-            dm.api_key = "test-key"
-            dm.folder_path = Path("/tmp/test-pdfs")
-            dm.embeddings_model = mock_emb
-            dm.cache = mock_cache
+            dm = DocumentManager("test-key", folder_path="PDFs")
 
             with patch("pathlib.Path.glob", return_value=[mock_pdf]):
                 retriever = dm.setup_retriever()
@@ -129,17 +136,88 @@ class TestDocumentManagerRetrieverSetup:
              patch("document_manager.GoogleGenerativeAIEmbeddings"):
             mock_vs_mgr.cargar.return_value = None
 
-            dm = DocumentManager.__new__(DocumentManager)
-            dm.api_key = "test-key"
-            dm.folder_path = Path("/tmp/no-pdfs")
-            dm.embeddings_model = MagicMock()
-            dm.cache = MagicMock()
+            dm = DocumentManager("test-key", folder_path="PDFs")
 
             with patch("pathlib.Path.glob", return_value=[]):
                 with pytest.raises(RAGError) as exc_info:
                     dm.setup_retriever()
 
                 assert exc_info.value.code == ErrorCode.RAG_NO_PDFS
+
+    def test_csv_load_failure_logged(self):
+        """GIVEN CSV that raises on load WHEN setup_retriever() called THEN warning logged and processing continues."""
+        from document_manager import DocumentManager
+
+        mock_retriever = MagicMock()
+        mock_vectorstore = MagicMock()
+        mock_vectorstore.as_retriever.return_value = mock_retriever
+
+        # PDF válido
+        mock_pdf_loader = MagicMock()
+        mock_pdf_doc = MagicMock()
+        mock_pdf_doc.page_content = "pdf content"
+        mock_pdf_loader.load.return_value = [mock_pdf_doc]
+
+        # CSV que falla al cargar
+        mock_csv_loader = MagicMock()
+        mock_csv_loader.load.side_effect = Exception("CSV corrupto")
+
+        mock_splitter = MagicMock()
+        mock_split_doc = MagicMock()
+        mock_split_doc.page_content = "chunk"
+        mock_splitter.split_documents.return_value = [mock_split_doc]
+
+        with patch("document_manager.VectorStoreManager") as mock_vs_mgr, \
+             patch("document_manager.EmbeddingCache") as mock_cache_cls, \
+             patch("document_manager.GoogleGenerativeAIEmbeddings") as mock_emb_cls, \
+             patch("document_manager.PyMuPDFLoader", return_value=mock_pdf_loader), \
+             patch("document_manager.CSVLoader", return_value=mock_csv_loader), \
+             patch("document_manager.RecursiveCharacterTextSplitter", return_value=mock_splitter), \
+             patch("document_manager.FAISS") as mock_fais_mod, \
+             patch("document_manager.time"), \
+             patch("document_manager.np") as mock_np, \
+             patch("document_manager.logger") as mock_logger:
+
+            mock_vs_mgr.cargar.return_value = None
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
+            mock_emb = MagicMock()
+            mock_emb.embed_query.return_value = [0.1]
+            mock_emb_cls.return_value = mock_emb
+            mock_fais_mod.from_embeddings.return_value = mock_vectorstore
+
+            dm = DocumentManager("test-key", folder_path="PDFs")
+
+            # Mock Path: glob("*.pdf") retorna 1 PDF, parent/CSVs exists + glob("*.csv") retorna 1 CSV
+            original_glob = Path.glob
+
+            def selective_glob(self_path, pattern):
+                # Para folder_path.glob("*.pdf")
+                if str(self_path).endswith("PDFs") and pattern == "*.pdf":
+                    return [MagicMock()]
+                # Para csv_folder.glob("*.csv")
+                if "CSVs" in str(self_path) and pattern == "*.csv":
+                    return [MagicMock()]
+                return []
+
+            original_exists = Path.exists
+
+            def selective_exists(self_path):
+                if "CSVs" in str(self_path):
+                    return True
+                return original_exists(self_path)
+
+            with patch.object(Path, "glob", selective_glob), \
+                 patch.object(Path, "exists", selective_exists):
+                retriever = dm.setup_retriever()
+
+                # CSVLoader se intentó crear
+                mock_csv_loader.load.assert_called_once()
+                # Warning logged por el CSV que falla
+                mock_logger.warning.assert_called()
+                # El procesamiento continuó con el PDF (no lanzó excepción)
+                assert retriever == mock_retriever
 
 
 class TestDocumentManagerEmbeddingCache:
@@ -182,6 +260,178 @@ class TestDocumentManagerEmbeddingCache:
         dm.cache.set.assert_called_once_with("new text", [0.4, 0.5, 0.6])
         assert result == [0.4, 0.5, 0.6]
 
+    def test_setup_retriever_cache_hit_fewer_embed_calls(self):
+        """GIVEN chunks in cache WHEN setup_retriever() builds index THEN embed_query called 0 times for cached chunks."""
+        from document_manager import DocumentManager
+
+        mock_retriever = MagicMock()
+        mock_vectorstore = MagicMock()
+        mock_vectorstore.as_retriever.return_value = mock_retriever
+
+        # Dos chunks: ambos en cache
+        mock_doc1 = MagicMock()
+        mock_doc1.page_content = "chunk uno"
+        mock_doc2 = MagicMock()
+        mock_doc2.page_content = "chunk dos"
+
+        mock_splitter = MagicMock()
+        mock_splitter.split_documents.return_value = [mock_doc1, mock_doc2]
+
+        mock_loader = MagicMock()
+        mock_loader.load.return_value = [MagicMock()]
+
+        mock_pdf = MagicMock()
+
+        with patch("document_manager.VectorStoreManager") as mock_vs_mgr, \
+             patch("document_manager.EmbeddingCache") as mock_cache_cls, \
+             patch("document_manager.GoogleGenerativeAIEmbeddings") as mock_emb_cls, \
+             patch("document_manager.PyMuPDFLoader", return_value=mock_loader), \
+             patch("document_manager.RecursiveCharacterTextSplitter", return_value=mock_splitter), \
+             patch("document_manager.FAISS") as mock_fais_mod, \
+             patch("document_manager.time"), \
+             patch("document_manager.np") as mock_np:
+
+            mock_vs_mgr.cargar.return_value = None
+            mock_cache = MagicMock()
+            # Ambos chunks en cache → cache.get retorna vector
+            mock_cache.get.return_value = [0.1, 0.2, 0.3]
+            mock_cache_cls.return_value = mock_cache
+
+            mock_emb = MagicMock()
+            mock_emb_cls.return_value = mock_emb
+
+            mock_fais_mod.from_embeddings.return_value = mock_vectorstore
+
+            dm = DocumentManager.__new__(DocumentManager)
+            dm.api_key = "test-key"
+            dm.folder_path = Path("/tmp/test-pdfs")
+            dm.embeddings_model = mock_emb
+            dm.cache = mock_cache
+
+            with patch("pathlib.Path.glob", return_value=[mock_pdf]):
+                dm.setup_retriever()
+
+                # Cache hit: embed_query NO llamado
+                mock_emb.embed_query.assert_not_called()
+                # Cache.get llamado 2 veces (un chunk por cada doc)
+                assert mock_cache.get.call_count == 2
+                mock_cache.save.assert_called_once()
+
+    def test_setup_retriever_cache_miss_all_chunks_embed(self):
+        """GIVEN no cached chunks WHEN setup_retriever() builds index THEN embed_query called for every chunk."""
+        from document_manager import DocumentManager
+
+        mock_retriever = MagicMock()
+        mock_vectorstore = MagicMock()
+        mock_vectorstore.as_retriever.return_value = mock_retriever
+
+        mock_doc1 = MagicMock()
+        mock_doc1.page_content = "chunk uno"
+        mock_doc2 = MagicMock()
+        mock_doc2.page_content = "chunk dos"
+        mock_doc3 = MagicMock()
+        mock_doc3.page_content = "chunk tres"
+
+        mock_splitter = MagicMock()
+        mock_splitter.split_documents.return_value = [mock_doc1, mock_doc2, mock_doc3]
+
+        mock_loader = MagicMock()
+        mock_loader.load.return_value = [MagicMock()]
+
+        mock_pdf = MagicMock()
+
+        with patch("document_manager.VectorStoreManager") as mock_vs_mgr, \
+             patch("document_manager.EmbeddingCache") as mock_cache_cls, \
+             patch("document_manager.GoogleGenerativeAIEmbeddings") as mock_emb_cls, \
+             patch("document_manager.PyMuPDFLoader", return_value=mock_loader), \
+             patch("document_manager.RecursiveCharacterTextSplitter", return_value=mock_splitter), \
+             patch("document_manager.FAISS") as mock_fais_mod, \
+             patch("document_manager.time"), \
+             patch("document_manager.np") as mock_np:
+
+            mock_vs_mgr.cargar.return_value = None
+            mock_cache = MagicMock()
+            # Cache vacío: cache.get retorna None siempre
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
+
+            mock_emb = MagicMock()
+            mock_emb.embed_query.return_value = [0.1, 0.2]
+            mock_emb_cls.return_value = mock_emb
+
+            mock_fais_mod.from_embeddings.return_value = mock_vectorstore
+
+            dm = DocumentManager.__new__(DocumentManager)
+            dm.api_key = "test-key"
+            dm.folder_path = Path("/tmp/test-pdfs")
+            dm.embeddings_model = mock_emb
+            dm.cache = mock_cache
+
+            with patch("pathlib.Path.glob", return_value=[mock_pdf]):
+                dm.setup_retriever()
+
+                # Cache miss: embed_query llamado una vez por chunk (3 chunks)
+                assert mock_emb.embed_query.call_count == 3
+                # Cache.set llamado para cada chunk
+                assert mock_cache.set.call_count == 3
+                mock_cache.save.assert_called_once()
+
+    def test_setup_retriever_partial_cache_mixed_calls(self):
+        """GIVEN some chunks cached, some not WHEN setup_retriever() builds index THEN embed_query called only for uncached chunks."""
+        from document_manager import DocumentManager
+
+        mock_retriever = MagicMock()
+        mock_vectorstore = MagicMock()
+        mock_vectorstore.as_retriever.return_value = mock_retriever
+
+        mock_doc1 = MagicMock()
+        mock_doc1.page_content = "chunk cached"
+        mock_doc2 = MagicMock()
+        mock_doc2.page_content = "chunk fresh"
+
+        mock_splitter = MagicMock()
+        mock_splitter.split_documents.return_value = [mock_doc1, mock_doc2]
+
+        mock_loader = MagicMock()
+        mock_loader.load.return_value = [MagicMock()]
+
+        mock_pdf = MagicMock()
+
+        with patch("document_manager.VectorStoreManager") as mock_vs_mgr, \
+             patch("document_manager.EmbeddingCache") as mock_cache_cls, \
+             patch("document_manager.GoogleGenerativeAIEmbeddings") as mock_emb_cls, \
+             patch("document_manager.PyMuPDFLoader", return_value=mock_loader), \
+             patch("document_manager.RecursiveCharacterTextSplitter", return_value=mock_splitter), \
+             patch("document_manager.FAISS") as mock_fais_mod, \
+             patch("document_manager.time"), \
+             patch("document_manager.np") as mock_np:
+
+            mock_vs_mgr.cargar.return_value = None
+            mock_cache = MagicMock()
+            # Primer chunk en cache, segundo no
+            mock_cache.get.side_effect = lambda text: [0.1, 0.2] if "cached" in str(text) else None
+            mock_cache_cls.return_value = mock_cache
+
+            mock_emb = MagicMock()
+            mock_emb.embed_query.return_value = [0.3, 0.4]
+            mock_emb_cls.return_value = mock_emb
+
+            mock_fais_mod.from_embeddings.return_value = mock_vectorstore
+
+            dm = DocumentManager.__new__(DocumentManager)
+            dm.api_key = "test-key"
+            dm.folder_path = Path("/tmp/test-pdfs")
+            dm.embeddings_model = mock_emb
+            dm.cache = mock_cache
+
+            with patch("pathlib.Path.glob", return_value=[mock_pdf]):
+                dm.setup_retriever()
+
+                # embed_query llamado solo 1 vez (para el chunk no cacheado)
+                assert mock_emb.embed_query.call_count == 1
+                # cache.set llamado solo 1 vez (para el chunk no cacheado)
+                assert mock_cache.set.call_count == 1
+
 
 class TestDocumentManagerActualizarMemoria:
     """Tests for actualizar_memoria() hash detection."""
@@ -192,17 +442,16 @@ class TestDocumentManagerActualizarMemoria:
 
         mock_retriever = MagicMock()
 
-        with patch("document_manager.VectorStoreManager") as mock_vs_mgr:
+        with patch("document_manager.VectorStoreManager") as mock_vs_mgr, \
+             patch("document_manager.EmbeddingCache"), \
+             patch("document_manager.GoogleGenerativeAIEmbeddings"):
             mock_vs_mgr.calcular_hash_archivos.return_value = "new_hash"
             mock_metadata_path = MagicMock()
             mock_metadata_path.exists.return_value = True
             mock_vs_mgr._get_metadata_path.return_value = mock_metadata_path
 
-            dm = DocumentManager.__new__(DocumentManager)
-            dm.api_key = "test-key"
-            dm.folder_path = Path("/tmp/test-pdfs")
-            dm.embeddings_model = MagicMock()
-            dm.cache = MagicMock()
+            dm = DocumentManager("test-key", folder_path="PDFs")
+            dm.retriever = mock_retriever
 
             # Mock the metadata file read
             mock_open_data = '{"hash": "old_hash"}'
@@ -220,17 +469,15 @@ class TestDocumentManagerActualizarMemoria:
         """GIVEN no files changed WHEN actualizar_memoria() called THEN returns False."""
         from document_manager import DocumentManager
 
-        with patch("document_manager.VectorStoreManager") as mock_vs_mgr:
+        with patch("document_manager.VectorStoreManager") as mock_vs_mgr, \
+             patch("document_manager.EmbeddingCache"), \
+             patch("document_manager.GoogleGenerativeAIEmbeddings"):
             mock_vs_mgr.calcular_hash_archivos.return_value = "same_hash"
             mock_metadata_path = MagicMock()
             mock_metadata_path.exists.return_value = True
             mock_vs_mgr._get_metadata_path.return_value = mock_metadata_path
 
-            dm = DocumentManager.__new__(DocumentManager)
-            dm.api_key = "test-key"
-            dm.folder_path = Path("/tmp/test-pdfs")
-            dm.embeddings_model = MagicMock()
-            dm.cache = MagicMock()
+            dm = DocumentManager("test-key", folder_path="PDFs")
 
             with patch("builtins.open", create=True) as mock_open:
                 mock_open.return_value.__enter__ = lambda s: s

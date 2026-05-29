@@ -156,48 +156,58 @@ class TestRAGOrchestratorActualizarMemoria:
 
 
 class TestRAGOrchestratorInterfaceContract:
-    """Tests for drop-in replacement contract."""
+    """Tests for drop-in replacement contract using inspect.signature()."""
 
     def test_constructor_signature_matches_old(self):
-        """GIVEN RAGOrchestrator WHEN constructed THEN signature matches RAGLangchain(api_key, folder_path)."""
-        with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
-             patch("rag_orchestrator.QueryProcessor"):
+        """GIVEN RAGOrchestrator WHEN inspected THEN constructor params = (api_key, folder_path='PDFs')."""
+        import inspect
+        from rag_orchestrator import RAGOrchestrator
 
-            mock_dm = mock_dm_cls.return_value
-            mock_dm.folder_path = Path("/tmp/PDFs")
-            mock_dm.setup_retriever.return_value = MagicMock()
+        sig = inspect.signature(RAGOrchestrator.__init__)
+        params = list(sig.parameters.keys())
 
-            from rag_orchestrator import RAGOrchestrator
-            # Should accept same args as RAGLangchain
-            rag = RAGOrchestrator("google_key")
-            rag2 = RAGOrchestrator("google_key", folder_path="CustomDocs")
+        # Debe aceptar (self, api_key, folder_path="PDFs")
+        assert params == ["self", "api_key", "folder_path"], \
+            f"Constructor params inesperados: {params}"
 
-            assert rag.folder_path is not None
-            assert rag2.folder_path is not None
+        # folder_path debe tener default "PDFs"
+        folder_param = sig.parameters["folder_path"]
+        assert folder_param.default == "PDFs", \
+            f"folder_path default esperado='PDFs', got={folder_param.default!r}"
+
+        # api_key no debe tener default (requerido)
+        api_param = sig.parameters["api_key"]
+        assert api_param.default is inspect.Parameter.empty, \
+            "api_key no debería tener default"
 
     def test_preguntar_signature_matches_old(self):
-        """GIVEN RAGOrchestrator WHEN preguntar() called THEN accepts same kwargs as RAGLangchain."""
-        with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
-             patch("rag_orchestrator.QueryProcessor") as mock_qp_cls:
+        """GIVEN RAGOrchestrator WHEN inspected THEN preguntar params = (query_text=None, audio_bytes=None, remitente=None, session_manager=None)."""
+        import inspect
+        from rag_orchestrator import RAGOrchestrator
 
-            mock_dm = mock_dm_cls.return_value
-            mock_dm.folder_path = Path("/tmp/PDFs")
-            mock_dm.setup_retriever.return_value = MagicMock()
-            mock_qp = mock_qp_cls.return_value
-            mock_qp.procesar = AsyncMock(return_value=("t", "r"))
+        sig = inspect.signature(RAGOrchestrator.preguntar)
+        params = list(sig.parameters.keys())
 
-            from rag_orchestrator import RAGOrchestrator
-            rag = RAGOrchestrator("key")
+        # Debe aceptar (self, query_text=None, audio_bytes=None, remitente=None, session_manager=None)
+        assert params == ["self", "query_text", "audio_bytes", "remitente", "session_manager"], \
+            f"preguntar params inesperados: {params}"
 
-            # Should accept same kwargs
-            import asyncio
-            result = asyncio.run(rag.preguntar(
-                query_text="test",
-                audio_bytes=None,
-                remitente="user",
-                session_manager=None
-            ))
-            assert isinstance(result, tuple)
+        # Todos los parámetros deben ser keyword-only con default None
+        for name in ["query_text", "audio_bytes", "remitente", "session_manager"]:
+            param = sig.parameters[name]
+            assert param.default is None, \
+                f"{name} default esperado=None, got={param.default!r}"
+
+    def test_actualizar_memoria_signature(self):
+        """GIVEN RAGOrchestrator WHEN inspected THEN actualizar_memoria takes no extra params."""
+        import inspect
+        from rag_orchestrator import RAGOrchestrator
+
+        sig = inspect.signature(RAGOrchestrator.actualizar_memoria)
+        params = list(sig.parameters.keys())
+
+        assert params == ["self"], \
+            f"actualizar_memoria params inesperados: {params}"
 
     def test_line_count_under_30(self):
         """GIVEN the orchestrator implementation WHEN lines counted THEN ≤30 implementation lines."""
