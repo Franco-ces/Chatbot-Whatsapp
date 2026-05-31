@@ -1,3 +1,6 @@
+//Con docker abierto
+
+cd chatbotW
 docker-compose up -d //Levantar docker
 
 docker logs gemini_whatsapp_bot -f //Trackeo en tiempo real
