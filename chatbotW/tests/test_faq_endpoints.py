@@ -79,6 +79,16 @@ class TestListarFAQs:
         assert body[0]["pregunta"] == "¿Horario?"
         assert body[0]["respuesta"] == "9-18"
 
+    @pytest.mark.asyncio
+    async def test_archivo_vacio_get_devuelve_lista_vacia(self, client, faqs_path, auth_token):
+        """Regresión: faqs.json existe pero está vacío (0 bytes). GET no debe
+        explotar con 500; debe devolver [].
+        """
+        faqs_path.write_text("", encoding="utf-8")
+        resp = await client.get("/api/faqs", headers=_auth(auth_token))
+        assert resp.status_code == 200
+        assert resp.json() == []
+
 
 # ────────────────────────────────────────────────────────────────────────
 # POST /api/faqs
@@ -107,6 +117,25 @@ class TestCrearFAQ:
         on_disk = json.loads(faqs_path.read_text(encoding="utf-8"))
         assert len(on_disk) == 1
         assert on_disk[0]["id"] == body["id"]
+
+    @pytest.mark.asyncio
+    async def test_archivo_vacio_post_no_devuelve_500(self, client, faqs_path, auth_token):
+        """Regresión: faqs.json existe pero está vacío (0 bytes), p.ej. cuando un
+        bind mount de Docker crea un archivo vacío en el primer arranque.
+        El primer POST debe recuperar la lista vacía, no explotar con 500.
+        """
+        faqs_path.write_text("", encoding="utf-8")
+        resp = await client.post(
+            "/api/faqs",
+            json={"pregunta": "Horario", "respuesta": "Lun a Vie 9-18hs"},
+            headers=_auth(auth_token),
+        )
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["pregunta"] == "Horario"
+        # El primer POST reescribe el archivo con contenido válido
+        on_disk = json.loads(faqs_path.read_text(encoding="utf-8"))
+        assert len(on_disk) == 1
 
     @pytest.mark.asyncio
     async def test_pregunta_vacia_devuelve_400(self, client, auth_token):

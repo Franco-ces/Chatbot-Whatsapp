@@ -22,6 +22,9 @@ from ConfigManager import ConfigManager
 from error_handler import register_error_handlers
 from error_codes import ErrorCode
 from exceptions import APIError
+from logging_config import get_logger
+
+logger = get_logger("interface")
 
 app = FastAPI()
 
