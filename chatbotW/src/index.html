@@ -85,7 +85,7 @@
 
             <!-- TAB BAR -->
             <div class="max-w-5xl mx-auto py-6 px-4">
-                <div class="flex space-x-1 border-b border-gray-300 mb-6 overflow-x-auto">
+                <div class="flex space-x-1 border-b border-gray-300 mb-6 overflow-x-auto items-end">
                     <button @click="switchTab('config')" :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">🔑 Configuración</button>
                     <button @click="switchTab('docs')" :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">📁 Documentos</button>
                     <button @click="switchTab('faqs')" :class="activeTab === 'faqs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">❓ FAQs</button>
@@ -93,7 +93,7 @@
                 </div>
 
                 <!-- ─── TAB: Configuración ─── -->
-                <div x-show="activeTab === 'config'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
+                <div x-show="activeTab === 'config'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h2 class="text-xl font-semibold mb-4 text-gray-800">Configuración de Google API Key</h2>
                     <div class="flex gap-4">
                         <input type="text" x-model="apiKey" placeholder="Pega tu clave aquí..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
@@ -144,15 +144,15 @@
                 </div>
 
                 <!-- ─── TAB: Documentos ─── -->
-                <div x-show="activeTab === 'docs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
+                <div x-show="activeTab === 'docs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div>
-                            <h2 class="text-xl font-semibold mb-4 text-gray-800">📤 Subir Nuevos (PDF)</h2>
+                            <h2 class="text-xl font-semibold mb-4 text-gray-800 flex items-center min-h-[40px]">📤 Subir Nuevos (PDF)</h2>
                             <input type="file" multiple accept=".pdf" @change="uploadPdfs" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 rounded-lg p-2 transition-colors">
                             <p x-text="pdfUploadStatus" :class="pdfUploadStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
                         <div>
-                            <h2 class="text-xl font-semibold mb-4 flex justify-between items-center text-gray-800">
+                            <h2 class="text-xl font-semibold mb-4 flex justify-between items-center min-h-[40px] text-gray-800">
                                 <span>📥 Archivos en Servidor</span>
                                 <button @click="loadPdfs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200">🔄 Refrescar</button>
                             </h2>
@@ -162,7 +162,7 @@
                                 </template>
                                 <template x-for="pdf in pdfs" :key="pdf">
                                     <li class="p-3 flex justify-between items-center hover:bg-white transition-colors group border-b border-gray-100 last:border-b-0">
-                                        <span class="font-medium text-gray-700 mr-2 flex items-center gap-2">📄 <span x-text="pdf" class="text-sm"></span></span>
+                                        <span class="font-medium text-gray-700 mr-2 flex items-center gap-2 min-w-0">📄 <span x-text="pdf" class="text-sm truncate"></span></span>
                                         <div class="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button @click="downloadFile('/api/pdfs/' + pdf, pdf)" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors leading-none" title="Descargar">⬇️</button>
                                             <button @click="deletePdf(pdf)" class="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors leading-none" title="Eliminar">✖</button>
@@ -179,12 +179,12 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div>
-                            <h3 class="text-lg font-semibold mb-3 text-gray-700">📤 Subir CSV</h3>
+                            <h3 class="text-lg font-semibold mb-3 text-gray-700 flex items-center min-h-[36px]">📤 Subir CSV</h3>
                             <input type="file" accept=".csv" @change="uploadCsvs" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-4 cursor-pointer border border-gray-200 rounded-lg p-2 transition-colors">
                             <p x-text="csvUploadStatus" :class="csvUploadStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
                         <div>
-                            <h3 class="text-lg font-semibold mb-3 flex justify-between items-center text-gray-700">
+                            <h3 class="text-lg font-semibold mb-3 flex justify-between items-center min-h-[36px] text-gray-700">
                                 <span>📥 Archivos CSV</span>
                                 <button @click="loadCsvs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200">🔄 Refrescar</button>
                             </h3>
@@ -194,7 +194,7 @@
                                 </template>
                                 <template x-for="csv in csvs" :key="csv">
                                     <li class="p-3 flex justify-between items-center hover:bg-white transition-colors group border-b border-gray-100 last:border-b-0">
-                                        <span class="font-medium text-gray-700 mr-2 flex items-center gap-2">📊 <span x-text="csv" class="text-sm truncate max-w-[200px]"></span></span>
+                                        <span class="font-medium text-gray-700 mr-2 flex items-center gap-2 min-w-0">📊 <span x-text="csv" class="text-sm truncate max-w-[200px]"></span></span>
                                         <div class="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button @click="$store.csvEditor.edit(csv)" class="text-yellow-600 hover:bg-yellow-50 p-1.5 rounded-md transition-colors leading-none" title="Editar">✏️</button>
                                             <button @click="downloadFile('/api/csvs/' + csv, csv)" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors leading-none" title="Descargar">⬇️</button>
@@ -213,7 +213,7 @@
                         <div x-show="$store.csvEditor.loading" class="text-center py-8 text-gray-500">Cargando datos...</div>
 
                         <div x-show="!$store.csvEditor.loading">
-                            <div class="overflow-x-auto mb-6 rounded-lg border border-gray-200">
+                            <div class="overflow-auto max-h-[500px] mb-6 rounded-lg border border-gray-200 custom-scrollbar">
                                 <table class="w-full border-collapse">
                                     <thead>
                                         <tr class="bg-gray-50 border-b border-gray-200">
@@ -260,8 +260,8 @@
                 </div>
 
                 <!-- ─── TAB: Logs ─── -->
-                <div x-show="activeTab === 'logs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
+                <div x-show="activeTab === 'logs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-[500px] md:h-[600px]">
                         <div class="md:col-span-1 border-r border-gray-100 pr-6 flex flex-col h-full">
                             <h2 class="text-lg font-semibold mb-4 flex justify-between items-center text-gray-800">
                                 <span>📋 Registros</span>
@@ -284,10 +284,10 @@
                                 </template>
                             </ul>
                         </div>
-                        <div class="md:col-span-2 flex flex-col h-full pl-2">
+                        <div class="md:col-span-2 flex flex-col h-full pl-2 min-h-0">
                             <h2 x-text="currentLogTitle" class="text-lg font-semibold mb-4 text-gray-800"></h2>
 
-                            <div class="w-full flex-1 bg-wpp p-4 rounded-xl overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-200 custom-scrollbar relative">
+                            <div class="w-full flex-1 min-h-0 bg-wpp p-4 rounded-xl overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-200 custom-scrollbar relative">
                                 <div x-show="loadingLog" class="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
                                     <div class="text-gray-500 font-medium">Cargando...</div>
                                 </div>
@@ -301,7 +301,7 @@
                 </div>
 
                 <!-- ─── TAB: FAQs ─── -->
-                <div x-show="activeTab === 'faqs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
+                <div x-show="activeTab === 'faqs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-semibold text-gray-800">❓ Respuestas Frecuentes</h2>
                         <div class="flex gap-2">
@@ -317,13 +317,13 @@
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">Pregunta <span class="text-gray-400 font-normal">(máx 500)</span></label>
-                                <textarea x-model="faqForm.pregunta" rows="2" placeholder="Ej: ¿Cuál es el horario de atención?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y"></textarea>
+                                <textarea x-model="faqForm.pregunta" maxlength="500" rows="2" placeholder="Ej: ¿Cuál es el horario de atención?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y"></textarea>
                                 <p class="text-xs text-right mt-1" :class="faqForm.pregunta.length > 500 ? 'text-red-600' : 'text-gray-400'" x-text="`${faqForm.pregunta.length} / 500`"></p>
                                 <p x-show="faqForm.errors.pregunta" x-text="faqForm.errors.pregunta" class="text-xs text-red-600 mt-1 font-medium"></p>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">Respuesta <span class="text-gray-400 font-normal">(máx 500)</span></label>
-                                <textarea x-model="faqForm.respuesta" rows="3" placeholder="Ej: Lun a Vie de 9 a 18hs." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y"></textarea>
+                                <textarea x-model="faqForm.respuesta" maxlength="500" rows="3" placeholder="Ej: Lun a Vie de 9 a 18hs." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y"></textarea>
                                 <p class="text-xs text-right mt-1" :class="faqForm.respuesta.length > 500 ? 'text-red-600' : 'text-gray-400'" x-text="`${faqForm.respuesta.length} / 500`"></p>
                                 <p x-show="faqForm.errors.respuesta" x-text="faqForm.errors.respuesta" class="text-xs text-red-600 mt-1 font-medium"></p>
                             </div>
@@ -338,7 +338,7 @@
                     </div>
 
                     <!-- Tabla de FAQs -->
-                    <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <div class="overflow-auto max-h-[500px] custom-scrollbar rounded-lg border border-gray-200">
                         <table class="w-full border-collapse">
                             <thead>
                                 <tr class="bg-gray-50 border-b border-gray-200">
@@ -378,11 +378,6 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
     </style>
 </body>
 </html>
