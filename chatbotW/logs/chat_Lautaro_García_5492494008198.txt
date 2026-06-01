@@ -16,3 +16,24 @@ Chat finalizado a las 18:07
 id_usuario|||Lautaro García (5492494008198)|||18:08|||Recordame el precio
 id_bot|||Neuradocs|||18:09|||El precio de los auriculares Sony WH-1000XM6 es de $410.000. ¿Hay algo más en lo que pueda ayudarte con respecto a este producto?
 Chat finalizado a las 18:14
+id_usuario|||Lautaro García (5492494008198)|||01:50|||que horario de atencion tienen?
+id_bot|||Neuradocs|||01:51|||Lo siento, no cuento con esa información específica. Puedes ponerte en contacto a través del correo electrónico soporte@empresaprueba.com o llamando al teléfono +54 11 1234-5678.
+id_usuario|||Lautaro García (5492494008198)|||01:52|||Cual es el horario de atencion?
+id_bot|||Neuradocs|||01:52|||Lo siento, no cuento con esa información específica. Puedes ponerte en contacto a través del correo electrónico soporte@empresaprueba.com o llamando al teléfono +54 11 1234-5678.
+Chat finalizado a las 01:57
+id_usuario|||Lautaro García (5492494008198)|||04:25|||A que hora abren?
+id_bot|||Neuradocs|||04:25|||A las 9 am, de Lunes a Viernes!
+id_usuario|||Lautaro García (5492494008198)|||04:27|||Cuanto cuesta una funda de silicona?
+id_bot|||Neuradocs|||04:28|||La funda de silicona para el Samsung A54 tiene un precio de $12.000. ¿Hay algo más en lo que pueda ayudarte?
+id_usuario|||Lautaro García (5492494008198)|||04:28|||A que hora abren?
+id_bot|||Neuradocs|||04:28|||A las 9 am, de Lunes a Viernes!
+id_usuario|||Lautaro García (5492494008198)|||04:29|||A que hora abren?
+id_bot|||Neuradocs|||04:29|||A las 9 am, de Lunes a Viernes!
+Chat finalizado a las 04:34
+id_usuario|||Lautaro García (5492494008198)|||04:43|||A que hora abren?
+id_bot|||Neuradocs|||04:43|||A las 9 am, de Lunes a Viernes! Recorda que no abrimos los sabados.
+id_usuario|||Lautaro García (5492494008198)|||04:43|||A que hora abren?
+id_bot|||Neuradocs|||04:43|||A las 9 am, de Lunes a Viernes!
+id_usuario|||Lautaro García (5492494008198)|||04:45|||Venden auriculares?
+id_bot|||Neuradocs|||04:46|||Sí, contamos con los auriculares Sony WH-1000XM6, que tienen un precio de $410.000. ¿Hay algo más en lo que pueda ayudarte?
+Chat finalizado a las 04:52
