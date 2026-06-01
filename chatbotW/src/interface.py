@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import set_key
@@ -15,6 +15,8 @@ from starlette.requests import Request
 from fastapi.responses import JSONResponse
 import secrets
 import csv
+import json
+import uuid
 
 from ConfigManager import ConfigManager
 from error_handler import register_error_handlers
@@ -39,6 +41,8 @@ PDF_FOLDER = ROOT_DIR / "PDFs"
 LOGS_DIR = ROOT_DIR / "logs"
 ENV_FILE = ROOT_DIR / ".env"
 STATIC_DIR = FILE_PATH.parent / "static"
+# Ruta al JSON de FAQs. Se crea en el primer POST.
+FAQS_PATH = ROOT_DIR / "faqs.json"
 
 PDF_FOLDER.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -350,6 +354,117 @@ async def verify_token(request: Request):
         return {"valid": True}
     except JWTError:
         return {"valid": False}
+# ────────────────────────────────────────────────────────────────────────
+
+# ─── FAQ CRUD Endpoints ────────────────────────────────────────────────
+def _read_faqs() -> list:
+    """Lee las FAQs del disco. Si el archivo no existe, devuelve []."""
+    if not FAQS_PATH.exists():
+        return []
+    try:
+        with open(FAQS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            logger.warning("faqs.json malformado: no es una lista", detail=str(type(data)))
+            return []
+        return data
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Error leyendo faqs.json", detail=str(e))
+        return []
+
+
+def _write_faqs(rows: list) -> None:
+    """Escribe las FAQs atómicamente: temp + os.replace."""
+    tmp_path = FAQS_PATH.with_suffix(".json.tmp")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, FAQS_PATH)
+    except OSError as e:
+        # Si quedó un temp colgado, intentar limpiarlo.
+        if tmp_path.exists():
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        raise APIError(ErrorCode.FAQ_WRITE_FAILED, detail=str(e))
+
+
+def _validate_faq_fields(pregunta: str | None, respuesta: str | None) -> tuple[str, str]:
+    """Valida pregunta/respuesta: no vacías (post-strip) y máx 500 chars."""
+    if pregunta is None or respuesta is None:
+        raise APIError(
+            ErrorCode.FAQ_INVALID_DATA,
+            detail="Los campos pregunta y respuesta son obligatorios.",
+        )
+    p = pregunta.strip()
+    r = respuesta.strip()
+    if not p or not r:
+        raise APIError(
+            ErrorCode.FAQ_INVALID_DATA,
+            detail="Los campos pregunta y respuesta no pueden estar vacíos.",
+        )
+    if len(p) > 500 or len(r) > 500:
+        raise APIError(
+            ErrorCode.FAQ_INVALID_DATA,
+            detail="Los campos pregunta y respuesta no pueden superar los 500 caracteres.",
+        )
+    return p, r
+
+
+@app.get("/api/faqs")
+async def listar_faqs():
+    """Devuelve la lista completa de FAQs."""
+    return _read_faqs()
+
+
+@app.post("/api/faqs")
+async def crear_faq(data: dict):
+    """Crea una nueva fila de FAQ. Genera id con uuid4."""
+    pregunta, respuesta = _validate_faq_fields(data.get("pregunta"), data.get("respuesta"))
+    rows = _read_faqs()
+    new_row = {
+        "id": str(uuid.uuid4()),
+        "pregunta": pregunta,
+        "respuesta": respuesta,
+    }
+    rows.append(new_row)
+    _write_faqs(rows)
+    return JSONResponse(status_code=201, content=new_row)
+
+
+@app.put("/api/faqs/{faq_id}")
+async def actualizar_faq(faq_id: str, data: dict):
+    """Reemplaza la fila con ese id. 404 si no existe."""
+    pregunta, respuesta = _validate_faq_fields(data.get("pregunta"), data.get("respuesta"))
+    rows = _read_faqs()
+    for i, row in enumerate(rows):
+        if row.get("id") == faq_id:
+            rows[i] = {
+                "id": faq_id,
+                "pregunta": pregunta,
+                "respuesta": respuesta,
+            }
+            _write_faqs(rows)
+            return rows[i]
+    raise APIError(
+        ErrorCode.FAQ_NOT_FOUND,
+        detail=f"No existe una FAQ con id '{faq_id}'.",
+    )
+
+
+@app.delete("/api/faqs/{faq_id}")
+async def eliminar_faq(faq_id: str):
+    """Elimina la fila con ese id. 204 si OK, 404 si no existe."""
+    rows = _read_faqs()
+    new_rows = [r for r in rows if r.get("id") != faq_id]
+    if len(new_rows) == len(rows):
+        raise APIError(
+            ErrorCode.FAQ_NOT_FOUND,
+            detail=f"No existe una FAQ con id '{faq_id}'.",
+        )
+    _write_faqs(new_rows)
+    return Response(status_code=204)
 # ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
