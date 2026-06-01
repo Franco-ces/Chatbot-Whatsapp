@@ -351,6 +351,98 @@ class TestFAQMatcherMatch:
         assert "score" in hit_call.kwargs
         assert hit_call.kwargs["score"] == pytest.approx(1.0)
 
+    def test_match_query_vacia_loggea_debug(self, tmp_path):
+        """Spec: query vacía → no match, pero dejamos rastro en DEBUG (no es error)."""
+        from faq_matcher import FAQMatcher
+
+        path = tmp_path / "faqs.json"
+        _write_faqs(path, [{"pregunta": "P1", "respuesta": "R1"}])
+        embedder = _make_embedder(vectors_by_text={"P1": [1.0, 0.0, 0.0, 0.0]})
+
+        logger = MagicMock()
+        matcher = FAQMatcher(
+            faqs_path=path,
+            embeddings_model=embedder,
+            config_manager=_make_config_manager(),
+            logger=logger,
+        )
+
+        assert matcher.match("") is None
+        assert matcher.match("   ") is None
+
+        # DEBUG, no WARNING: query vacía es comportamiento esperado, no bug.
+        assert logger.debug.called
+        warn_messages = [c.args[0] for c in logger.warning.call_args_list]
+        assert not any("matcher deshabilitado" in m for m in warn_messages)
+        assert not any("sin filas" in m for m in warn_messages)
+
+    def test_match_matcher_deshabilitado_loggea_warning(self, tmp_path):
+        """Spec: cuando el init falló y el matcher quedó _disabled=True,
+        match() debe loggear WARNING explícito para que el operador sepa
+        por qué no hay match (no más silent return).
+        """
+        from faq_matcher import FAQMatcher
+
+        path = tmp_path / "faqs.json"
+        _write_faqs(path, [{"pregunta": "P1", "respuesta": "R1"}])
+        embedder = MagicMock()
+        embedder.embed_query.side_effect = RuntimeError("API caída")
+        logger = MagicMock()
+
+        matcher = FAQMatcher(
+            faqs_path=path,
+            embeddings_model=embedder,
+            config_manager=_make_config_manager(),
+            logger=logger,
+        )
+        assert matcher._disabled is True
+        logger.reset_mock()  # limpiamos el warning del init
+        embedder.embed_query.reset_mock()  # limpiamos la llamada del init
+
+        result = matcher.match("una consulta cualquiera")
+        assert result is None
+
+        # Debe haber un WARNING que mencione que el matcher está deshabilitado
+        warn_messages = [c.args[0] for c in logger.warning.call_args_list]
+        assert any("matcher deshabilitado" in m for m in warn_messages), (
+            f"Expected a 'matcher deshabilitado' warning; got: {warn_messages}"
+        )
+        # embedder no se llamó (matcher está deshabilitado, no hay nada que comparar)
+        embedder.embed_query.assert_not_called()
+
+    def test_match_sin_filas_loggea_warning(self, tmp_path):
+        """Spec: faqs.json con [] → match() loggea WARNING con la query
+        y una pista sobre dónde investigar (faqs.json / embeddings_model).
+        """
+        from faq_matcher import FAQMatcher
+
+        path = tmp_path / "faqs.json"
+        path.write_text("[]", encoding="utf-8")
+        embedder = _make_embedder()
+        logger = MagicMock()
+
+        matcher = FAQMatcher(
+            faqs_path=path,
+            embeddings_model=embedder,
+            config_manager=_make_config_manager(),
+            logger=logger,
+        )
+        logger.reset_mock()
+
+        result = matcher.match("qué medios de pago aceptan")
+        assert result is None
+
+        # Debe haber un WARNING que mencione "sin filas"
+        warn_messages = [c.args[0] for c in logger.warning.call_args_list]
+        assert any("sin filas" in m for m in warn_messages), (
+            f"Expected a 'sin filas' warning; got: {warn_messages}"
+        )
+        # El warning debe incluir la query truncada para debug
+        warn_kwargs = [c.kwargs for c in logger.warning.call_args_list]
+        assert any("query" in kw for kw in warn_kwargs)
+        # embedder no se llamó (no hay con qué comparar)
+        embedder.embed_query.assert_not_called()
+
 
 # ────────────────────────────────────────────────────────────────────────
 # Threshold handling

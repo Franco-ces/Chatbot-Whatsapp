@@ -177,8 +177,19 @@ class FAQMatcher:
         6. Si score >= threshold: FAQMatch(...). Si no: None.
         """
         if not query or not str(query).strip():
+            self.logger.debug("FAQ match skipped: query vacía")
             return None
-        if self._disabled or not self._rows:
+        if self._disabled:
+            self.logger.warning(
+                "FAQ match skipped: matcher deshabilitado",
+                query=query[:50],
+            )
+            return None
+        if not self._rows:
+            self.logger.warning(
+                "FAQ match skipped: sin filas cargadas (revisar faqs.json y embeddings_model)",
+                query=query[:50],
+            )
             return None
 
         # Hot-reload por mtime antes de cada match.
@@ -188,7 +199,17 @@ class FAQMatcher:
             self.logger.warning("Reload durante match falló, usando estado cacheado", detail=str(e))
 
         # Si el reload deshabilitó el matcher o vació las filas, salimos.
-        if self._disabled or not self._rows:
+        if self._disabled:
+            self.logger.warning(
+                "FAQ match skipped: matcher deshabilitado durante reload",
+                query=query[:50],
+            )
+            return None
+        if not self._rows:
+            self.logger.warning(
+                "FAQ match skipped: filas vaciadas durante reload",
+                query=query[:50],
+            )
             return None
 
         # Embed de la query.
