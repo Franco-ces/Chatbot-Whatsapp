@@ -34,6 +34,21 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         session_manager.agregar_mensaje(remitente, texto, es_bot=False, push_name=push_name)
 
     try:
+        # --- FAQ CHECK (operator-curated answers, hot-reload por mtime) ---
+        # El FAQ es la fuente de verdad que el operador edita en vivo desde
+        # la UI. Tiene que correr ANTES del cache LRU de respuestas: si
+        # una respuesta cacheada stale coincide con la pregunta, el cache
+        # la devuelve y el match() del FAQMatcher nunca se llama, así que
+        # el hot-reload no se entera de las ediciones.
+        if texto and not es_audio:
+            faq_answer = rag_instance.check_faq(texto)
+            if faq_answer:
+                logger.info("FAQ shortcut (bot_service layer)")
+                if session_manager:
+                    session_manager.agregar_mensaje(remitente, faq_answer, es_bot=True, push_name=push_name)
+                await wa_client.enviar_mensaje(remitente, faq_answer)
+                return
+
         # --- CACHE CHECK (exact match, text-only) ---
         if texto and not es_audio:
             cached = _question_cache.get(texto)

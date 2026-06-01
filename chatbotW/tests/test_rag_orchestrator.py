@@ -13,23 +13,32 @@ class TestRAGOrchestratorConstructor:
     def test_constructor_creates_both_components(self):
         """GIVEN api_key='key', folder_path='PDFs' WHEN constructed THEN doc_manager and query_processor created."""
         with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
-             patch("rag_orchestrator.QueryProcessor") as mock_qp_cls:
+             patch("rag_orchestrator.QueryProcessor") as mock_qp_cls, \
+             patch("rag_orchestrator.ConfigManager") as mock_cm_cls, \
+             patch("rag_orchestrator.FAQMatcher") as mock_faq_cls:
 
             mock_dm = mock_dm_cls.return_value
             mock_dm.folder_path = Path("/tmp/PDFs")
             mock_dm.setup_retriever.return_value = MagicMock()
+            mock_faq_instance = mock_faq_cls.return_value
 
             from rag_orchestrator import RAGOrchestrator
             rag = RAGOrchestrator("key", folder_path="PDFs")
 
             mock_dm_cls.assert_called_once_with("key", "PDFs")
-            mock_qp_cls.assert_called_once_with("key")
+            mock_qp_cls.assert_called_once()
+            # El segundo argumento posicional es api_key; faq_matcher es kwarg.
+            assert mock_qp_cls.call_args.args == ("key",)
+            # Y el faq_matcher se construyó y se pasó.
+            assert mock_qp_cls.call_args.kwargs.get("faq_matcher") is mock_faq_instance
             assert rag.retriever is not None
 
     def test_constructor_with_custom_path(self):
         """GIVEN folder_path='CustomDocs' WHEN constructed THEN folder_path resolves correctly."""
         with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
-             patch("rag_orchestrator.QueryProcessor"):
+             patch("rag_orchestrator.QueryProcessor"), \
+             patch("rag_orchestrator.ConfigManager"), \
+             patch("rag_orchestrator.FAQMatcher"):
 
             mock_dm = mock_dm_cls.return_value
             mock_dm.folder_path = Path("/tmp/CustomDocs")
@@ -49,7 +58,9 @@ class TestRAGOrchestratorPreguntar:
     def mock_rag(self):
         """Create a RAGOrchestrator with mocked sub-components."""
         with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
-             patch("rag_orchestrator.QueryProcessor") as mock_qp_cls:
+             patch("rag_orchestrator.QueryProcessor") as mock_qp_cls, \
+             patch("rag_orchestrator.ConfigManager"), \
+             patch("rag_orchestrator.FAQMatcher"):
 
             mock_dm = mock_dm_cls.return_value
             mock_dm.folder_path = Path("/tmp/PDFs")
@@ -110,7 +121,9 @@ class TestRAGOrchestratorActualizarMemoria:
     def test_memory_updated_refreshes_retriever(self):
         """GIVEN files changed WHEN actualizar_memoria() called THEN retriever refreshed and returns True."""
         with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
-             patch("rag_orchestrator.QueryProcessor"):
+             patch("rag_orchestrator.QueryProcessor"), \
+             patch("rag_orchestrator.ConfigManager"), \
+             patch("rag_orchestrator.FAQMatcher"):
 
             mock_dm = mock_dm_cls.return_value
             mock_dm.folder_path = Path("/tmp/PDFs")
@@ -135,7 +148,9 @@ class TestRAGOrchestratorActualizarMemoria:
     def test_memory_unchanged_retriever_untouched(self):
         """GIVEN no files changed WHEN actualizar_memoria() called THEN retriever unchanged and returns False."""
         with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
-             patch("rag_orchestrator.QueryProcessor"):
+             patch("rag_orchestrator.QueryProcessor"), \
+             patch("rag_orchestrator.ConfigManager"), \
+             patch("rag_orchestrator.FAQMatcher"):
 
             mock_dm = mock_dm_cls.return_value
             mock_dm.folder_path = Path("/tmp/PDFs")
@@ -209,8 +224,15 @@ class TestRAGOrchestratorInterfaceContract:
         assert params == ["self"], \
             f"actualizar_memoria params inesperados: {params}"
 
-    def test_line_count_under_30(self):
-        """GIVEN the orchestrator implementation WHEN lines counted THEN ≤30 implementation lines."""
+    def test_line_count_under_60(self):
+        """GIVEN the orchestrator implementation WHEN lines counted THEN ≤60 implementation lines.
+
+        Subió de 30 a 50 al sumar el wiring de FAQMatcher en PR 2 (Task 5).
+        Subió de 50 a 60 con `check_faq` (hotfix 5): método que expone el
+        FAQMatcher a `bot_service` para que el chequeo de FAQ corra ANTES
+        del cache LRU y las ediciones del operador en la UI se vean
+        reflejadas sin restart.
+        """
         import inspect
         from rag_orchestrator import RAGOrchestrator
 
@@ -218,4 +240,4 @@ class TestRAGOrchestratorInterfaceContract:
         source = inspect.getsource(RAGOrchestrator)
         lines = [l for l in source.split("\n") if l.strip() and not l.strip().startswith("#") and not l.strip().startswith('"""') and not l.strip().startswith("def ") and not l.strip().startswith("class ")]
         # Only count method body lines
-        assert len(lines) <= 30, f"RAGOrchestrator has {len(lines)} implementation lines, max 30"
+        assert len(lines) <= 60, f"RAGOrchestrator has {len(lines)} implementation lines, max 60"

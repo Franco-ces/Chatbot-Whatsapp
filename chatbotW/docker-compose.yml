@@ -10,6 +10,11 @@ services:
       - "5000:5000"
     env_file:
       - .env
+    # DEBE coincidir con admin-ui. Sin esta env var, `faq_paths` cae
+    # al fallback _ROOT_DIR/faqs.json y el bot busca un archivo que
+    # no existe (mismo volume, path equivocado).
+    environment:
+      - FAQS_VOLUME_MOUNT=/app/faqs_data
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
@@ -18,6 +23,14 @@ services:
       - ./cache:/app/cache
       - ./logs:/app/logs
       - ./config_bot.json:/app/config_bot.json
+      # Named volume compartido con admin-ui. Los Docker named volumes
+      # SIEMPRE se montan como directorios, no como archivos — por eso
+      # el path destino es /app/faqs_data (directorio), y faqs.json vive
+      # ADENTRO como archivo regular. FAQS_VOLUME_MOUNT en ambos
+      # servicios apunta a este mismo directorio. Persiste a través de
+      # `docker compose down` + `up` y no toca el cache de bind mounts
+      # de Docker Desktop WSL2.
+      - faq_data:/app/faqs_data
 
   admin-ui:
     build: .
@@ -29,12 +42,21 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    # FAQS_VOLUME_MOUNT le dice a `interface.FAQS_PATH` que el archivo
+    # vive en el named volume `faq_data` montado en /app/faqs_data
+    # (directorio), en vez de en ROOT_DIR. FAQS_PATH queda como
+    # /app/faqs_data/faqs.json. DEBE coincidir con el path destino
+    # del bind-mount `faq_data:` de arriba. Persiste a través de
+    # recreates del container.
+    environment:
+      - FAQS_VOLUME_MOUNT=/app/faqs_data
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
       - ./logs:/app/logs
       - ./config_bot.json:/app/config_bot.json
       - ./.env:/app/.env
+      - faq_data:/app/faqs_data
 
   evolution-api:
     image: evoapicloud/evolution-api:v2.3.7
@@ -78,3 +100,6 @@ volumes:
   evolution_instances:
   evolution_db:
   evolution_redis_data:
+  # Named volume para faqs.json. Persiste a través de recreates del
+  # container; no usa el cache de bind mounts de Docker Desktop WSL2.
+  faq_data:

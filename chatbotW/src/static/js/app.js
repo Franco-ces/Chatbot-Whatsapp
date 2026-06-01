@@ -27,17 +27,34 @@ document.addEventListener('alpine:init', () => {
         configBotPhone: '',
         configStatus: '',
         configStatusClass: '',
-        
+
         // Upload state
         pdfUploadStatus: '',
         pdfUploadStatusClass: '',
         csvUploadStatus: '',
         csvUploadStatusClass: '',
 
+        // FAQs state
+        faqs: [],
+        faqForm: {
+            open: false,
+            editId: null,
+            pregunta: '',
+            respuesta: '',
+            saving: false,
+            errors: { pregunta: '', respuesta: '' },
+            get valid() {
+                const p = (this.pregunta || '').trim();
+                const r = (this.respuesta || '').trim();
+                return p.length > 0 && p.length <= 500 && r.length > 0 && r.length <= 500;
+            },
+        },
+
         init() {
             this.$watch('activeTab', (val) => {
                 if (val === 'config') this.loadContactConfig();
                 if (val === 'docs') { this.loadPdfs(); this.loadCsvs(); }
+                if (val === 'faqs') this.loadFaqs();
                 if (val === 'logs') { this.loadLogs(); this.searchQuery = ''; }
             });
             this.$nextTick(() => {
@@ -392,6 +409,107 @@ document.addEventListener('alpine:init', () => {
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
-        }
+        },
+
+        // --- FAQS ---
+        async loadFaqs() {
+            this.faqs = [];
+            try {
+                const res = await apiFetch('/api/faqs');
+                if (res.ok) {
+                    this.faqs = await res.json();
+                }
+            } catch (err) {
+                console.error('Error al cargar FAQs', err);
+                window.showToast('Error al cargar FAQs', 'error');
+            }
+        },
+
+        _validateFaqForm() {
+            const f = this.faqForm;
+            f.errors.pregunta = '';
+            f.errors.respuesta = '';
+            const p = (f.pregunta || '').trim();
+            const r = (f.respuesta || '').trim();
+            if (!p) f.errors.pregunta = 'La pregunta no puede estar vacía.';
+            else if (p.length > 500) f.errors.pregunta = 'La pregunta no puede superar los 500 caracteres.';
+            if (!r) f.errors.respuesta = 'La respuesta no puede estar vacía.';
+            else if (r.length > 500) f.errors.respuesta = 'La respuesta no puede superar los 500 caracteres.';
+            return !f.errors.pregunta && !f.errors.respuesta;
+        },
+
+        startCreateFaq() {
+            const f = this.faqForm;
+            f.open = true;
+            f.editId = null;
+            f.pregunta = '';
+            f.respuesta = '';
+            f.saving = false;
+            f.errors = { pregunta: '', respuesta: '' };
+        },
+
+        startEditFaq(faq) {
+            const f = this.faqForm;
+            f.open = true;
+            f.editId = faq.id;
+            f.pregunta = faq.pregunta;
+            f.respuesta = faq.respuesta;
+            f.saving = false;
+            f.errors = { pregunta: '', respuesta: '' };
+        },
+
+        cancelFaqForm() {
+            const f = this.faqForm;
+            f.open = false;
+            f.editId = null;
+            f.pregunta = '';
+            f.respuesta = '';
+            f.saving = false;
+            f.errors = { pregunta: '', respuesta: '' };
+        },
+
+        async saveFaq() {
+            if (!this._validateFaqForm()) return;
+            const f = this.faqForm;
+            f.saving = true;
+            const isEdit = !!f.editId;
+            const url = isEdit ? `/api/faqs/${f.editId}` : '/api/faqs';
+            const method = isEdit ? 'PUT' : 'POST';
+            try {
+                const res = await apiFetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pregunta: f.pregunta.trim(), respuesta: f.respuesta.trim() }),
+                });
+                if (res.ok) {
+                    window.showToast(isEdit ? 'FAQ actualizada' : 'FAQ creada', 'success');
+                    this.cancelFaqForm();
+                    await this.loadFaqs();
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    const detail = (errData.error && errData.error.detail) || 'Error al guardar';
+                    window.showToast(detail, 'error');
+                }
+            } catch (err) {
+                window.showToast('Error de conexión al guardar', 'error');
+            } finally {
+                f.saving = false;
+            }
+        },
+
+        async confirmDeleteFaq(faq) {
+            if (!confirm(`¿Eliminar la pregunta "${faq.pregunta}"?`)) return;
+            try {
+                const res = await apiFetch(`/api/faqs/${faq.id}`, { method: 'DELETE' });
+                if (res.status === 204 || res.ok) {
+                    window.showToast('FAQ eliminada', 'success');
+                    await this.loadFaqs();
+                } else {
+                    window.showToast('Error al eliminar', 'error');
+                }
+            } catch (err) {
+                window.showToast('Error de conexión al eliminar', 'error');
+            }
+        },
     }));
 });

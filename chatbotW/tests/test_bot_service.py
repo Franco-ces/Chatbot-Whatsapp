@@ -26,6 +26,10 @@ def wa_client():
 def rag_instance():
     rag = AsyncMock()
     rag.preguntar = AsyncMock()
+    # check_faq es sync en RAGOrchestrator (match() no es awaitable);
+    # lo mockeamos con Mock, no AsyncMock.
+    from unittest.mock import Mock
+    rag.check_faq = Mock(return_value=None)
     return rag
 
 
@@ -63,6 +67,89 @@ class TestProcesarMensajeExitoso:
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert "E-" not in call_text
+
+
+class TestFAQAntesDelCache:
+    """El chequeo de FAQ corre ANTES del cache LRU de respuestas.
+
+    Bug: el cache LRU se llenaba con respuestas de RAG y devolvía
+    respuestas cacheadas sin consultar al FAQMatcher. Cuando el operador
+    editaba una fila en la UI, el bot devolvía la respuesta vieja
+    cacheada y nunca llamaba a match(), así que el hot-reload no se
+    enteraba. El FAQ es la fuente de verdad que el operador edita en
+    vivo, así que su chequeo tiene que ir primero.
+    """
+
+    @pytest.mark.asyncio
+    async def test_faq_hit_retorna_respuesta_y_no_consulta_rag(self, wa_client, rag_instance):
+        """Si check_faq devuelve una respuesta, se envía y NO se llama a rag.preguntar()."""
+        FAQ_ANSWER = "Lun a Vie de 9 a 18 hs"
+        rag_instance.check_faq.return_value = FAQ_ANSWER
+        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        rag_instance.check_faq.assert_called_once_with(TEXTO)
+        rag_instance.preguntar.assert_not_called()
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FAQ_ANSWER)
+
+    @pytest.mark.asyncio
+    async def test_faq_miss_falls_through_a_cache_y_rag(self, wa_client, rag_instance):
+        """Si check_faq devuelve None, sigue el flujo normal: cache → rag.preguntar()."""
+        rag_instance.check_faq.return_value = None
+        rag_instance.preguntar.return_value = ("transcripcion", RESPUESTA_OK)
+        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        rag_instance.check_faq.assert_called_once_with(TEXTO)
+        rag_instance.preguntar.assert_called_once()
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
+
+    @pytest.mark.asyncio
+    async def test_faq_hit_invalida_cache_stale(self, wa_client, rag_instance):
+        """Si el cache tiene una respuesta vieja y la FAQ tiene la nueva, gana la FAQ.
+
+        Reproduce el bug de la smoke E2E: el operador edita la respuesta
+        en la UI, el usuario repregunta, el bot debe devolver la nueva
+        (del FAQ), no la vieja (del cache).
+        """
+        # Primera pregunta: RAG responde, se cachea.
+        rag_instance.check_faq.return_value = None
+        rag_instance.preguntar.return_value = ("t", "RESPUESTA_VIEJA")
+        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        assert _question_cache.get(TEXTO) == "RESPUESTA_VIEJA"
+        # El operador edita la FAQ. Ahora check_faq devuelve la nueva.
+        rag_instance.check_faq.return_value = "RESPUESTA_NUEVA"
+        wa_client.enviar_mensaje.reset_mock()
+        # Segunda pregunta: la FAQ matchea, el cache NO se consulta.
+        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        # Y la respuesta enviada es la nueva, no la cacheada.
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, "RESPUESTA_NUEVA")
+
+    @pytest.mark.asyncio
+    async def test_faq_miss_preserva_historial_y_ejecuta_rag(self, wa_client, rag_instance):
+        """Spec query-processor delta:32-36: History is preserved on FAQ miss.
+
+        GIVEN FAQ miss (check_faq=None) AND session_manager presente
+        WHEN `procesar_mensaje_bot` corre THEN (a) el mensaje del usuario
+        se agrega al historial, (b) RAG corre normal, (c) la respuesta del
+        bot se agrega al historial. Cubre el path de miss específicamente.
+        """
+        from unittest.mock import MagicMock
+
+        mock_session = MagicMock()
+        rag_instance.check_faq.return_value = None  # miss
+        rag_instance.preguntar.return_value = ("t", RESPUESTA_OK)
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, session_manager=mock_session,
+        )
+
+        # El chequeo de FAQ corrió, dio miss, y el pipeline RAG siguió.
+        rag_instance.check_faq.assert_called_once_with(TEXTO)
+        rag_instance.preguntar.assert_called_once()
+        # El mensaje del usuario se agregó al historial ANTES del FAQ check.
+        mock_session.agregar_mensaje.assert_any_call(REMITTENTE, TEXTO, es_bot=False, push_name="")
+        # La respuesta del bot se agregó al historial DESPUÉS del RAG.
+        mock_session.agregar_mensaje.assert_any_call(REMITTENTE, RESPUESTA_OK, es_bot=True, push_name="")
+        # Se envió al usuario.
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
 
 
 class TestErroresEnRAG:

@@ -26,6 +26,11 @@ class ErrorCode(str, Enum):
     SYS_UNEXPECTED = "E-SYS-001"
     SYS_DEPENDENCY_MISSING = "E-SYS-002"
 
+    # FAQ errors (E-FAQ)
+    FAQ_INVALID_DATA = "E-FAQ-001"
+    FAQ_WRITE_FAILED = "E-FAQ-002"
+    FAQ_NOT_FOUND = "E-FAQ-003"
+
     @property
     def user_message(self) -> str:
         return _USER_MESSAGES[self]
@@ -50,6 +55,9 @@ _USER_MESSAGES = {
     ErrorCode.API_UNAUTHORIZED: "Acceso no autorizado.",
     ErrorCode.SYS_UNEXPECTED: "Ocurrió un error inesperado.",
     ErrorCode.SYS_DEPENDENCY_MISSING: "El sistema no está correctamente inicializado.",
+    ErrorCode.FAQ_INVALID_DATA: "Datos inválidos para la FAQ.",
+    ErrorCode.FAQ_WRITE_FAILED: "No se pudo guardar la FAQ en disco.",
+    ErrorCode.FAQ_NOT_FOUND: "FAQ no encontrada.",
 }
 
 _HTTP_STATUSES = {
@@ -59,4 +67,7 @@ _HTTP_STATUSES = {
     ErrorCode.API_UNAUTHORIZED: 401,
     ErrorCode.RAG_NO_PDFS: 503,
     ErrorCode.SYS_DEPENDENCY_MISSING: 503,
+    ErrorCode.FAQ_INVALID_DATA: 400,
+    ErrorCode.FAQ_WRITE_FAILED: 500,
+    ErrorCode.FAQ_NOT_FOUND: 404,
 }

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional, TYPE_CHECKING
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -9,6 +10,11 @@ from prompts import PROMPT_ASISTENTE_VIRTUAL
 from guardrails import evaluar_guardrail_entrada, evaluar_guardrail_salida, detectar_solicitud_humano, _MSJ_HANDOFF
 from context_builder import construir_contexto
 from logging_config import get_logger
+
+if TYPE_CHECKING:
+    # Evita import circular: faq_matcher importa numpy y logging_config; no necesita
+    # query_processor, así que el TYPE_CHECKING es seguro y mantiene la firma tipada.
+    from faq_matcher import FAQMatcher
 
 # SDK GEMINI
 from google import genai
@@ -30,7 +36,7 @@ class QueryProcessor:
     Procesa consultas del usuario: audio → guardrails → contexto → prompt → Gemini → guardrails.
     """
 
-    def __init__(self, api_key):
+    def __init__(self, api_key, faq_matcher: Optional["FAQMatcher"] = None):
         self.api_key = api_key
 
         # Cliente Gemini
@@ -47,6 +53,10 @@ class QueryProcessor:
 
         # Gestión de configuración (email, teléfono)
         self.config_manager = ConfigManager()
+
+        # Matcher semántico de FAQs (opcional). Si es None, el pipeline
+        # opera como siempre (sólo RAG). Lo construye RAGOrchestrator.
+        self.faq_matcher = faq_matcher
 
     async def procesar(self, query_text, audio_bytes, retriever, folder_path, remitente, session_manager):
         """
@@ -77,6 +87,27 @@ class QueryProcessor:
             logger.info("Handoff solicitado por usuario", remitente=remitente)
             notificar_handoff(remitente, texto_para_buscar, "")
             return transcripcion_detectada, _MSJ_HANDOFF
+
+        # --- FAQ MATCHER: shortcut semántico contra filas del operador ---
+        # Si hay match arriba del threshold, devolvemos la respuesta del operador
+        # SIN construir contexto, SIN llamar a Gemini, SIN correr el output
+        # guardrail (la respuesta es de confianza, la spec lo dice así).
+        # El input guardrail ya corrió arriba y el handoff ya fue evaluado.
+        if self.faq_matcher is not None and texto_para_buscar:
+            try:
+                faq_hit = self.faq_matcher.match(texto_para_buscar)
+            except Exception as e:
+                # Defensa de último recurso: un match() que tira no debe matar el bot.
+                logger.warning("FAQMatcher.match() lanzó excepción, continúa con RAG", detail=str(e))
+                faq_hit = None
+            if faq_hit is not None:
+                logger.info(
+                    "FAQ shortcut",
+                    score=round(faq_hit.score, 4),
+                    matched_id=faq_hit.id,
+                    returned=True,
+                )
+                return transcripcion_detectada, faq_hit.respuesta
 
         # --- CONTEXTO (RAG + PRECIOS) ---
         contexto_total = await construir_contexto(
