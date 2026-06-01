@@ -23,25 +23,36 @@ import pytest
 # Helpers
 # ────────────────────────────────────────────────────────────────────────
 
-def _make_embedder(vectors_by_text: dict | None = None, side_effect=None):
+def _make_embedder(vectors_by_text: dict | None = None, side_effect=None, dim: int | None = None):
     """Devuelve un mock con `embed_query(text) -> list[float]`.
 
-    Si `vectors_by_text` está dado, devuelve el vector asociado al texto.
+    Si `vectors_by_text` está dado, devuelve el vector asociado al texto
+    y para los demás textos devuelve un vector de la MISMA dimensión
+    (la del primer valor del dict, o `dim` si se pasa explícito).
     Si `side_effect` está dado, se aplica como `side_effect` (útil para
     simular que la API lanza una excepción).
     """
     embedder = MagicMock(name="embeddings_model")
     if side_effect is not None:
         embedder.embed_query.side_effect = side_effect
-    else:
-        def _embed(text: str):
-            if vectors_by_text and text in vectors_by_text:
-                return vectors_by_text[text]
-            # Vector determinista derivado del texto (longitud variable)
-            # para que cosine entre dos textos distintos sea 0
-            # y cosine del mismo texto contra sí mismo sea 1.0
-            return [1.0 if i == 0 else 0.0 for i in range(8)]
-        embedder.embed_query.side_effect = _embed
+        return embedder
+
+    # Si el caller pasó un dict, usamos la dimensión del primer vector
+    # para mantener consistencia entre init y match.
+    effective_dim = dim
+    if effective_dim is None and vectors_by_text:
+        first = next(iter(vectors_by_text.values()))
+        effective_dim = len(first)
+    if effective_dim is None:
+        effective_dim = 8  # fallback razonable
+
+    def _embed(text: str):
+        if vectors_by_text and text in vectors_by_text:
+            return vectors_by_text[text]
+        # Vector base (canónico) de la dimensión correcta
+        return [1.0 if i == 0 else 0.0 for i in range(effective_dim)]
+
+    embedder.embed_query.side_effect = _embed
     return embedder
 
 
@@ -363,8 +374,14 @@ class TestFAQMatcherThreshold:
         _write_faqs(path, [{"pregunta": "P1", "respuesta": "R1"}])
         v_p1 = [1.0, 0.0, 0.0, 0.0]
         v_partial = [0.5, 0.5, 0.0, 0.0]  # cosine ~0.707
-        embedder = _make_embedder(vectors_by_text={"P1": v_p1})
-        embedder.embed_query.side_effect = lambda text: v_partial
+
+        # En init, embebemos P1 con v_p1 → row.vec = v_p1.
+        # En match(), embebemos la query con v_partial → cos 0.707 con v_p1.
+        phase = {"mode": "init"}
+        def embed(text):
+            return v_p1 if phase["mode"] == "init" else v_partial
+        embedder = MagicMock()
+        embedder.embed_query.side_effect = embed
 
         # ConfigManager mutable: el orquestador "edita" el threshold en runtime
         config_state = {"faq_threshold": 0.9}
@@ -378,8 +395,10 @@ class TestFAQMatcherThreshold:
             config_manager=cm,
             logger=MagicMock(),
         )
+        assert len(matcher._rows) == 1
 
         # Threshold 0.9: cosine 0.707 < 0.9 → miss
+        phase["mode"] = "match"
         assert matcher.match("x") is None
 
         # Operador baja el threshold a 0.5
@@ -496,16 +515,9 @@ class TestFAQMatcherEmbeddingFailures:
         path = tmp_path / "faqs.json"
         _write_faqs(path, [{"pregunta": "P1", "respuesta": "R1"}])
         v_p1 = [1.0, 0.0, 0.0, 0.0]
-        call_count = {"n": 0}
 
-        def flaky_embed(text):
-            call_count["n"] += 1
-            if call_count["n"] == 1:
-                raise RuntimeError("API rate limit")
-            return v_p1
-
-        embedder = MagicMock()
-        embedder.embed_query.side_effect = flaky_embed
+        # Init usa el dict → fila cargada OK con row.vec = v_p1.
+        embedder = _make_embedder(vectors_by_text={"P1": v_p1})
         logger = MagicMock()
 
         matcher = FAQMatcher(
@@ -514,16 +526,24 @@ class TestFAQMatcherEmbeddingFailures:
             config_manager=_make_config_manager(threshold=0.88),
             logger=logger,
         )
+        assert len(matcher._rows) == 1
 
-        # En init se llamó una vez (éxito → fila cargada)
-        # Antes del match el contador está en 1.
-        # En la primera query → falla → devuelve None
+        # Ahora en match, la primera llamada falla, la segunda pasa.
+        match_calls = {"n": 0}
+        def flaky_embed(text):
+            match_calls["n"] += 1
+            if match_calls["n"] == 1:
+                raise RuntimeError("API rate limit")
+            return v_p1
+        embedder.embed_query.side_effect = flaky_embed
+
+        # Primera query: embedding falla → matcher devuelve None (sin matar el bot).
         assert matcher.match("primera") is None
-        # En la segunda query → éxito → hit
+        # Segunda query: embedding pasa → hit.
         result = matcher.match("segunda")
         assert result is not None
         assert result.respuesta == "R1"
-        # Se loggeó el warning del fallo
+        # Se loggeó el warning del fallo.
         logger.warning.assert_called()
 
 
