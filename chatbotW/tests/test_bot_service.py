@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 from bot_service import procesar_mensaje_bot, _notificar_error, _question_cache
 from exceptions import AppError, CommunicationError, RAGError
 from error_codes import ErrorCode
+from query_processor import QueryResult
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +44,7 @@ class TestProcesarMensajeExitoso:
 
     @pytest.mark.asyncio
     async def test_envia_respuesta_sin_audio(self, wa_client, rag_instance):
-        rag_instance.preguntar.return_value = ("transcripcion", RESPUESTA_OK)
+        rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
         rag_instance.preguntar.assert_called_once_with(
             query_text=TEXTO, audio_bytes=None, remitente=REMITTENTE, session_manager=None
@@ -53,7 +54,7 @@ class TestProcesarMensajeExitoso:
     @pytest.mark.asyncio
     async def test_envia_respuesta_con_audio(self, wa_client, rag_instance):
         wa_client.obtener_audio_base64.return_value = "YXVkaW8="
-        rag_instance.preguntar.return_value = ("transcripcion", RESPUESTA_OK)
+        rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=True)
         wa_client.obtener_audio_base64.assert_called_once_with(MENSAJE_DATA)
         rag_instance.preguntar.assert_called_once()
@@ -63,7 +64,7 @@ class TestProcesarMensajeExitoso:
 
     @pytest.mark.asyncio
     async def test_no_envia_mensaje_de_error(self, wa_client, rag_instance):
-        rag_instance.preguntar.return_value = ("", RESPUESTA_OK)
+        rag_instance.preguntar.return_value = QueryResult("", RESPUESTA_OK, cacheable=True)
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert "E-" not in call_text
@@ -94,7 +95,7 @@ class TestFAQAntesDelCache:
     async def test_faq_miss_falls_through_a_cache_y_rag(self, wa_client, rag_instance):
         """Si check_faq devuelve None, sigue el flujo normal: cache → rag.preguntar()."""
         rag_instance.check_faq.return_value = None
-        rag_instance.preguntar.return_value = ("transcripcion", RESPUESTA_OK)
+        rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
         rag_instance.check_faq.assert_called_once_with(TEXTO)
         rag_instance.preguntar.assert_called_once()
@@ -110,7 +111,7 @@ class TestFAQAntesDelCache:
         """
         # Primera pregunta: RAG responde, se cachea.
         rag_instance.check_faq.return_value = None
-        rag_instance.preguntar.return_value = ("t", "RESPUESTA_VIEJA")
+        rag_instance.preguntar.return_value = QueryResult("t", "RESPUESTA_VIEJA", cacheable=True)
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
         assert _question_cache.get(TEXTO) == "RESPUESTA_VIEJA"
         # El operador edita la FAQ. Ahora check_faq devuelve la nueva.
@@ -134,7 +135,7 @@ class TestFAQAntesDelCache:
 
         mock_session = MagicMock()
         rag_instance.check_faq.return_value = None  # miss
-        rag_instance.preguntar.return_value = ("t", RESPUESTA_OK)
+        rag_instance.preguntar.return_value = QueryResult("t", RESPUESTA_OK, cacheable=True)
 
         await procesar_mensaje_bot(
             rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
@@ -150,6 +151,86 @@ class TestFAQAntesDelCache:
         mock_session.agregar_mensaje.assert_any_call(REMITTENTE, RESPUESTA_OK, es_bot=True, push_name="")
         # Se envió al usuario.
         wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
+
+
+class TestCacheLRUConFlagCacheable:
+    """El cache LRU de respuestas respeta el flag `cacheable` del QueryResult.
+
+    Bug original: `bot_service` cacheaba CUALQUIER respuesta no-vacía,
+    incluyendo el fallback "Lo siento, no cuento con esa información..."
+    que el prompt del RAG dispara cuando no hay contexto. Resultado: una
+    respuesta mala quedaba cacheada en memoria y todas las repeticiones
+    del mismo texto devolvían el fallback aunque la información ya
+    estuviera disponible. Fix: el QueryResult trae `cacheable`, y el
+    cache store solo se ejecuta cuando es True.
+    """
+
+    @pytest.mark.asyncio
+    async def test_rag_respuesta_no_cacheable_no_se_guarda(self, wa_client, rag_instance):
+        """Cuando el QueryProcessor marca la respuesta como no cacheable
+        (ej. fallback de guardrail/handoff, FAQ shortcut, o la respuesta
+        'no tengo información' cuando el RAG no encontró contexto), el
+        cache LRU NO se debe llenar. Si se llenara, la siguiente vez que
+        el usuario repita el mismo texto recibiría la respuesta mala
+        cacheada en vez de un intento fresco del RAG.
+        """
+        rag_instance.check_faq.return_value = None
+        FALLBACK = "Lo siento, no cuento con esa información específica. Escribinos a soporte@empresa.com"
+        rag_instance.preguntar.return_value = QueryResult(
+            "qué planes tienen", FALLBACK, cacheable=False,
+        )
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False,
+        )
+
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FALLBACK)
+        # El cache NO debe tener la entrada: el fallback se cachearía
+        # envenenando respuestas futuras.
+        assert _question_cache.get(TEXTO) is None, (
+            "BUG: el cache LRU guardó una respuesta no cacheable. "
+            "Próximas repeticiones del mismo texto devolverán el fallback cacheado."
+        )
+
+    @pytest.mark.asyncio
+    async def test_rag_respuesta_cacheable_si_se_guarda(self, wa_client, rag_instance):
+        """Cuando el QueryProcessor marca la respuesta como cacheable
+        (respuesta de Gemini con contexto real y guardrail aprobado), el
+        cache SÍ se llena para acelerar repeticiones del mismo texto.
+        """
+        rag_instance.check_faq.return_value = None
+        rag_instance.preguntar.return_value = QueryResult(
+            TEXTO, RESPUESTA_OK, cacheable=True,
+        )
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False,
+        )
+
+        assert _question_cache.get(TEXTO) == RESPUESTA_OK
+
+    @pytest.mark.asyncio
+    async def test_faq_hit_no_se_cachea_tampoco(self, wa_client, rag_instance):
+        """El shortcut de FAQ no pasa por el RAG, pero si pasara, su
+        QueryResult llega con cacheable=False (decisión defensiva del
+        QueryProcessor). Este test verifica que el bot_service NO cachea
+        la respuesta del FAQ: si la cacheara y el operador edita la fila
+        en la UI, el usuario recibiría la respuesta vieja cacheada.
+        """
+        FAQ_ANSWER = "Lun a Vie de 9 a 18 hs"
+        rag_instance.check_faq.return_value = FAQ_ANSWER
+        # Incluso si por algún refactor futuro el FAQ pasara por preguntar(),
+        # el flag cacheable=False debe evitar el cache.
+        rag_instance.preguntar.return_value = QueryResult(TEXTO, FAQ_ANSWER, cacheable=False)
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False,
+        )
+
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FAQ_ANSWER)
+        # Importante: el FAQ matchea y la respuesta se envía SIN pasar
+        # por el cache store (el short-circuit retorna antes).
+        assert _question_cache.get(TEXTO) is None
 
 
 class TestErroresEnRAG:
@@ -201,7 +282,7 @@ class TestAudioFallos:
     @pytest.mark.asyncio
     async def test_audio_devuelve_none_continua_sin_audio(self, wa_client, rag_instance):
         wa_client.obtener_audio_base64.return_value = None
-        rag_instance.preguntar.return_value = ("transcripcion", RESPUESTA_OK)
+        rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
         await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=True)
         rag_instance.preguntar.assert_called_once_with(
             query_text=TEXTO, audio_bytes=None, remitente=REMITTENTE, session_manager=None
@@ -239,7 +320,7 @@ class TestErroresEnEnvio:
 
     @pytest.mark.asyncio
     async def test_error_al_enviar_respuesta_notifica_error(self, wa_client, rag_instance):
-        rag_instance.preguntar.return_value = ("transcripcion", RESPUESTA_OK)
+        rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
         wa_client.enviar_mensaje.side_effect = [
             CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED),
             None,

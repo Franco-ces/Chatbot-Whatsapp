@@ -1,4 +1,5 @@
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -21,6 +22,25 @@ from google import genai
 from google.genai import types
 
 logger = get_logger("query_processor")
+
+
+@dataclass
+class QueryResult:
+    """Resultado de `QueryProcessor.procesar()`.
+
+    Attributes:
+        transcripcion: texto de la query (o transcripción de audio) tal como
+            se pasó al pipeline. Puede ser None si la query vino sólo como audio.
+        respuesta: texto que se va a enviar al usuario.
+        cacheable: True sólo si la respuesta fue generada por Gemini a partir
+            de contexto real (RAG + guardrail de salida aprobado). False para
+            respuestas de fallback (rechazo de guardrail de entrada, handoff
+            a humano, FAQ shortcut, rechazo de guardrail de salida). El caller
+            usa este flag para decidir si cachea la respuesta en el LRU.
+    """
+    transcripcion: Optional[str]
+    respuesta: str
+    cacheable: bool
 
 
 def notificar_handoff(remitente: str | None, texto: str, historial: str):
@@ -58,10 +78,17 @@ class QueryProcessor:
         # opera como siempre (sólo RAG). Lo construye RAGOrchestrator.
         self.faq_matcher = faq_matcher
 
-    async def procesar(self, query_text, audio_bytes, retriever, folder_path, remitente, session_manager):
+    async def procesar(self, query_text, audio_bytes, retriever, folder_path, remitente, session_manager) -> QueryResult:
         """
         Maneja entradas de texto, de audio en memoria o ambas de forma híbrida (RAG + JSON).
         Si se provee session_manager, inyecta el historial de conversación en el prompt.
+
+        Devuelve un `QueryResult` con la transcripción, la respuesta y un flag
+        `cacheable` que indica si la respuesta debería persistirse en el cache
+        LRU del caller (bot_service). Las respuestas de fallback (rechazo de
+        guardrail, handoff, FAQ shortcut, rechazo de output) llegan con
+        `cacheable=False`; sólo la respuesta final de Gemini con contexto
+        aprobado por el guardrail de salida llega con `cacheable=True`.
         """
         texto_para_buscar = query_text if query_text else ""
         transcripcion_detectada = query_text
@@ -80,13 +107,13 @@ class QueryProcessor:
             self.llm_guardrail
         )
         if not es_seguro:
-            return transcripcion_detectada, mensaje_rechazo
+            return QueryResult(transcripcion_detectada, mensaje_rechazo, cacheable=False)
 
         # --- HANDOFF: deteccion de solicitud de humano ---
         if detectar_solicitud_humano(texto_para_buscar):
             logger.info("Handoff solicitado por usuario", remitente=remitente)
             notificar_handoff(remitente, texto_para_buscar, "")
-            return transcripcion_detectada, _MSJ_HANDOFF
+            return QueryResult(transcripcion_detectada, _MSJ_HANDOFF, cacheable=False)
 
         # --- FAQ MATCHER: shortcut semántico contra filas del operador ---
         # Si hay match arriba del threshold, devolvemos la respuesta del operador
@@ -107,7 +134,7 @@ class QueryProcessor:
                     matched_id=faq_hit.id,
                     returned=True,
                 )
-                return transcripcion_detectada, faq_hit.respuesta
+                return QueryResult(transcripcion_detectada, faq_hit.respuesta, cacheable=False)
 
         # --- CONTEXTO (RAG + PRECIOS) ---
         contexto_total = await construir_contexto(
@@ -158,6 +185,6 @@ class QueryProcessor:
             respuesta_texto, contexto_total, self.llm_guardrail
         )
         if not es_aceptado:
-            return transcripcion_detectada, mensaje_rechazo_salida
+            return QueryResult(transcripcion_detectada, mensaje_rechazo_salida, cacheable=False)
 
-        return transcripcion_detectada, respuesta_texto
+        return QueryResult(transcripcion_detectada, respuesta_texto, cacheable=True)

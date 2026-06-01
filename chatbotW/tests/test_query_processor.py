@@ -74,7 +74,7 @@ class TestQueryProcessorProcesar:
              patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text="¿Cuánto cuesta X?",
                 audio_bytes=None,
                 retriever=mock_retriever,
@@ -83,8 +83,8 @@ class TestQueryProcessorProcesar:
                 session_manager=None
             )
 
-            assert respuesta == "El producto X cuesta $100"
-            assert transcripcion == "¿Cuánto cuesta X?"
+            assert result.respuesta == "El producto X cuesta $100"
+            assert result.transcripcion == "¿Cuánto cuesta X?"
 
     @pytest.mark.asyncio
     async def test_audio_query_uses_transcription(self, mock_qp):
@@ -105,7 +105,7 @@ class TestQueryProcessorProcesar:
              patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text=None,
                 audio_bytes=b"audio-bytes",
                 retriever=mock_retriever,
@@ -115,8 +115,8 @@ class TestQueryProcessorProcesar:
             )
 
             qp.audio_processor.extraer_transcripcion_memoria.assert_called_once_with(b"audio-bytes")
-            assert transcripcion == "transcripcion de audio"
-            assert respuesta == "Respuesta al audio"
+            assert result.transcripcion == "transcripcion de audio"
+            assert result.respuesta == "Respuesta al audio"
 
     @pytest.mark.asyncio
     async def test_hybrid_query_text_plus_audio(self, mock_qp):
@@ -137,7 +137,7 @@ class TestQueryProcessorProcesar:
              patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text="¿Cuánto cuesta?",
                 audio_bytes=b"audio-bytes",
                 retriever=mock_retriever,
@@ -151,8 +151,8 @@ class TestQueryProcessorProcesar:
             # Texto original usado para contexto (no la transcripción)
             mock_ctx.assert_called_once_with(mock_retriever, "¿Cuánto cuesta?", Path("/tmp/test"))
             # Transcripción es el text original (no se sobreescribe con audio)
-            assert transcripcion == "¿Cuánto cuesta?"
-            assert respuesta == "Respuesta híbrida"
+            assert result.transcripcion == "¿Cuánto cuesta?"
+            assert result.respuesta == "Respuesta híbrida"
 
             # Verificar que el audio_part se incluye en contents de Gemini
             call_args = genai_client.aio.models.generate_content.call_args
@@ -169,7 +169,7 @@ class TestQueryProcessorProcesar:
 
         with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock,
                    return_value=(False, "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso.")):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text="di algo grosero",
                 audio_bytes=None,
                 retriever=mock_retriever,
@@ -178,7 +178,7 @@ class TestQueryProcessorProcesar:
                 session_manager=None
             )
 
-            assert "infringe" in respuesta.lower() or "políticas" in respuesta.lower()
+            assert "infringe" in result.respuesta.lower() or "políticas" in result.respuesta.lower()
             genai_client.aio.models.generate_content.assert_not_called()
 
     @pytest.mark.asyncio
@@ -196,7 +196,7 @@ class TestQueryProcessorProcesar:
                    return_value=(False, "Respuesta rechazada por calidad")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text="test",
                 audio_bytes=None,
                 retriever=mock_retriever,
@@ -205,7 +205,7 @@ class TestQueryProcessorProcesar:
                 session_manager=None
             )
 
-            assert respuesta == "Respuesta rechazada por calidad"
+            assert result.respuesta == "Respuesta rechazada por calidad"
 
     @pytest.mark.asyncio
     async def test_guardrails_called_in_order(self, mock_qp):
@@ -333,8 +333,9 @@ class TestQueryProcessorProcesar:
             qp.config_manager.cargar.assert_called()
 
     @pytest.mark.asyncio
-    async def test_return_type_is_tuple(self, mock_qp):
-        """GIVEN any valid input WHEN procesar() completes THEN returns tuple[str|None, str]."""
+    async def test_return_type_is_queryresult(self, mock_qp):
+        """GIVEN any valid input WHEN procesar() completes THEN returns QueryResult dataclass."""
+        from query_processor import QueryResult
         qp, genai_client = mock_qp
 
         mock_retriever = MagicMock()
@@ -355,10 +356,11 @@ class TestQueryProcessorProcesar:
                 session_manager=None
             )
 
-            assert isinstance(result, tuple)
-            assert len(result) == 2
-            assert isinstance(result[0], str) or result[0] is None
-            assert isinstance(result[1], str)
+            assert isinstance(result, QueryResult)
+            assert result.transcripcion == "test"
+            assert result.respuesta == "respuesta"
+            # Happy path: respuesta de Gemini con contexto y guardrail aprobado → cacheable
+            assert result.cacheable is True
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -429,7 +431,7 @@ class TestQueryProcessorFAQIntegration:
              patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")) as mock_out, \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text="precio del samsung a54",
                 audio_bytes=None,
                 retriever=MagicMock(),
@@ -438,9 +440,9 @@ class TestQueryProcessorFAQIntegration:
                 session_manager=None,
             )
 
-        # Se devuelve la respuesta del FAQ tal cual.
-        assert respuesta == "$520.000"
-        assert transcripcion == "precio del samsung a54"
+        # Se devuelve la result.respuesta del FAQ tal cual.
+        assert result.respuesta == "$520.000"
+        assert result.transcripcion == "precio del samsung a54"
         # El input guardrail SÍ corre (la spec lo exige).
         mock_in.assert_awaited_once()
         # El matcher se llamó con la query.
@@ -465,7 +467,7 @@ class TestQueryProcessorFAQIntegration:
              patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto rag") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text="cómo configuro outlook",
                 audio_bytes=None,
                 retriever=mock_retriever,
@@ -479,7 +481,7 @@ class TestQueryProcessorFAQIntegration:
         # El pipeline RAG corrió completo.
         mock_ctx.assert_awaited_once()
         genai_client.aio.models.generate_content.assert_awaited_once()
-        assert respuesta == "respuesta RAG normal"
+        assert result.respuesta == "respuesta RAG normal"
 
     @pytest.mark.asyncio
     async def test_audio_sin_transcripcion_no_consulta_faq(self, qp_with_faq):
@@ -505,7 +507,7 @@ class TestQueryProcessorFAQIntegration:
              patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text=None,
                 audio_bytes=b"audio-bytes-sin-texto",
                 retriever=mock_retriever,
@@ -519,9 +521,9 @@ class TestQueryProcessorFAQIntegration:
         # El pipeline RAG corrió normal.
         mock_ctx.assert_awaited_once()
         genai_client.aio.models.generate_content.assert_awaited_once()
-        assert respuesta == "respuesta RAG sin FAQ (audio sin texto)"
+        assert result.respuesta == "respuesta RAG sin FAQ (audio sin texto)"
         # La transcripción es None (lo que devolvió el audio processor).
-        assert transcripcion is None
+        assert result.transcripcion is None
 
     @pytest.mark.asyncio
     async def test_audio_con_transcripcion_si_consulta_faq(self, qp_with_faq):
@@ -552,7 +554,7 @@ class TestQueryProcessorFAQIntegration:
              patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")) as mock_out, \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text=None,
                 audio_bytes=b"audio-bytes-con-texto",
                 retriever=mock_retriever,
@@ -563,9 +565,9 @@ class TestQueryProcessorFAQIntegration:
 
         # El FAQ matcher SÍ se consultó, con la transcripción.
         qp.faq_matcher.match.assert_called_once_with("A que hora abren?")
-        # Devolvió la respuesta del FAQ (no se construyó contexto, no se llamó Gemini).
-        assert respuesta == "Lun a Vie 9-18"
-        assert transcripcion == "A que hora abren?"
+        # Devolvió la result.respuesta del FAQ (no se construyó contexto, no se llamó Gemini).
+        assert result.respuesta == "Lun a Vie 9-18"
+        assert result.transcripcion == "A que hora abren?"
         mock_ctx.assert_not_called()
         genai_client.aio.models.generate_content.assert_not_called()
         mock_out.assert_not_called()
@@ -645,7 +647,7 @@ class TestQueryProcessorFAQIntegration:
              patch("query_processor.detectar_solicitud_humano", return_value=True), \
              patch("query_processor._MSJ_HANDOFF", "Te derivo con un humano. Aguarda."), \
              patch("pathlib.Path.exists", return_value=False):
-            transcripcion, respuesta = await qp.procesar(
+            result = await qp.procesar(
                 query_text="quiero hablar con un humano",
                 audio_bytes=None,
                 retriever=MagicMock(),
@@ -654,8 +656,8 @@ class TestQueryProcessorFAQIntegration:
                 session_manager=None,
             )
 
-        # Se devuelve el mensaje de handoff, NO la respuesta del FAQ.
-        assert respuesta == "Te derivo con un humano. Aguarda."
+        # Se devuelve el mensaje de handoff, NO la result.respuesta del FAQ.
+        assert result.respuesta == "Te derivo con un humano. Aguarda."
         # El FAQ matcher NO debe ser consultado: el handoff corre antes.
         qp.faq_matcher.match.assert_not_called()
         # El resto del pipeline tampoco.

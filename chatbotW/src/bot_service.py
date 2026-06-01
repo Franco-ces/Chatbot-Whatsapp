@@ -67,18 +67,25 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
                 audio_bytes = base64.b64decode(audio_b64)
 
         rag_start = time.perf_counter()
-        transcripcion, respuesta_texto = await rag_instance.preguntar(
+        resultado = await rag_instance.preguntar(
             query_text=texto,
             audio_bytes=audio_bytes,
             remitente=remitente,
             session_manager=session_manager
         )
+        transcripcion = resultado.transcripcion
+        respuesta_texto = resultado.respuesta
         rag_duration_ms = int((time.perf_counter() - rag_start) * 1000)
 
         logger.info("RAG responded successfully", rag_duration_ms=rag_duration_ms)
 
         # --- CACHE STORE (text-only, successful responses) ---
-        if texto and not es_audio and respuesta_texto:
+        # Solo cacheamos respuestas que el QueryProcessor marcó como confiables
+        # (es decir: vino de Gemini con contexto real y pasó el output guardrail).
+        # Las respuestas de fallback (rechazo de guardrail, handoff, FAQ shortcut,
+        # "no tengo información") llegan con cacheable=False y NO se persisten,
+        # porque cachear el fallback "no info" envenenaba el cache LRU.
+        if texto and not es_audio and respuesta_texto and resultado.cacheable:
             _question_cache.set(texto, respuesta_texto)
 
         # Log de la respuesta del bot
