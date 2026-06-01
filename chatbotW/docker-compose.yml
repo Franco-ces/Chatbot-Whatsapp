@@ -18,6 +18,10 @@ services:
       - ./cache:/app/cache
       - ./logs:/app/logs
       - ./config_bot.json:/app/config_bot.json
+      # Mismo volume que admin-ui: ambos servicios leen/escriben
+      # /app/faqs.json. El volume es named (ver bottom) para que las
+      # filas sobrevivan a `docker compose down` + `up`.
+      - faq_data:/app/faqs.json
 
   admin-ui:
     build: .
@@ -29,12 +33,18 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    # FAQS_VOLUME_MOUNT le dice a `interface.FAQS_PATH` que el archivo vive
+    # en el named volume `faq_data` montado en /app/faqs.json, en vez de en
+    # ROOT_DIR. Persiste a través de recreates del container.
+    environment:
+      - FAQS_VOLUME_MOUNT=/app
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
       - ./logs:/app/logs
       - ./config_bot.json:/app/config_bot.json
       - ./.env:/app/.env
+      - faq_data:/app/faqs.json
 
   evolution-api:
     image: evoapicloud/evolution-api:v2.3.7
@@ -78,3 +88,6 @@ volumes:
   evolution_instances:
   evolution_db:
   evolution_redis_data:
+  # Named volume para faqs.json. Persiste a través de recreates del
+  # container; no usa el cache de bind mounts de Docker Desktop WSL2.
+  faq_data:

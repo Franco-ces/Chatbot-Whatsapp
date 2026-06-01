@@ -45,13 +45,24 @@ LOGS_DIR = ROOT_DIR / "logs"
 ENV_FILE = ROOT_DIR / ".env"
 STATIC_DIR = FILE_PATH.parent / "static"
 # Ruta al JSON de FAQs. Se crea en el primer POST.
-FAQS_PATH = ROOT_DIR / "faqs.json"
+# En Docker, la ruta se controla con la env var FAQS_VOLUME_MOUNT
+# (montada como Docker named volume en docker-compose.yml) para que las
+# filas persistan entre `docker compose down` + `up`. En desarrollo local
+# la env var no está seteada y se usa ROOT_DIR/"faqs.json" como antes.
+_FAQS_VOLUME_MOUNT = os.getenv("FAQS_VOLUME_MOUNT")
+if _FAQS_VOLUME_MOUNT:
+    FAQS_PATH = Path(_FAQS_VOLUME_MOUNT) / "faqs.json"
+else:
+    FAQS_PATH = ROOT_DIR / "faqs.json"
 
 PDF_FOLDER.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 CSV_FOLDER = ROOT_DIR / "CSVs"
 CSV_FOLDER.mkdir(parents=True, exist_ok=True)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
+# Si FAQS_VOLUME_MOUNT apunta a un directorio nuevo, lo creamos para que
+# el primer POST no falle con FileNotFoundError.
+FAQS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

@@ -339,3 +339,38 @@ class TestEliminarFAQ:
         uuid_mod.UUID(id2)
         # Y son distintos
         assert id1 != id2
+
+
+# ────────────────────────────────────────────────────────────────────────
+# FAQS_PATH configurable para named volume (PR 2 fixup)
+#
+# Cuando el operator corre los containers, FAQS_VOLUME_MOUNT apunta al
+# punto de montaje del named volume `faq_data` (ver docker-compose.yml).
+# interface.FAQS_PATH debe resolver a <mount> / "faqs.json" en ese caso,
+# y caer al path local (ROOT_DIR/"faqs.json") en desarrollo.
+# ────────────────────────────────────────────────────────────────────────
+
+class TestFAQSPathVolumeConfig:
+    def test_faqs_path_uses_volume_mount_when_env_var_set(self, monkeypatch, tmp_path):
+        """GIVEN FAQS_VOLUME_MOUNT=/some/path WHEN interface module loaded THEN FAQS_PATH = /some/path/faqs.json."""
+        monkeypatch.setenv("FAQS_VOLUME_MOUNT", str(tmp_path))
+        # Reimport limpio del módulo para que tome la env var.
+        import importlib
+        import interface as interface_mod
+        importlib.reload(interface_mod)
+        try:
+            assert interface_mod.FAQS_PATH == tmp_path / "faqs.json"
+        finally:
+            # Revertimos para no contaminar el resto de los tests.
+            monkeypatch.delenv("FAQS_VOLUME_MOUNT")
+            importlib.reload(interface_mod)
+
+    def test_faqs_path_falls_back_to_root_dir_when_no_env_var(self, monkeypatch):
+        """GIVEN FAQS_VOLUME_MOUNT no está seteada WHEN interface module loaded THEN FAQS_PATH = ROOT_DIR/faqs.json (compat dev local)."""
+        monkeypatch.delenv("FAQS_VOLUME_MOUNT", raising=False)
+        import importlib
+        import interface as interface_mod
+        importlib.reload(interface_mod)
+        assert interface_mod.FAQS_PATH == interface_mod.ROOT_DIR / "faqs.json"
+        # Y NO vive bajo el volume mount (estamos en dev local).
+        assert str(interface_mod.FAQS_PATH).endswith("faqs.json")
