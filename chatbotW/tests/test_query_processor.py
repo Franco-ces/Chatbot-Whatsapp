@@ -56,6 +56,7 @@ class TestQueryProcessorProcesar:
             qp.llm_guardrail = MagicMock()
             qp.prompt_template = PROMPT_ASISTENTE_VIRTUAL
             qp.config_manager = cfg_instance
+            qp.faq_matcher = None  # default; las pruebas FAQ lo sobreescriben
 
             return qp, genai_client
 
