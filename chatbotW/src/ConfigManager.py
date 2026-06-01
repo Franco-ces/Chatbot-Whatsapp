@@ -18,7 +18,8 @@ class ConfigManager:
             self.config = {
                 "email": "soporte@empresa.com",
                 "telefono": "+54 11 1234-5678",
-                "bot_phone": ""
+                "bot_phone": "",
+                "faq_threshold": 0.88,
             }
             self.guardar() # Lo creamos físicamente de entrada
 
@@ -35,6 +36,9 @@ class ConfigManager:
             self.config.setdefault("email", "")
             self.config.setdefault("telefono", "")
             self.config.setdefault("bot_phone", "")
+            # Umbral de similitud coseno para que una consulta matchee una FAQ.
+            # 0.88 = default conservador; configurable por el operador.
+            self.config.setdefault("faq_threshold", 0.88)
 
     def guardar(self, nuevo_email=None, nuevo_tel=None, nuevo_bot_phone=None):
         """Actualiza los valores en memoria y los persiste en el disco."""
