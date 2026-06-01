@@ -1,5 +1,6 @@
 {
     "email": "soporte@empresaprueba.com",
     "telefono": "+54 11 1234-5678",
-    "bot_phone": ""
+    "bot_phone": "",
+    "faq_threshold": 0.88
 }

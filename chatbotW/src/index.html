@@ -88,6 +88,7 @@
                 <div class="flex space-x-1 border-b border-gray-300 mb-6 overflow-x-auto">
                     <button @click="switchTab('config')" :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">🔑 Configuración</button>
                     <button @click="switchTab('docs')" :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">📁 Documentos</button>
+                    <button @click="switchTab('faqs')" :class="activeTab === 'faqs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">❓ FAQs</button>
                     <button @click="switchTab('logs')" :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">📜 Logs</button>
                 </div>
 
@@ -285,7 +286,7 @@
                         </div>
                         <div class="md:col-span-2 flex flex-col h-full pl-2">
                             <h2 x-text="currentLogTitle" class="text-lg font-semibold mb-4 text-gray-800"></h2>
-                            
+
                             <div class="w-full flex-1 bg-wpp p-4 rounded-xl overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-200 custom-scrollbar relative">
                                 <div x-show="loadingLog" class="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
                                     <div class="text-gray-500 font-medium">Cargando...</div>
@@ -296,6 +297,76 @@
                                 <div x-html="currentLogContent" class="flex flex-col gap-3 w-full pb-4"></div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ─── TAB: FAQs ─── -->
+                <div x-show="activeTab === 'faqs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-fade-in">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold text-gray-800">❓ Respuestas Frecuentes</h2>
+                        <div class="flex gap-2">
+                            <button @click="loadFaqs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200">🔄 Refrescar</button>
+                            <button @click="startCreateFaq()" class="text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 px-3 rounded-lg transition-colors shadow-sm">➕ Agregar fila</button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">Estas respuestas se devuelven directo al usuario sin pasar por la IA (match por similitud). Editá o eliminá las filas según necesites.</p>
+
+                    <!-- Form de creación / edición -->
+                    <div x-show="faqForm.open" x-transition class="mb-6 border border-gray-200 rounded-xl p-5 bg-gray-50 shadow-sm">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-800" x-text="faqForm.editId ? '✏️ Editar FAQ' : '➕ Nueva FAQ'"></h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1">Pregunta <span class="text-gray-400 font-normal">(máx 500)</span></label>
+                                <textarea x-model="faqForm.pregunta" rows="2" placeholder="Ej: ¿Cuál es el horario de atención?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y"></textarea>
+                                <p class="text-xs text-right mt-1" :class="faqForm.pregunta.length > 500 ? 'text-red-600' : 'text-gray-400'" x-text="`${faqForm.pregunta.length} / 500`"></p>
+                                <p x-show="faqForm.errors.pregunta" x-text="faqForm.errors.pregunta" class="text-xs text-red-600 mt-1 font-medium"></p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1">Respuesta <span class="text-gray-400 font-normal">(máx 500)</span></label>
+                                <textarea x-model="faqForm.respuesta" rows="3" placeholder="Ej: Lun a Vie de 9 a 18hs." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y"></textarea>
+                                <p class="text-xs text-right mt-1" :class="faqForm.respuesta.length > 500 ? 'text-red-600' : 'text-gray-400'" x-text="`${faqForm.respuesta.length} / 500`"></p>
+                                <p x-show="faqForm.errors.respuesta" x-text="faqForm.errors.respuesta" class="text-xs text-red-600 mt-1 font-medium"></p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 mt-4">
+                            <button @click="saveFaq()" :disabled="!faqForm.valid || faqForm.saving" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center gap-2">
+                                <span x-show="!faqForm.saving">💾 Guardar</span>
+                                <span x-show="faqForm.saving">⏳ Guardando...</span>
+                            </button>
+                            <button @click="cancelFaqForm()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">❌ Cancelar</button>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de FAQs -->
+                    <div class="overflow-x-auto rounded-lg border border-gray-200">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-200">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/3">Pregunta</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/2">Respuesta</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                <template x-if="faqs.length === 0">
+                                    <tr>
+                                        <td colspan="3" class="p-8 text-center text-gray-500 italic text-sm">📭 Aún no hay FAQs. Hacé clic en "Agregar fila" para crear la primera.</td>
+                                    </tr>
+                                </template>
+                                <template x-for="faq in faqs" :key="faq.id">
+                                    <tr class="hover:bg-gray-50 transition-colors">
+                                        <td class="px-4 py-3 text-sm text-gray-800 align-top"><div class="whitespace-pre-wrap break-words" x-text="faq.pregunta"></div></td>
+                                        <td class="px-4 py-3 text-sm text-gray-700 align-top"><div class="whitespace-pre-wrap break-words" x-text="faq.respuesta"></div></td>
+                                        <td class="px-4 py-3 text-center align-top">
+                                            <div class="flex gap-1 justify-center">
+                                                <button @click="startEditFaq(faq)" class="text-yellow-600 hover:bg-yellow-50 p-1.5 rounded-md transition-colors" title="Editar">✏️</button>
+                                                <button @click="confirmDeleteFaq(faq)" class="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Eliminar">🗑️</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
