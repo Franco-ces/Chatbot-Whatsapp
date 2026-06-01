@@ -35,6 +35,7 @@ services:
       - ./logs:/app/logs
       - ./config_bot.json:/app/config_bot.json
       - ./.env:/app/.env
+      - ./faqs.json:/app/faqs.json
 
   evolution-api:
     image: evoapicloud/evolution-api:v2.3.7
