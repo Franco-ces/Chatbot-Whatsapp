@@ -41,7 +41,8 @@ async def set_active(
     name: str,
     *,
     admin: EvolutionAdmin,
-    config: ConfigManager,
+    config: ConfigManager | None = None,
+    config_path: str | None = None,
     webhook_url: str,
     webhook_secret: str,
 ) -> None:
@@ -51,8 +52,14 @@ async def set_active(
         name: nombre de la instancia a activar (debe matchear un Evolution
             instance existente y vinculado).
         admin: cliente de alto nivel ya construido contra Evolution.
-        config: ConfigManager apuntando al config_bot.json que el bot
-            esta usando (el watcher de PR 3 polea este mismo archivo).
+        config: ConfigManager ya instanciado apuntando al config_bot.json
+            que el bot esta usando (el watcher de PR 3 polea este mismo
+            archivo). Si es None, se construye uno a partir de `config_path`
+            (o con el path por defecto si `config_path` tambien es None).
+            Tests pasan `config=` para inyectar un mock; callers de
+            produccion (CLI, admin UI) suelen pasar `config_path=` y dejar
+            que el bridge construya.
+        config_path: ruta al config_bot.json. Solo se usa si `config` es None.
         webhook_url: URL publica del bot (el destino que Evolution va a
             llamar cuando llegue un mensaje). Viene de `os.environ["BOT_URL"]`.
         webhook_secret: valor del header `X-Webhook-Secret` que el bot
@@ -67,6 +74,11 @@ async def set_active(
             `EvolutionAdmin._raise_as_api_error`).
         ConfigError: si la escritura atomica de config_bot.json falla.
     """
+    if config is None:
+        # Caller de produccion (CLI, admin) prefiere pasar config_path
+        # y dejar que el bridge construya. Asi NO necesita importar
+        # ConfigManager (mantiene limpia la frontera de dominios).
+        config = ConfigManager(config_path) if config_path else ConfigManager()
     # 1) Re-verificar estado contra Evolution. NO confiamos en lo que la UI
     # mostro por polling: entre el ultimo GET /state y este click pueden
     # haber pasado varios segundos y la instancia pudo haber caido.

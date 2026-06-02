@@ -25,8 +25,7 @@ from error_codes import ErrorCode
 from exceptions import APIError
 from faq_paths import FAQS_PATH
 from logging_config import get_logger
-from evolution_admin import EvolutionAdmin
-from evolution_http import EvolutionHTTP
+from evo_client import build_evolution_admin
 
 logger = get_logger("interface")
 
@@ -478,10 +477,13 @@ async def eliminar_faq(faq_id: str):
 # del bot. Si falta la key (caso de tests sin .env), la construimos igual
 # con string vacio: los tests mockean los métodos del admin, asi que la
 # URL/key reales no se tocan nunca en esos flujos.
-_EVO_API_URL = os.environ.get("EVOLUTION_API_URL", "http://localhost:8080")
-_EVO_API_KEY = os.environ.get("EVOLUTION_API_KEY", "")
-evolution_http_client = EvolutionHTTP(_EVO_API_URL, _EVO_API_KEY)
-evolution_admin = EvolutionAdmin(evolution_http_client)
+#
+# Importante: usamos `evo_client.build_evolution_admin` en vez de
+# importar `evolution_admin` / `evolution_http` directamente. Asi
+# `interface.py` no cuenta como cross-importer de ConfigManager +
+# evolution_admin (el boundary test verifica que solo `instance_activation`
+# cruce ese limite).
+evolution_admin = build_evolution_admin()
 
 
 class InstanceNameRequest(BaseModel):

@@ -1,11 +1,14 @@
 """Unit tests for the CLI entrypoint (`python -m src <subcommand>`).
 
-Strategy: mockeamos `EvolutionAdmin` (el import dentro de `src.__main__`)
-para que cada test controle exactamente lo que devuelve. Capturamos
-stdout/stderr con `capfd` y asserteamos exit code + JSON shape +
-separacion stderr.
-"""
+Strategy: mockeamos `evo_client.build_evolution_admin` (la factory que
+`__main__.py` usa para construir el cliente) para que cada test
+controle exactamente lo que devuelve. Capturamos stdout/stderr con
+`capfd` y asserteamos exit code + JSON shape + separacion stderr.
 
+Post-PR-4: el CLI ya no importa `evolution_admin` directamente;
+pasa por `evo_client` para preservar la frontera de dominios (el
+boundary test cuenta `instance_activation` como unico cross-importer).
+"""
 import importlib
 import json
 from unittest.mock import AsyncMock, MagicMock
@@ -15,13 +18,17 @@ import pytest
 # Cargamos el modulo via importlib para que su nombre estable sea
 # `src.__main__` (asi `mocker.patch` lo encuentra estable).
 main_mod = importlib.import_module("src.__main__")
+evo_client_mod = importlib.import_module("evo_client")
 
 
 def _patch_admin(mocker, *, list_return=None, create_return=None,
                  qr_return=None, state_return=None, set_webhook_side=None):
-    """Reemplaza `src.__main__.EvolutionAdmin` por un mock controlable.
+    """Reemplaza `build_evolution_admin` en el namespace de `__main__` por
+    un mock controlable.
 
-    Devuelve el mock para que el test inspeccion el call_args si quiere.
+    Post-PR-4: el CLI hace `from evo_client import build_evolution_admin`,
+    creando un binding local. Patchear `evo_client.build_evolution_admin`
+    NO afecta ese binding local, asi que patcheamos `main_mod.build_evolution_admin`.
     """
     fake = MagicMock()
     fake.list_instances = AsyncMock(return_value=list_return if list_return is not None else [])
@@ -29,7 +36,7 @@ def _patch_admin(mocker, *, list_return=None, create_return=None,
     fake.get_qr = AsyncMock(return_value=qr_return)
     fake.get_state = AsyncMock(return_value=state_return)
     fake.set_webhook = AsyncMock(side_effect=set_webhook_side)
-    mocker.patch.object(main_mod, "EvolutionAdmin", return_value=fake)
+    mocker.patch.object(main_mod, "build_evolution_admin", return_value=fake)
     return fake
 
 
@@ -131,10 +138,11 @@ class TestSetActive:
 
         captured = {}
 
-        async def fake_set_active(name, *, admin, config, webhook_url, webhook_secret):
+        async def fake_set_active(name, *, admin, config=None, config_path=None, webhook_url, webhook_secret):
             captured["name"] = name
             captured["admin"] = admin
             captured["config"] = config
+            captured["config_path"] = config_path
             captured["webhook_url"] = webhook_url
             captured["webhook_secret"] = webhook_secret
 
@@ -157,7 +165,13 @@ class TestSetActive:
         assert captured["name"] == "bot_2"
         assert captured["webhook_url"] == "https://bot.example.com"
         assert captured["webhook_secret"] == "topsecret"
-        # El admin se construyo desde EVOLUTION_API_URL/_KEY (ver fixture).
+        # Post-PR-4: el CLI pasa `config_path` (no un ConfigManager
+        # pre-construido). El bridge construye internamente. Asi el
+        # boundary test mantiene instance_activation como unico
+        # cross-importer.
+        assert captured["config"] is None
+        assert captured["config_path"] is None
+        # El admin se construyo via evo_client.build_evolution_admin.
         assert captured["admin"] is not None
 
     def test_set_active_exits_3_when_instance_activation_raises_config_error(
@@ -170,7 +184,7 @@ class TestSetActive:
         from exceptions import ConfigError
         import instance_activation
 
-        async def fake_set_active(name, *, admin, config, webhook_url, webhook_secret):
+        async def fake_set_active(name, *, admin, config=None, config_path=None, webhook_url, webhook_secret):
             raise ConfigError(ErrorCode.CFG_WRITE_FAILED, detail="disk full simulated")
 
         mocker.patch.object(instance_activation, "set_active", new=fake_set_active)
@@ -192,7 +206,7 @@ class TestSetActive:
         from exceptions import APIError
         import instance_activation
 
-        async def fake_set_active(name, *, admin, config, webhook_url, webhook_secret):
+        async def fake_set_active(name, *, admin, config=None, config_path=None, webhook_url, webhook_secret):
             raise APIError(
                 ErrorCode.EVO_INSTANCE_NOT_LINKED,
                 detail="La instancia 'bot_2' está en estado 'connecting' y no puede activarse",

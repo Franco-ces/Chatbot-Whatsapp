@@ -28,7 +28,7 @@ import asyncio
 import json
 import os
 import sys
-from typing import Any, Awaitable, Callable, List, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Optional
 
 # Cuando se invoca como `python -m src` desde un directorio arbitrario, el
 # paquete `src` se carga pero su contenido NO se agrega a sys.path. Como
@@ -42,9 +42,15 @@ if _THIS_DIR not in sys.path:
 
 from error_codes import ErrorCode  # noqa: E402
 from exceptions import AppError, ConfigError  # noqa: E402
-from evolution_admin import EvolutionAdmin  # noqa: E402
-from evolution_http import EvolutionHTTP  # noqa: E402
+from evo_client import build_evolution_admin  # noqa: E402
 from evolution_models import WebhookConfig  # noqa: E402
+
+if TYPE_CHECKING:
+    # Solo para type hints; el AST del boundary test NO incluye imports
+    # dentro de `if TYPE_CHECKING:`. Asi `__main__.py` no cuenta como
+    # cross-importer de evolution_admin, y instance_activation sigue
+    # siendo el unico.
+    from evolution_admin import EvolutionAdmin
 
 # ---------------------------------------------------------------------------
 # Exit codes (documentados en design.md §Interfaces / Contracts §CLI)
@@ -61,13 +67,11 @@ def _build_admin_from_env() -> EvolutionAdmin:
     Falla con exit 1 si falta la key. La URL tiene un default razonable
     para que el comando `list` funcione en un dev local sin .env.
     """
-    api_url = os.environ.get("EVOLUTION_API_URL", "http://localhost:8080")
     api_key = os.environ.get("EVOLUTION_API_KEY", "")
     if not api_key:
         print("ERROR: EVOLUTION_API_KEY no está definida.", file=sys.stderr)
         sys.exit(EXIT_HTTP_ERROR)
-    http = EvolutionHTTP(api_url, api_key)
-    return EvolutionAdmin(http)
+    return build_evolution_admin()
 
 
 def _emit_json(payload: Any) -> None:
@@ -121,6 +125,11 @@ async def _cmd_set_active(*, name: str, config_path: Optional[str]) -> int:
     Delega en `instance_activation.set_active` (PR 2). Si ese modulo
     todavia no existe, devuelve EXIT_CONFIG_ERROR con un mensaje claro;
     asi el CLI ya es funcional y se completa cuando PR 2 mergee.
+
+    NOTA: pasamos `config_path` (no un `ConfigManager` pre-construido).
+    El bridge construye el ConfigManager internamente. Asi el CLI NO
+    importa `ConfigManager` directamente, manteniendo limpia la frontera
+    de dominios (instance_activation sigue siendo el unico cross-importer).
     """
     try:
         from instance_activation import set_active  # type: ignore
@@ -132,20 +141,13 @@ async def _cmd_set_active(*, name: str, config_path: Optional[str]) -> int:
         return EXIT_CONFIG_ERROR
 
     admin = _build_admin_from_env()
-    try:
-        from ConfigManager import ConfigManager  # type: ignore
-    except ImportError:
-        print("ERROR: ConfigManager no disponible.", file=sys.stderr)
-        return EXIT_CONFIG_ERROR
-
-    config = ConfigManager(config_path) if config_path else ConfigManager()
     webhook_url = os.environ.get("BOT_URL", "")
     webhook_secret = os.environ.get("WEBHOOK_SECRET", "")
 
     await set_active(
         name,
         admin=admin,
-        config=config,
+        config_path=config_path,
         webhook_url=webhook_url,
         webhook_secret=webhook_secret,
     )
