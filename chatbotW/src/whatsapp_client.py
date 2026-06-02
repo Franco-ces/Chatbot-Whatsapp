@@ -8,26 +8,44 @@ logger = get_logger("whatsapp_client")
 
 
 class WhatsAppClient:
-    def __init__(self, api_url: str, api_key: str, instance_name: str):
+    """Cliente HTTP para Evolution API. `instance_name` es per-call, no de instancia.
+
+    Antes (pre-PR-3): el nombre de instancia se pasaba en el constructor
+    y se guardaba como atributo. Cada llamada armaba la URL a partir de
+    `self.instance_name`. Eso ataba el cliente a UNA instancia para
+    toda la vida del proceso: para cambiar de instancia (hot-swap) habia
+    que reconstruir el cliente (descartando el connection pool) o
+    mantener un pool por instancia (YAGNI).
+
+    Ahora (post-PR-3): el cliente es un wrapper HTTP generico. El
+    nombre de instancia llega como kwarg en cada llamada. main.py
+    resuelve el nombre via `InstanceWatcher.get_active_name()` antes
+    de cada outbound y lo pasa aca. La misma instancia del cliente
+    sirve para A y B; el nombre cambia por llamada, no por rebuild.
+
+    Atomicidad: el kwarg es keyword-only (`*, instance_name: str`) y
+    NO tiene default — asi el caller no puede olvidarlo accidentalmente.
+    """
+
+    def __init__(self, api_url: str, api_key: str):
         self.api_url = api_url
         self.api_key = api_key
-        self.instance_name = instance_name
         self.headers = {
             "apikey": self.api_key,
             "Content-Type": "application/json"
         }
         self._client = httpx_idle_client.IdleTimeoutClient()
 
-    async def obtener_audio_base64(self, mensaje_data: dict):
+    async def obtener_audio_base64(self, mensaje_data: dict, *, instance_name: str):
         """
         Solicita a Evolution API que descargue el medio del mensaje y lo devuelva en Base64.
         """
-        url = f"{self.api_url}/chat/getBase64FromMediaMessage/{self.instance_name}"
-        
+        url = f"{self.api_url}/chat/getBase64FromMediaMessage/{instance_name}"
+
         payload = {
             "message": mensaje_data
         }
-        
+
         try:
             response = await self._client.request("POST", url, json=payload, headers=self.headers)
             if response.status_code in [200, 201]:
@@ -41,25 +59,25 @@ class WhatsAppClient:
             detail = f"Error de conexión con Evolution API: {e}"
             raise CommunicationError(ErrorCode.COM_CONNECTION_FAILED, detail=detail, cause=e)
 
-    async def enviar_mensaje(self, numero: str, texto: str):
-        url = f"{self.api_url}/message/sendText/{self.instance_name}"
-        
+    async def enviar_mensaje(self, numero: str, texto: str, *, instance_name: str):
+        url = f"{self.api_url}/message/sendText/{instance_name}"
+
         payload = {
             "number": numero,
             "text": texto,
             "delay": 2500
         }
-        
+
         start = time.perf_counter()
         try:
             response = await self._client.request("POST", url, json=payload, headers=self.headers)
             duration_ms = int((time.perf_counter() - start) * 1000)
-            
+
             if response.status_code not in [200, 201]:
                 logger.debug("Evolution API response error", status_code=response.status_code, send_duration_ms=duration_ms)
                 detail = f"Evolution API rechazó el mensaje (código {response.status_code}): {response.text[:200]}"
                 raise CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED, detail=detail)
-                
+
             logger.info("Message sent successfully", send_duration_ms=duration_ms)
             return response.json()
         except httpx_idle_client.httpx.HTTPStatusError as e:

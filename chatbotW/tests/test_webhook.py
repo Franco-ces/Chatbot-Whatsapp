@@ -4,6 +4,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from payload_parser import EvolutionWebhook, WebhookData, MessageKey
 
 
+def _make_watcher_stub(instance_name="bot_test"):
+    """Stub del InstanceWatcher para tests de webhook.
+
+    PR 3: el webhook resuelve el instance_name activo via
+    `instance_watcher.get_active_name()`. Los tests parchean
+    `main.instance_watcher` con este stub para que el resolution
+    devuelva un nombre (sin esto, el webhook cae al branch
+    "no_active_instance" y devuelve un status distinto de "ok").
+    """
+    stub = MagicMock()
+    stub.get_active_name.return_value = instance_name
+    return stub
+
+
 def _make_payload(text="Hola", from_me=False, event="messages.upsert"):
     """Helper to build a valid EvolutionWebhook payload."""
     return EvolutionWebhook(
@@ -68,6 +82,7 @@ class TestWebhookValidPayload:
         with patch("main.rag", mock_rag), \
              patch("main.wa_client", mock_wa), \
              patch("main.session_manager", mock_session), \
+             patch("main.instance_watcher", _make_watcher_stub()), \
              patch("main.usuario_excedido", return_value=False):
 
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -127,6 +142,7 @@ class TestWebhookValidPayload:
         with patch("main.rag", MagicMock()), \
              patch("main.wa_client", mock_wa), \
              patch("main.session_manager", MagicMock()), \
+             patch("main.instance_watcher", _make_watcher_stub()), \
              patch("main.usuario_excedido", return_value=True):
 
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -145,6 +161,9 @@ class TestWebhookValidPayload:
 
             assert resp.status_code == 200
             assert resp.json() == {"status": "rate_limited"}
+            # El rate-limit path ahora tambien recibe instance_name kwarg
+            _, kwargs = mock_wa.enviar_mensaje.call_args
+            assert kwargs.get("instance_name") == "bot_test"
             mock_wa.enviar_mensaje.assert_called_once()
 
     @pytest.mark.asyncio

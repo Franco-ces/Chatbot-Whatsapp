@@ -48,9 +48,14 @@ async def check_rag_loaded(rag_instance) -> dict:
     return {"status": "unhealthy", "duration_ms": 0, "detail": "RAG not initialized"}
 
 
-async def run_health_probes(wa_client, rag_instance) -> dict:
+async def run_health_probes(wa_client, rag_instance, *, instance_name: str) -> dict:
     """
     Run all health probes and return aggregated status.
+
+    `instance_name` es kwarg keyword-only obligatorio: el caller
+    (main.py) lo resuelve por request via `InstanceWatcher.get_active_name()`
+    y lo pasa aca. Asi el health check prueba la instancia que el
+    bot esta usando realmente para outbound, no una hardcodeada.
     Status logic: ok if all pass, degraded if any fail, unhealthy if all fail.
     """
     probes = {}
@@ -61,7 +66,7 @@ async def run_health_probes(wa_client, rag_instance) -> dict:
     # Probe: Evolution API
     if wa_client:
         probes["evolution_api"] = await check_evolution_api(
-            wa_client.api_url, wa_client.api_key, wa_client.instance_name
+            wa_client.api_url, wa_client.api_key, instance_name
         )
     else:
         probes["evolution_api"] = {"status": "unhealthy", "duration_ms": 0, "detail": "WhatsApp client not initialized"}

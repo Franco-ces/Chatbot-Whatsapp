@@ -21,11 +21,19 @@ _USER_ERROR_MSG = (
 
 async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: str,
                          mensaje_data: dict, es_audio: bool,
-                         session_manager=None, push_name=""):
+                         session_manager=None, push_name="",
+                         *, instance_name: str):
     """
     Ejecuta el ciclo de vida del bot: log, obtiene audio (si aplica),
     consulta al RAG, log respuesta y envía el mensaje.
     Ante un error, envía un mensaje amigable al usuario con un código de error.
+
+    `instance_name` es un kwarg keyword-only obligatorio: nombre de la
+    instancia Evolution activa para este request. Lo resuelve main.py
+    via `InstanceWatcher.get_active_name()` por cada webhook, y se
+    propaga a TODAS las llamadas outbound (enviar_mensaje x4 +
+    obtener_audio_base64 x1). Sin default para que el caller no pueda
+    olvidarlo.
     """
     logger.info("Starting bot processing", remitente=remitente, push_name=push_name or "N/A")
 
@@ -46,7 +54,7 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
                 logger.info("FAQ shortcut (bot_service layer)")
                 if session_manager:
                     session_manager.agregar_mensaje(remitente, faq_answer, es_bot=True, push_name=push_name)
-                await wa_client.enviar_mensaje(remitente, faq_answer)
+                await wa_client.enviar_mensaje(remitente, faq_answer, instance_name=instance_name)
                 return
 
         # --- CACHE CHECK (exact match, text-only) ---
@@ -55,14 +63,14 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
             if cached:
                 if session_manager:
                     session_manager.agregar_mensaje(remitente, cached, es_bot=True, push_name=push_name)
-                await wa_client.enviar_mensaje(remitente, cached)
+                await wa_client.enviar_mensaje(remitente, cached, instance_name=instance_name)
                 return
 
         audio_bytes = None
 
         if es_audio:
             logger.info("Audio detected, downloading from Evolution API")
-            audio_b64 = await wa_client.obtener_audio_base64(mensaje_data)
+            audio_b64 = await wa_client.obtener_audio_base64(mensaje_data, instance_name=instance_name)
             if audio_b64:
                 audio_bytes = base64.b64decode(audio_b64)
 
@@ -94,33 +102,34 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
 
         logger.info("Sending message to Evolution API")
         send_start = time.perf_counter()
-        resultado = await wa_client.enviar_mensaje(remitente, respuesta_texto)
+        resultado = await wa_client.enviar_mensaje(remitente, respuesta_texto, instance_name=instance_name)
         send_duration_ms = int((time.perf_counter() - send_start) * 1000)
         logger.info("Message sent", send_duration_ms=send_duration_ms, resultado=str(resultado)[:200])
 
     except CommunicationError as e:
         error_code = e.code.value
         logger.error("Communication error", error_code=error_code, detail=e.detail)
-        await _notificar_error(wa_client, remitente, e)
+        await _notificar_error(wa_client, remitente, e, instance_name=instance_name)
 
     except AppError as e:
         error_code = e.code.value
         logger.error("Application error", error_code=error_code, detail=e.detail)
-        await _notificar_error(wa_client, remitente, e)
+        await _notificar_error(wa_client, remitente, e, instance_name=instance_name)
 
     except Exception as e:
         error_code = ErrorCode.SYS_UNEXPECTED.value
         logger.error("Unexpected error", error_code=error_code, detail=str(e))
         app_error = AppError(ErrorCode.SYS_UNEXPECTED, detail=str(e), cause=e)
-        await _notificar_error(wa_client, remitente, app_error)
+        await _notificar_error(wa_client, remitente, app_error, instance_name=instance_name)
 
 
-async def _notificar_error(wa_client, remitente: str, error: AppError):
+async def _notificar_error(wa_client, remitente: str, error: AppError, *, instance_name: str):
     """Envía un mensaje con el código de error al usuario por WhatsApp."""
     try:
         await wa_client.enviar_mensaje(
             remitente,
-            _USER_ERROR_MSG.format(code=error.code.value)
+            _USER_ERROR_MSG.format(code=error.code.value),
+            instance_name=instance_name,
         )
     except Exception as e:
         logger.error("Failed to notify user of error", error_code=error.code.value, detail=str(e))

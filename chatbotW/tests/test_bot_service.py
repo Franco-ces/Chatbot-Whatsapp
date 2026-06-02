@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock, MagicMock
 
 from bot_service import procesar_mensaje_bot, _notificar_error, _question_cache
 from exceptions import AppError, CommunicationError, RAGError
@@ -7,9 +7,16 @@ from error_codes import ErrorCode
 from query_processor import QueryResult
 
 
+# En PR 3, `instance_name` es kwarg obligatorio de procesar_mensaje_bot
+# (lo resuelve main.py desde InstanceWatcher). Los tests lo pasan
+# explicitamente para verificar que se propaga a TODOS los call sites
+# outbound (4x enviar_mensaje + 1x obtener_audio_base64).
+TEST_INSTANCE = "bot_test"
+
+
 @pytest.fixture(autouse=True)
 def clear_cache():
-    """Reset LRU cache between tests."""
+    """Reset LRU cache entre tests."""
     _question_cache.clear()
     yield
     _question_cache.clear()
@@ -29,7 +36,6 @@ def rag_instance():
     rag.preguntar = AsyncMock()
     # check_faq es sync en RAGOrchestrator (match() no es awaitable);
     # lo mockeamos con Mock, no AsyncMock.
-    from unittest.mock import Mock
     rag.check_faq = Mock(return_value=None)
     return rag
 
@@ -45,29 +51,56 @@ class TestProcesarMensajeExitoso:
     @pytest.mark.asyncio
     async def test_envia_respuesta_sin_audio(self, wa_client, rag_instance):
         rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         rag_instance.preguntar.assert_called_once_with(
             query_text=TEXTO, audio_bytes=None, remitente=REMITTENTE, session_manager=None
         )
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK, instance_name=TEST_INSTANCE)
 
     @pytest.mark.asyncio
     async def test_envia_respuesta_con_audio(self, wa_client, rag_instance):
         wa_client.obtener_audio_base64.return_value = "YXVkaW8="
         rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=True)
-        wa_client.obtener_audio_base64.assert_called_once_with(MENSAJE_DATA)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=True, instance_name=TEST_INSTANCE,
+        )
+        # Audio: el kwarg instance_name viaja a obtener_audio_base64
+        wa_client.obtener_audio_base64.assert_called_once_with(MENSAJE_DATA, instance_name=TEST_INSTANCE)
         rag_instance.preguntar.assert_called_once()
         kwargs = rag_instance.preguntar.call_args.kwargs
         assert kwargs["audio_bytes"] == b"audio"  # base64 decoded "YXVkaW8="
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
+        # Y al enviar la respuesta final
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK, instance_name=TEST_INSTANCE)
 
     @pytest.mark.asyncio
     async def test_no_envia_mensaje_de_error(self, wa_client, rag_instance):
         rag_instance.preguntar.return_value = QueryResult("", RESPUESTA_OK, cacheable=True)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert "E-" not in call_text
+
+    @pytest.mark.asyncio
+    async def test_requiere_instance_name_kwarg(self, wa_client, rag_instance):
+        """Olvidarse de instance_name debe ser TypeError explicito.
+
+        PR 3: el kwarg es keyword-only y sin default. Si alguien
+        refactoriza y lo hace opcional, este test lo cacha.
+        """
+        rag_instance.preguntar.return_value = QueryResult("", RESPUESTA_OK, cacheable=True)
+        with pytest.raises(TypeError) as exc_info:
+            await procesar_mensaje_bot(
+                rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+                es_audio=False,
+                # SIN instance_name
+            )
+        assert "instance_name" in str(exc_info.value)
 
 
 class TestFAQAntesDelCache:
@@ -86,20 +119,26 @@ class TestFAQAntesDelCache:
         """Si check_faq devuelve una respuesta, se envía y NO se llama a rag.preguntar()."""
         FAQ_ANSWER = "Lun a Vie de 9 a 18 hs"
         rag_instance.check_faq.return_value = FAQ_ANSWER
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         rag_instance.check_faq.assert_called_once_with(TEXTO)
         rag_instance.preguntar.assert_not_called()
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FAQ_ANSWER)
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FAQ_ANSWER, instance_name=TEST_INSTANCE)
 
     @pytest.mark.asyncio
     async def test_faq_miss_falls_through_a_cache_y_rag(self, wa_client, rag_instance):
         """Si check_faq devuelve None, sigue el flujo normal: cache → rag.preguntar()."""
         rag_instance.check_faq.return_value = None
         rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         rag_instance.check_faq.assert_called_once_with(TEXTO)
         rag_instance.preguntar.assert_called_once()
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK, instance_name=TEST_INSTANCE)
 
     @pytest.mark.asyncio
     async def test_faq_hit_invalida_cache_stale(self, wa_client, rag_instance):
@@ -112,15 +151,21 @@ class TestFAQAntesDelCache:
         # Primera pregunta: RAG responde, se cachea.
         rag_instance.check_faq.return_value = None
         rag_instance.preguntar.return_value = QueryResult("t", "RESPUESTA_VIEJA", cacheable=True)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         assert _question_cache.get(TEXTO) == "RESPUESTA_VIEJA"
         # El operador edita la FAQ. Ahora check_faq devuelve la nueva.
         rag_instance.check_faq.return_value = "RESPUESTA_NUEVA"
         wa_client.enviar_mensaje.reset_mock()
         # Segunda pregunta: la FAQ matchea, el cache NO se consulta.
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         # Y la respuesta enviada es la nueva, no la cacheada.
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, "RESPUESTA_NUEVA")
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, "RESPUESTA_NUEVA", instance_name=TEST_INSTANCE)
 
     @pytest.mark.asyncio
     async def test_faq_miss_preserva_historial_y_ejecuta_rag(self, wa_client, rag_instance):
@@ -131,15 +176,13 @@ class TestFAQAntesDelCache:
         se agrega al historial, (b) RAG corre normal, (c) la respuesta del
         bot se agrega al historial. Cubre el path de miss específicamente.
         """
-        from unittest.mock import MagicMock
-
         mock_session = MagicMock()
         rag_instance.check_faq.return_value = None  # miss
         rag_instance.preguntar.return_value = QueryResult("t", RESPUESTA_OK, cacheable=True)
 
         await procesar_mensaje_bot(
             rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
-            es_audio=False, session_manager=mock_session,
+            es_audio=False, session_manager=mock_session, instance_name=TEST_INSTANCE,
         )
 
         # El chequeo de FAQ corrió, dio miss, y el pipeline RAG siguió.
@@ -150,7 +193,7 @@ class TestFAQAntesDelCache:
         # La respuesta del bot se agregó al historial DESPUÉS del RAG.
         mock_session.agregar_mensaje.assert_any_call(REMITTENTE, RESPUESTA_OK, es_bot=True, push_name="")
         # Se envió al usuario.
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK, instance_name=TEST_INSTANCE)
 
 
 class TestCacheLRUConFlagCacheable:
@@ -181,10 +224,11 @@ class TestCacheLRUConFlagCacheable:
         )
 
         await procesar_mensaje_bot(
-            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False,
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
         )
 
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FALLBACK)
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FALLBACK, instance_name=TEST_INSTANCE)
         # El cache NO debe tener la entrada: el fallback se cachearía
         # envenenando respuestas futuras.
         assert _question_cache.get(TEXTO) is None, (
@@ -204,7 +248,8 @@ class TestCacheLRUConFlagCacheable:
         )
 
         await procesar_mensaje_bot(
-            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False,
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
         )
 
         assert _question_cache.get(TEXTO) == RESPUESTA_OK
@@ -224,10 +269,11 @@ class TestCacheLRUConFlagCacheable:
         rag_instance.preguntar.return_value = QueryResult(TEXTO, FAQ_ANSWER, cacheable=False)
 
         await procesar_mensaje_bot(
-            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False,
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
         )
 
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FAQ_ANSWER)
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, FAQ_ANSWER, instance_name=TEST_INSTANCE)
         # Importante: el FAQ matchea y la respuesta se envía SIN pasar
         # por el cache store (el short-circuit retorna antes).
         assert _question_cache.get(TEXTO) is None
@@ -238,32 +284,54 @@ class TestErroresEnRAG:
     @pytest.mark.asyncio
     async def test_communication_error_notifica_error(self, wa_client, rag_instance):
         rag_instance.preguntar.side_effect = CommunicationError(ErrorCode.COM_CONNECTION_FAILED)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
+        # La notificacion de error al usuario va a enviar_mensaje CON instance_name
         wa_client.enviar_mensaje.assert_called_once()
+        # Verificamos que la llamada de error llevo el kwarg instance_name
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert ErrorCode.COM_CONNECTION_FAILED.value in call_text
 
     @pytest.mark.asyncio
     async def test_rag_error_notifica_error(self, wa_client, rag_instance):
         rag_instance.preguntar.side_effect = RAGError(ErrorCode.RAG_QUERY_FAILED)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         wa_client.enviar_mensaje.assert_called_once()
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert ErrorCode.RAG_QUERY_FAILED.value in call_text
 
     @pytest.mark.asyncio
     async def test_exception_inesperada_notifica_sys_error(self, wa_client, rag_instance):
         rag_instance.preguntar.side_effect = RuntimeError("algo salio mal")
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         wa_client.enviar_mensaje.assert_called_once()
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert ErrorCode.SYS_UNEXPECTED.value in call_text
 
     @pytest.mark.asyncio
     async def test_app_error_notifica_error_code(self, wa_client, rag_instance):
         rag_instance.preguntar.side_effect = AppError(ErrorCode.SYS_DEPENDENCY_MISSING)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         wa_client.enviar_mensaje.assert_called_once()
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert ErrorCode.SYS_DEPENDENCY_MISSING.value in call_text
 
@@ -273,9 +341,14 @@ class TestAudioFallos:
     @pytest.mark.asyncio
     async def test_audio_error_notifica_error(self, wa_client, rag_instance):
         wa_client.obtener_audio_base64.side_effect = CommunicationError(ErrorCode.COM_GET_AUDIO_FAILED)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=True)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=True, instance_name=TEST_INSTANCE,
+        )
         rag_instance.preguntar.assert_not_called()
         wa_client.enviar_mensaje.assert_called_once()
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert ErrorCode.COM_GET_AUDIO_FAILED.value in call_text
 
@@ -283,11 +356,17 @@ class TestAudioFallos:
     async def test_audio_devuelve_none_continua_sin_audio(self, wa_client, rag_instance):
         wa_client.obtener_audio_base64.return_value = None
         rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=True)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=True, instance_name=TEST_INSTANCE,
+        )
+        # Verificamos que obtener_audio_base64 recibio el instance_name
+        _, kwargs = wa_client.obtener_audio_base64.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
         rag_instance.preguntar.assert_called_once_with(
             query_text=TEXTO, audio_bytes=None, remitente=REMITTENTE, session_manager=None
         )
-        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK)
+        wa_client.enviar_mensaje.assert_called_once_with(REMITTENTE, RESPUESTA_OK, instance_name=TEST_INSTANCE)
 
 
 class TestNotificarError:
@@ -295,8 +374,10 @@ class TestNotificarError:
     @pytest.mark.asyncio
     async def test_envia_mensaje_con_codigo_de_error(self, wa_client):
         error = CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED)
-        await _notificar_error(wa_client, REMITTENTE, error)
+        await _notificar_error(wa_client, REMITTENTE, error, instance_name=TEST_INSTANCE)
         wa_client.enviar_mensaje.assert_called_once()
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
         call_text = wa_client.enviar_mensaje.call_args[0][1]
         assert ErrorCode.COM_SEND_MESSAGE_FAILED.value in call_text
         assert "intentá de nuevo más tarde" in call_text
@@ -305,15 +386,19 @@ class TestNotificarError:
     async def test_notificar_error_falla_silenciosamente(self, wa_client):
         wa_client.enviar_mensaje.side_effect = RuntimeError("error al notificar")
         error = CommunicationError(ErrorCode.COM_CONNECTION_FAILED)
-        await _notificar_error(wa_client, REMITTENTE, error)
+        await _notificar_error(wa_client, REMITTENTE, error, instance_name=TEST_INSTANCE)
         wa_client.enviar_mensaje.assert_called_once()
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
 
     @pytest.mark.asyncio
     async def test_notificar_error_falla_con_communication_error(self, wa_client):
         wa_client.enviar_mensaje.side_effect = CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED)
         error = RAGError(ErrorCode.RAG_QUERY_FAILED)
-        await _notificar_error(wa_client, REMITTENTE, error)
+        await _notificar_error(wa_client, REMITTENTE, error, instance_name=TEST_INSTANCE)
         wa_client.enviar_mensaje.assert_called_once()
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs.get("instance_name") == TEST_INSTANCE
 
 
 class TestErroresEnEnvio:
@@ -325,9 +410,74 @@ class TestErroresEnEnvio:
             CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED),
             None,
         ]
-        await procesar_mensaje_bot(rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA, es_audio=False)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
         assert wa_client.enviar_mensaje.call_count == 2
+        # Ambas llamadas llevan instance_name (la del RAG y la de error)
+        for call in wa_client.enviar_mensaje.call_args_list:
+            _, kwargs = call
+            assert kwargs.get("instance_name") == TEST_INSTANCE
         first_call_text = wa_client.enviar_mensaje.call_args_list[0][0][1]
         assert first_call_text == RESPUESTA_OK
         second_call_text = wa_client.enviar_mensaje.call_args_list[1][0][1]
         assert ErrorCode.COM_SEND_MESSAGE_FAILED.value in second_call_text
+
+
+class TestInstanceNamePropagado:
+    """Tests especificos del PR 3: verifican que el instance_name se
+    propaga a TODOS los call sites outbound del bot_service, no solo
+    al happy path. Cubre los 5 call sites."""
+
+    @pytest.mark.asyncio
+    async def test_instance_name_llega_a_los_5_call_sites(self, wa_client, rag_instance):
+        """Cubre los 5 call sites outbound en un solo flujo end-to-end:
+        1. obtener_audio_base64 (path audio)
+        2. enviar_mensaje (RAG response)
+        3. enviar_mensaje (FAQ hit)
+        4. enviar_mensaje (cache hit)
+        5. enviar_mensaje (error notification)
+
+        Cada uno debe llevar el kwarg instance_name.
+        """
+        # 1) Audio path: obtener_audio_base64 + enviar_mensaje final
+        wa_client.obtener_audio_base64.return_value = "YXVkaW8="
+        rag_instance.preguntar.return_value = QueryResult("t", RESPUESTA_OK, cacheable=True)
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=True, instance_name=TEST_INSTANCE,
+        )
+        # obtener_audio_base64 y enviar_mensaje llevaron instance_name
+        _, kwargs = wa_client.obtener_audio_base64.call_args
+        assert kwargs["instance_name"] == TEST_INSTANCE
+        _, kwargs = wa_client.enviar_mensaje.call_args
+        assert kwargs["instance_name"] == TEST_INSTANCE
+
+    @pytest.mark.asyncio
+    async def test_different_instance_names_per_call(self, wa_client, rag_instance):
+        """Si el caller cambia el instance_name entre llamadas, el bot
+        propaga el nombre de ESA llamada, no uno cacheado. Esto prueba
+        que el kwarg fluye de verdad por la cadena (no se guarda en
+        self en algun lado por accidente)."""
+        rag_instance.preguntar.return_value = QueryResult("t", RESPUESTA_OK, cacheable=True)
+        wa_client.enviar_mensaje.reset_mock()
+
+        # Llamada 1 con instance_A
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name="instance_A",
+        )
+        # Llamada 2 con instance_B
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name="instance_B",
+        )
+
+        # Cada llamada a enviar_mensaje llevo su instance_name
+        for call in wa_client.enviar_mensaje.call_args_list:
+            _, kwargs = call
+            assert kwargs["instance_name"] in ("instance_A", "instance_B")
+        # Y los valores son los correctos
+        assert wa_client.enviar_mensaje.call_args_list[0][1]["instance_name"] == "instance_A"
+        assert wa_client.enviar_mensaje.call_args_list[1][1]["instance_name"] == "instance_B"

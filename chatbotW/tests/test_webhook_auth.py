@@ -16,6 +16,13 @@ for mod in ["price_lookup"]:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
 
+
+def _make_watcher_stub(instance_name="bot_test"):
+    """Stub del InstanceWatcher para tests de webhook (PR 3)."""
+    stub = MagicMock()
+    stub.get_active_name.return_value = instance_name
+    return stub
+
 # Payload válido para todos los tests
 VALID_PAYLOAD = {
     "event": "messages.upsert",
@@ -58,6 +65,7 @@ class TestWebhookAuth:
              patch("main.rag", MagicMock()), \
              patch("main.wa_client", MagicMock()), \
              patch("main.session_manager", MagicMock()), \
+             patch("main.instance_watcher", _make_watcher_stub()), \
              patch("main.usuario_excedido", return_value=False):
 
             async with httpx.AsyncClient(
@@ -116,6 +124,7 @@ class TestWebhookAuth:
              patch("main.rag", MagicMock()), \
              patch("main.wa_client", MagicMock()), \
              patch("main.session_manager", MagicMock()), \
+             patch("main.instance_watcher", _make_watcher_stub()), \
              patch("main.usuario_excedido", return_value=False):
 
             async with httpx.AsyncClient(

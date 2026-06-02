@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 from collections import defaultdict
+from pathlib import Path
 
 from logging_config import setup_logging, get_logger, request_id_ctx
 from rag_orchestrator import RAGOrchestrator
@@ -21,9 +22,11 @@ from error_codes import ErrorCode
 from exceptions import AppError
 from sesionLoggerManager import SessionManager
 from health import run_health_probes
+from instance_watcher import InstanceWatcher
 
 rag = None
 wa_client = None
+instance_watcher = None
 session_manager = None
 logger = None
 
@@ -60,6 +63,31 @@ def usuario_excedido(remitente: str) -> bool:
     return False
 
 
+def _resolve_instance_name() -> str:
+    """Resuelve el nombre de instancia activa para un request saliente.
+
+    Prioridad:
+    1) `instance_watcher.get_active_name()` — el nombre actualizado
+       por el watcher despues de un swap. Una vez que el admin
+       activo una instancia, este valor es el que manda.
+    2) `os.environ["EVOLUTION_INSTANCE_NAME"]` — fallback pre-activacion
+       (config vacio, primer deploy). El env var queda hasta que
+       alguien use la UI/CLI para activar formalmente.
+
+    Devuelve "" si ambos estan vacios — el caller debe decidir si
+    eso es error o no (los call sites outbound actualmented no
+    pueden funcionar sin nombre, asi que un string vacio se
+    propagara como URL malformada; es preferible a un fallback
+    silencioso que mande el mensaje a una instancia que no
+    esperabamos).
+    """
+    if instance_watcher is not None:
+        name = instance_watcher.get_active_name()
+        if name:
+            return name
+    return os.environ.get("EVOLUTION_INSTANCE_NAME", "")
+
+
 async def cleanup_loop():
     """Limpia sesiones expiradas y IDs de mensajes viejos cada 60 segundos."""
     global session_manager
@@ -77,7 +105,7 @@ async def cleanup_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global rag, wa_client, session_manager, logger
+    global rag, wa_client, instance_watcher, session_manager, logger
     setup_logging()
     logger = get_logger("main")
 
@@ -95,10 +123,11 @@ async def lifespan(app: FastAPI):
             logger.error("Faltan variables de entorno requeridas", error_code=ErrorCode.SYS_DEPENDENCY_MISSING.value)
             sys.exit(1)
 
+        # Post-PR-3: wa_client es generico (no instance_name en ctor).
+        # El nombre llega per-call via _resolve_instance_name().
         wa_client = WhatsAppClient(
             api_url=evolution_url,
             api_key=evolution_key,
-            instance_name=instance
         )
 
         rag = RAGOrchestrator(google_key)
@@ -110,18 +139,31 @@ async def lifespan(app: FastAPI):
     # Inicializamos el SessionManager (logger con buffer + timeout)
     session_manager = SessionManager(timeout_seconds=300, max_mensajes=6)
 
+    # Post-PR-3: el InstanceWatcher polea config_bot.json y mantiene
+    # _active_name actualizado. main.py consulta get_active_name() por
+    # request (no por arranque), asi un swap hecho por la UI se ve
+    # en el siguiente webhook sin reiniciar.
+    config_path = Path(__file__).resolve().parent.parent / "config_bot.json"
+    instance_watcher = InstanceWatcher(config_path)
+    await instance_watcher.start()
+    initial_name = instance_watcher.get_active_name() or instance
+    logger.info("InstanceWatcher inicializado", active_instance_name=initial_name)
+
     # Arrancamos el loop de limpieza de sesiones expiradas
     task = asyncio.create_task(cleanup_loop())
 
     logger.info("Dependencias cargadas. Servidor listo para recibir mensajes.")
     yield
 
-    # Shutdown: cancelamos el loop y finalizamos sesiones activas
+    # Shutdown: cancelamos loops y watchers
     task.cancel()
     try:
         await task
     except asyncio.CancelledError:
         pass
+
+    if instance_watcher:
+        await instance_watcher.stop()
 
     if session_manager:
         session_manager.limpiar_sesiones_expiradas()
@@ -170,8 +212,14 @@ async def request_logging_middleware(request: Request, call_next):
 # ---- HEALTH ENDPOINT ----
 @app.get("/health")
 async def health_check():
-    """Deep health check probing RAG and Evolution API."""
-    result = await run_health_probes(wa_client, rag)
+    """Deep health check probing RAG and Evolution API.
+
+    Resuelve el instance_name via el watcher (mismo que los
+    webhooks de produccion usan), asi el health probe golpea la
+    instancia que el bot realmente esta usando.
+    """
+    instance_name = _resolve_instance_name()
+    result = await run_health_probes(wa_client, rag, instance_name=instance_name)
     return JSONResponse(content=result, status_code=200)
 
 
@@ -193,6 +241,24 @@ async def webhook(request: Request, payload: EvolutionWebhook):
         remitente = datos["remitente"]
         push_name = datos["push_name"]
 
+        # Resolvemos el instance_name UNA VEZ por webhook (atomic read
+        # del watcher, sin re-entrar en el lock). Asi un swap del
+        # admin durante este request puede afectar a webhooks
+        # concurrentes pero NO a este: el que empezo con A termina
+        # con A. Es la semantica del design (in-flight on old reference
+        # complete; new requests pick up new name).
+        instance_name = _resolve_instance_name()
+        if not instance_name:
+            # Sin nombre activo, no podemos responder. Loggeamos
+            # claramente: en un deploy normal esto no deberia pasar
+            # (siempre hay el env var de fallback); si pasa es un
+            # bug de configuracion que el admin tiene que arreglar.
+            logger.error(
+                "No hay instancia activa para outbound",
+                error_code=ErrorCode.SYS_DEPENDENCY_MISSING.value,
+            )
+            return {"status": "no_active_instance"}
+
         # Deduplicación: ignorar si ya procesamos este mensaje
         msg_id = payload.data.key.id
         if msg_id in mensajes_procesados:
@@ -210,7 +276,11 @@ async def webhook(request: Request, payload: EvolutionWebhook):
         # Validar Rate Limit por usuario
         if usuario_excedido(remitente):
             logger.warning("Rate limit exceeded", user=push_name or remitente)
-            await wa_client.enviar_mensaje(remitente, "Estás enviando mensajes muy rápido. Por favor, espera un minuto.")
+            await wa_client.enviar_mensaje(
+                remitente,
+                "Estás enviando mensajes muy rápido. Por favor, espera un minuto.",
+                instance_name=instance_name,
+            )
             return {"status": "rate_limited"}
 
         asyncio.create_task(
@@ -223,6 +293,7 @@ async def webhook(request: Request, payload: EvolutionWebhook):
                 es_audio=datos["es_audio"],
                 session_manager=session_manager,
                 push_name=push_name,
+                instance_name=instance_name,
             )
         )
 
