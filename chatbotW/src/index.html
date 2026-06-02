@@ -430,9 +430,9 @@
                                         </td>
                                         <td class="px-4 py-3 text-center">
                                             <div class="flex gap-1 justify-center">
-                                                <button @click="openQrModal(inst)" :disabled="inst.connectionState === 'open'" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Mostrar QR">📱</button>
-                                                <button @click="openSwapModal(inst)" :disabled="inst.connectionState !== 'open' || isActive(inst)" class="text-green-600 hover:bg-green-50 p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed" :title="isActive(inst) ? 'Esta es la instancia activa' : 'Activar'">⚡</button>
-                                                <button @click="deleteInstance(inst)" :disabled="isActive(inst)" class="text-red-600 hover:bg-red-50 p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed" :title="isActive(inst) ? 'No podés eliminar la instancia activa' : 'Eliminar'">🗑️</button>
+                                                <button @click="openQrModal(inst)" :disabled="inst.connectionState === 'open'" class="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed shadow-sm" title="Mostrar QR">📱</button>
+                                                <button @click="openSwapModal(inst)" :disabled="inst.connectionState !== 'open' || isActive(inst)" class="bg-green-600 hover:bg-green-700 text-white p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed shadow-sm" :title="isActive(inst) ? 'Esta es la instancia activa' : 'Activar'">⚡</button>
+                                                <button @click="deleteInstance(inst)" :disabled="isActive(inst)" class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed shadow-sm" :title="isActive(inst) ? 'No podés eliminar la instancia activa' : 'Eliminar'">🗑️</button>
                                             </div>
                                         </td>
                                     </tr>
