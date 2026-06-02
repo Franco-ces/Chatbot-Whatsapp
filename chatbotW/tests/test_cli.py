@@ -120,16 +120,90 @@ class TestSetWebhook:
 
 
 class TestSetActive:
-    def test_set_active_fails_with_exit_3_until_instance_activation_lands(
-        self, capfd
+    def test_set_active_succeeds_with_mocked_instance_activation(
+        self, mocker, monkeypatch, capfd
     ):
-        """PR 1: instance_activation todavia no existe. El CLI debe
-        devolver 3 (config error) con un mensaje claro a stderr, sin
-        contaminar stdout. Cuando PR 2 mergee, este test se actualizara
-        para esperar exit 0 con un mock del bridge."""
-        code = main_mod.main(["set-active", "--name", "bot_1"])
+        """PR 2: instance_activation ya esta implementado. El CLI lo invoca
+        con (name, admin, config, webhook_url, webhook_secret) leyendo
+        BOT_URL y WEBHOOK_SECRET del entorno, y emite `{status, active}`."""
+        from unittest.mock import AsyncMock
+        import instance_activation
+
+        captured = {}
+
+        async def fake_set_active(name, *, admin, config, webhook_url, webhook_secret):
+            captured["name"] = name
+            captured["admin"] = admin
+            captured["config"] = config
+            captured["webhook_url"] = webhook_url
+            captured["webhook_secret"] = webhook_secret
+
+        mocker.patch.object(instance_activation, "set_active", new=fake_set_active)
+
+        # BOT_URL y WEBHOOK_SECRET son las dos env vars que el CLI pasa
+        # al bridge. Si el admin no las setea en `.env` antes de invocar
+        # `set-active`, el bot no recibe webhooks firmados.
+        monkeypatch.setenv("BOT_URL", "https://bot.example.com")
+        monkeypatch.setenv("WEBHOOK_SECRET", "topsecret")
+
+        code = main_mod.main(["set-active", "--name", "bot_2"])
+        out, err = capfd.readouterr()
+        assert code == 0
+        assert err == ""  # happy path: nada a stderr
+        data = json.loads(out.strip())
+        assert data == {"status": "ok", "active": "bot_2"}
+
+        # El bridge recibio los parametros exactos del CLI.
+        assert captured["name"] == "bot_2"
+        assert captured["webhook_url"] == "https://bot.example.com"
+        assert captured["webhook_secret"] == "topsecret"
+        # El admin se construyo desde EVOLUTION_API_URL/_KEY (ver fixture).
+        assert captured["admin"] is not None
+
+    def test_set_active_exits_3_when_instance_activation_raises_config_error(
+        self, mocker, monkeypatch, capfd
+    ):
+        """Si el bridge propaga ConfigError (ej. escritura atomica del
+        config falla), el CLI traduce a exit 3 sin filtrar el detalle
+        crudo al stdout."""
+        from error_codes import ErrorCode
+        from exceptions import ConfigError
+        import instance_activation
+
+        async def fake_set_active(name, *, admin, config, webhook_url, webhook_secret):
+            raise ConfigError(ErrorCode.CFG_WRITE_FAILED, detail="disk full simulated")
+
+        mocker.patch.object(instance_activation, "set_active", new=fake_set_active)
+        monkeypatch.setenv("BOT_URL", "https://bot.example.com")
+        monkeypatch.setenv("WEBHOOK_SECRET", "topsecret")
+
+        code = main_mod.main(["set-active", "--name", "bot_2"])
         out, err = capfd.readouterr()
         assert code == 3
         assert out == ""  # stdout limpio, todo a stderr
-        assert "instance_activation" in err
-        assert "PR 2" in err
+        assert "disk full simulated" in err
+
+    def test_set_active_exits_2_when_instance_state_is_not_open(
+        self, mocker, monkeypatch, capfd
+    ):
+        """Si el bridge propaga APIError(EVO_INSTANCE_NOT_LINKED) (drift
+        detectado al activar), el CLI traduce a exit 2 (precondicion)."""
+        from error_codes import ErrorCode
+        from exceptions import APIError
+        import instance_activation
+
+        async def fake_set_active(name, *, admin, config, webhook_url, webhook_secret):
+            raise APIError(
+                ErrorCode.EVO_INSTANCE_NOT_LINKED,
+                detail="La instancia 'bot_2' está en estado 'connecting' y no puede activarse",
+            )
+
+        mocker.patch.object(instance_activation, "set_active", new=fake_set_active)
+        monkeypatch.setenv("BOT_URL", "https://bot.example.com")
+        monkeypatch.setenv("WEBHOOK_SECRET", "topsecret")
+
+        code = main_mod.main(["set-active", "--name", "bot_2"])
+        out, err = capfd.readouterr()
+        assert code == 2
+        assert out == ""
+        assert "connecting" in err
