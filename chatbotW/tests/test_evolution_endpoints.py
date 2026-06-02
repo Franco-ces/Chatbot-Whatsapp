@@ -217,6 +217,163 @@ class TestGetState:
 # POST /api/evolution/active
 # ---------------------------------------------------------------------------
 
+class TestDeleteInstance:
+    @pytest.mark.asyncio
+    async def test_sin_auth_devuelve_401(self, client):
+        resp = await client.delete("/api/evolution/instances/bot_2")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_happy_path_devuelve_204_y_llama_admin(
+        self, mocker, client, auth_token
+    ):
+        """Si la instancia NO es la activa, el endpoint llama a
+        `evolution_admin.delete_instance(name)` y devuelve 204 (no body).
+
+        Importante: monkey-patcheamos `config_manager.cargar` para que
+        el `cargar()` que el endpoint hace al inicio (defensa contra
+        swaps del watcher) NO pise el valor que seteamos en memoria."""
+        fake = _patch_admin(mocker)
+        fake.delete_instance = AsyncMock(return_value=None)
+        mocker.patch.object(interface.config_manager, "cargar", lambda: None)
+        interface.config_manager.config["active_instance_name"] = "other_bot"
+        resp = await client.delete(
+            "/api/evolution/instances/bot_2", headers=_auth(auth_token)
+        )
+        assert resp.status_code == 204
+        assert resp.content == b""
+        fake.delete_instance.assert_awaited_once_with("bot_2")
+
+    @pytest.mark.asyncio
+    async def test_borrar_la_activa_devuelve_409_EVO_INSTANCE_ACTIVE(
+        self, mocker, client, auth_token
+    ):
+        """Safety check: borrar la activa dejaria al bot sin outbound.
+        El endpoint rechaza con 409 + `EVO_INSTANCE_ACTIVE` y NO toca
+        Evolution (la llamada a `admin.delete_instance` no debe ocurrir)."""
+        fake = _patch_admin(mocker)
+        fake.delete_instance = AsyncMock(return_value=None)
+        mocker.patch.object(interface.config_manager, "cargar", lambda: None)
+        interface.config_manager.config["active_instance_name"] = "bot_2"
+        resp = await client.delete(
+            "/api/evolution/instances/bot_2", headers=_auth(auth_token)
+        )
+        assert resp.status_code == 409
+        body = resp.json()
+        assert body["error"]["code"] == "E-COM-006"
+        # Mensaje le da al operador la salida: "activá otra antes".
+        assert "activ" in body["error"]["detail"].lower()
+        fake.delete_instance.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_borrar_la_activa_via_env_var_devuelve_409(
+        self, mocker, client, auth_token, monkeypatch
+    ):
+        """Si `config.active_instance_name` esta vacio en disco (caso
+        comun: el operador NUNCA swapeo manualmente), el safety check
+        tiene que caer al fallback `EVOLUTION_INSTANCE_NAME` de env.
+        Si no, borrariamos la instancia que el bot esta usando y queda
+        sin outbound."""
+        fake = _patch_admin(mocker)
+        fake.delete_instance = AsyncMock(return_value=None)
+        mocker.patch.object(interface.config_manager, "cargar", lambda: None)
+        interface.config_manager.config["active_instance_name"] = ""
+        monkeypatch.setenv("EVOLUTION_INSTANCE_NAME", "rag_bot")
+        resp = await client.delete(
+            "/api/evolution/instances/rag_bot", headers=_auth(auth_token)
+        )
+        assert resp.status_code == 409
+        assert resp.json()["error"]["code"] == "E-COM-006"
+        fake.delete_instance.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_nombre_invalido_regex_devuelve_400(
+        self, mocker, client, auth_token
+    ):
+        """El path param pasa por `_validate_instance_name` (que re-corre
+        la regex). Sin auth ya filtra antes; con auth, la regex."""
+        fake = _patch_admin(mocker)
+        fake.delete_instance = AsyncMock(return_value=None)
+        resp = await client.delete(
+            "/api/evolution/instances/has%20space", headers=_auth(auth_token)
+        )
+        assert resp.status_code == 400
+        fake.delete_instance.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_404_de_evolution_se_propaga_como_404(
+        self, mocker, client, auth_token
+    ):
+        """Si Evolution no la tiene (404), `evolution_admin` mapea a
+        `APIError(API_NOT_FOUND)`, y el error_handler devuelve 404."""
+        from error_codes import ErrorCode
+        from exceptions import APIError
+
+        fake = _patch_admin(mocker)
+        fake.delete_instance = AsyncMock(
+            side_effect=APIError(
+                ErrorCode.API_NOT_FOUND,
+                detail="Instancia no encontrada (delete_instance(x))",
+            )
+        )
+        mocker.patch.object(interface.config_manager, "cargar", lambda: None)
+        interface.config_manager.config["active_instance_name"] = ""
+        resp = await client.delete(
+            "/api/evolution/instances/missing", headers=_auth(auth_token)
+        )
+        assert resp.status_code == 404
+        assert resp.json()["error"]["code"] == "E-API-002"
+
+
+class TestGetActiveInstance:
+    @pytest.mark.asyncio
+    async def test_sin_auth_devuelve_401(self, client):
+        resp = await client.get("/api/evolution/active")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_devuelve_200_con_nombre_activa(
+        self, mocker, client, auth_token
+    ):
+        mocker.patch.object(interface.config_manager, "cargar", lambda: None)
+        interface.config_manager.config["active_instance_name"] = "rag_bot"
+        resp = await client.get(
+            "/api/evolution/active", headers=_auth(auth_token)
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"name": "rag_bot"}
+
+    @pytest.mark.asyncio
+    async def test_cae_a_env_var_si_config_vacio(
+        self, mocker, client, auth_token, monkeypatch
+    ):
+        """Si el config no tiene activa persistida, el endpoint
+        devuelve la de `EVOLUTION_INSTANCE_NAME` (lo mismo que usa el
+        bot como fallback). Asi el frontend puede deshabilitar el
+        boton correcto."""
+        mocker.patch.object(interface.config_manager, "cargar", lambda: None)
+        interface.config_manager.config["active_instance_name"] = ""
+        monkeypatch.setenv("EVOLUTION_INSTANCE_NAME", "rag_bot")
+        resp = await client.get(
+            "/api/evolution/active", headers=_auth(auth_token)
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"name": "rag_bot"}
+
+    @pytest.mark.asyncio
+    async def test_sin_activa_devuelve_string_vacio(
+        self, mocker, client, auth_token, monkeypatch
+    ):
+        mocker.patch.object(interface.config_manager, "cargar", lambda: None)
+        interface.config_manager.config["active_instance_name"] = ""
+        monkeypatch.delenv("EVOLUTION_INSTANCE_NAME", raising=False)
+        resp = await client.get(
+            "/api/evolution/active", headers=_auth(auth_token)
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"name": ""}
+
+
 class TestActivateInstance:
     @pytest.mark.asyncio
     async def test_sin_auth_devuelve_401(self, client):

@@ -15,6 +15,7 @@ export function initInstancesPanel(Alpine) {
     Alpine.data('instancesPanel', () => ({
         // ─── State ─────────────────────────────────────────────────
         instances: [],
+        activeName: '',
         loading: false,
         selected: null,
         showQr: false,
@@ -37,6 +38,14 @@ export function initInstancesPanel(Alpine) {
                 && this.swapTarget.connectionState === 'open';
         },
 
+        isActive(inst) {
+            // El backend devuelve la activa en /api/evolution/active
+            // (es lo que esta en `config_bot.json`). Comparamos por
+            // nombre: Evolution permite nombres duplicados solo si
+            // son unicos, asi que el match es 1:1.
+            return inst && inst.name === this.activeName;
+        },
+
         // ─── Init ─────────────────────────────────────────────────
         init() {
             this.loadInstances();
@@ -46,16 +55,74 @@ export function initInstancesPanel(Alpine) {
         async loadInstances() {
             this.loading = true;
             try {
-                const res = await apiFetch('/api/evolution/instances');
-                if (res.ok) {
-                    const data = await res.json();
+                // Pedimos lista + activa en paralelo. La activa decide
+                // que botones quedan deshabilitados (no se puede eliminar
+                // la activa, y 'Activar' solo tiene sentido si NO es la
+                // actual). Si el GET /active falla seguimos: la lista
+                // se muestra igual, solo queda sin marca de activa.
+                const [listRes, activeRes] = await Promise.all([
+                    apiFetch('/api/evolution/instances'),
+                    apiFetch('/api/evolution/active'),
+                ]);
+                if (listRes.ok) {
+                    const data = await listRes.json();
                     this.instances = data.instances || [];
+                } else {
+                    console.error('Error al cargar instancias', listRes.status);
+                    window.showToast('Error al cargar instancias', 'error');
+                }
+                if (activeRes.ok) {
+                    const data = await activeRes.json();
+                    this.activeName = data.name || '';
+                } else {
+                    this.activeName = '';
                 }
             } catch (err) {
                 console.error('Error al cargar instancias', err);
                 window.showToast('Error al cargar instancias', 'error');
             } finally {
                 this.loading = false;
+            }
+        },
+
+        async deleteInstance(inst) {
+            if (!inst || !inst.name) return;
+            // Doble guard por si el HTML se desincroniza: el backend
+            // igual va a rechazar con 409 si la instancia es la activa.
+            if (this.isActive(inst)) {
+                window.showToast(
+                    'No podés eliminar la instancia activa. Primero activá otra.',
+                    'error'
+                );
+                return;
+            }
+            const name = inst.name;
+            // `window.confirm` bloquea el thread; suficiente para una
+            // accion destructiva sin meter un modal entero.
+            const ok = window.confirm(
+                `¿Eliminar la instancia "${name}" de Evolution? `
+                + 'Esta acción no se puede deshacer (también se borra '
+                + 'su sesión de WhatsApp si está vinculada).'
+            );
+            if (!ok) return;
+            try {
+                const res = await apiFetch(
+                    `/api/evolution/instances/${encodeURIComponent(name)}`,
+                    { method: 'DELETE' }
+                );
+                if (res.status === 204) {
+                    window.showToast(`Instancia '${name}' eliminada`, 'success');
+                    await this.loadInstances();
+                } else {
+                    // 404, 409, 5xx, etc. El backend ya formatea el error.
+                    const err = await res.json().catch(() => ({}));
+                    const detail = (err.error && err.error.detail)
+                        || `Error al eliminar (HTTP ${res.status})`;
+                    window.showToast(detail, 'error');
+                }
+            } catch (err) {
+                console.error('Error al eliminar instancia', err);
+                window.showToast('Error de conexión al eliminar', 'error');
             }
         },
 

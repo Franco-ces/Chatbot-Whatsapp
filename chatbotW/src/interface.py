@@ -90,7 +90,42 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class NoCacheStaticMiddleware(BaseHTTPMiddleware):
+    """Fuerza `Cache-Control: no-store` en `/` y `/static/*`.
+
+    Sin esto, `StaticFiles` y el response del index.html salen sin
+    header de cache, y el browser decide solo (suele cachear en
+    `disk cache` hasta cerrar la pestaña). Resultado: un cambio en
+    `instances.js` o `index.html` deployado al contenedor NO se ve
+    hasta hard refresh (Ctrl+Shift+R), que es exactamente el modo de
+    falla que nos costo 10 minutos hoy con el fix de
+    `connectionStatus`.
+
+    `no-store` (no `no-cache`) porque no queremos revalidacion: el
+    browser SIEMPRE va al server. Costo: ~30KB extra de trafico en
+    cada refresh. Para una SPA de admin con 4 paginas, irrelevante.
+
+    Solo se aplica a paths publicos (`/`, `/static/*`). Las rutas
+    `/api/*` mantienen su semantica de cache default (y de hecho
+    varias usan Authorization, que los browsers no cachean igual).
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path == "/" or path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+# Orden: en Starlette, el middleware registrado ULTIMO es el mas
+# externo (se ejecuta primero en la request, ultimo en la response).
+# Ponemos NoCacheStatic afuera de Auth para que el cache header se
+# aplique incluso en las responses de assets cuando el usuario
+# todavia no esta autenticado (que es el caso normal: la pagina de
+# login carga el JS y CSS antes de mandar credenciales).
 app.add_middleware(AuthMiddleware)
+app.add_middleware(NoCacheStaticMiddleware)
 # ────────────────────────────────────────────────────────────────────────
 
 # Instanciamos el manager de configuración
@@ -614,6 +649,74 @@ async def activate_evolution_instance(req: InstanceNameRequest):
         webhook_secret=webhook_secret,
     )
     return {"status": "ok", "active": req.name}
+
+
+@app.get("/api/evolution/active")
+async def get_active_evolution_instance():
+    """Devuelve el nombre de la instancia activa.
+
+    Misma logica que el safety check del DELETE:
+    1. `config_bot.json.active_instance_name` si esta seteada.
+    2. `EVOLUTION_INSTANCE_NAME` de env vars como fallback.
+
+    El frontend lo pide al cargar la lista para saber que botones
+    deshabilitar. No es un secret: cualquier operador logueado puede
+    ver cual es la activa.
+    """
+    config_manager.cargar()  # Relee del disco por si el watcher swapeo.
+    config_active = config_manager.config.get("active_instance_name", "")
+    env_active = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
+    return {"name": config_active or env_active}
+
+
+@app.delete("/api/evolution/instances/{name}", status_code=204)
+async def delete_evolution_instance(name: str):
+    """Elimina una instancia de Evolution. 204 si OK.
+
+    Safety check: si la instancia a borrar es la ACTIVA, rechaza con
+    409 `EVO_INSTANCE_ACTIVE`. Razon: borrar la activa dejaria al bot
+    sin outbound y la `WhatsAppClient` apuntaria a una instancia
+    inexistente hasta el proximo swap. La unica forma limpia de
+    desactivar la activa es activando OTRA primero.
+
+    Que cuenta como "activa" para este check:
+    1. `config_bot.json.active_instance_name` si esta seteada (caso:
+       el operador ya hizo swap manual al menos una vez).
+    2. `EVOLUTION_INSTANCE_NAME` de env vars como fallback (caso por
+       defecto: el operador NUNCA swapeo, el bot usa la del .env).
+
+    Raises:
+        APIError(EVO_INSTANCE_ACTIVE, 409): si la instancia es la activa.
+        APIError(API_NOT_FOUND, 404): si Evolution no la tiene.
+        APIError(API_INVALID_PAYLOAD, 400): nombre invalido o
+            que ya esta en uso (poco probable en DELETE, pero mapeado).
+    """
+    _validate_instance_name(name)
+
+    # Safety check contra la activa. Relee el config (puede haber
+    # cambiado desde el startup si hubo un swap reciente) y combina
+    # con el fallback de env var (la activa que el bot estaria usando
+    # si NUNCA se swapeo manualmente).
+    config_manager.cargar()
+    config_active = config_manager.config.get("active_instance_name", "")
+    env_active = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
+    active = config_active or env_active
+    if name == active:
+        raise APIError(
+            ErrorCode.EVO_INSTANCE_ACTIVE,
+            detail=(
+                f"La instancia '{name}' es la activa. Activá otra antes "
+                "de eliminarla."
+            ),
+        )
+
+    try:
+        await evolution_admin.delete_instance(name)
+    except APIError:
+        # Ya viene mapeado (404, 400, 5xx). Solo lo re-emitimos.
+        raise
+
+    return Response(status_code=204)
 # ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

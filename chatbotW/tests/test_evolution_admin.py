@@ -180,6 +180,48 @@ class TestGetState:
         assert out == ConnectionState.CONNECTING
 
 
+class TestDeleteInstance:
+    async def test_calls_delete_with_correct_path(self, mocker, admin):
+        """Debe llamar DELETE /instance/delete/{name} (sin body)."""
+        from unittest.mock import AsyncMock
+        mock_delete = AsyncMock(return_value=mocker.MagicMock(status_code=200, text=""))
+        mocker.patch.object(admin._http, "delete", new=mock_delete)
+        await admin.delete_instance("bot_2")
+        mock_delete.assert_awaited_once_with("instance/delete/bot_2")
+
+    async def test_404_from_evolution_maps_to_api_not_found(self, mocker, admin):
+        from error_codes import ErrorCode
+        from exceptions import APIError
+        from exceptions import CommunicationError
+
+        comm = CommunicationError(
+            ErrorCode.COM_SEND_MESSAGE_FAILED,
+            detail="not found",
+            status_code=404,
+            response_body="not found",
+        )
+        mocker.patch.object(admin._http, "delete", side_effect=comm)
+        with pytest.raises(APIError) as exc:
+            await admin.delete_instance("missing")
+        assert exc.value.code == ErrorCode.API_NOT_FOUND
+
+    async def test_5xx_from_evolution_maps_to_api_server_error(self, mocker, admin):
+        from error_codes import ErrorCode
+        from exceptions import APIError
+        from exceptions import CommunicationError
+
+        comm = CommunicationError(
+            ErrorCode.COM_SEND_MESSAGE_FAILED,
+            detail="boom",
+            status_code=500,
+            response_body="boom",
+        )
+        mocker.patch.object(admin._http, "delete", side_effect=comm)
+        with pytest.raises(APIError) as exc:
+            await admin.delete_instance("bot_2")
+        assert exc.value.code == ErrorCode.API_SERVER_ERROR
+
+
 class TestSetWebhook:
     async def test_sends_url_and_secret_header(self, mocker, admin):
         _mock_post(mocker, admin._http, 200, {"webhook": "ok"})

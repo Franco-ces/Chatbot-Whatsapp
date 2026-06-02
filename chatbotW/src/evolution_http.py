@@ -79,6 +79,28 @@ class EvolutionHTTP:
         self._raise_for_status(response)
         return response
 
+    async def delete(self, path: str, **kwargs) -> httpx.Response:
+        """DELETE a `path`. Levanta `CommunicationError` ante cualquier fallo.
+
+        Evolution usa DELETE en `/instance/delete/{name}` para eliminar
+        una instancia. La respuesta 2xx puede traer o no cuerpo JSON
+        (algunas versiones devuelven `{"status":"SUCCESS"}` y otras
+        `{}`); el caller decide si parsea o no.
+        """
+        url = self._build_url(path)
+        try:
+            response = await self._client.request(
+                "DELETE", url, headers=self._headers(), **kwargs
+            )
+        except httpx.RequestError as e:
+            raise CommunicationError(
+                ErrorCode.COM_CONNECTION_FAILED,
+                detail=f"Error de conexión con Evolution API: {e}",
+                cause=e,
+            )
+        self._raise_for_status(response)
+        return response
+
     async def aclose(self) -> None:
         """Cierra el cliente subyacente (libera conexiones del pool)."""
         await self._client.aclose()

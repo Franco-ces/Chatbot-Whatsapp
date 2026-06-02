@@ -192,6 +192,29 @@ class EvolutionAdmin:
         logger.info("Webhook configured", instance_name=name, url=config.url)
 
     # ---------------------------------------------------------------
+    # delete
+    # ---------------------------------------------------------------
+    async def delete_instance(self, name: str) -> None:
+        """Elimina una instancia de Evolution. NO revisa si es la activa
+        (esa decision es de `interface.py`, que cruza con `ConfigManager`
+        via el bridge `instance_activation`); este modulo solo habla
+        con Evolution.
+
+        Raises:
+            APIError: 404 si la instancia no existe, 400 si el nombre
+                es invalido, 5xx si Evolution tiene un problema interno.
+                Mapeo via `_raise_as_api_error`.
+            CommunicationError: error de transporte.
+        """
+        try:
+            await self._http.delete(f"instance/delete/{name}")
+        except CommunicationError as e:
+            self._raise_as_api_error(e, op=f"delete_instance({name})")
+            raise  # noqa: nunca llega aca; _raise_as_api_error siempre lanza
+
+        logger.info("Evolution instance deleted", instance_name=name)
+
+    # ---------------------------------------------------------------
     # helpers
     # ---------------------------------------------------------------
     def _raise_as_api_error(self, exc: CommunicationError, *, op: str) -> None:

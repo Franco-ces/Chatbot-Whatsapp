@@ -121,6 +121,45 @@ class TestPost:
         assert kwargs["headers"]["apikey"] == "k-123"
 
 
+class TestDelete:
+    async def test_delete_sends_correct_method_and_path(self, mocker, client):
+        resp = mocker.MagicMock()
+        resp.status_code = 200
+        resp.text = ""
+        resp.content = b""
+        mock_request = mocker.patch.object(
+            client._client, "request", return_value=resp
+        )
+        await client.delete("instance/delete/bot_2")
+        args, kwargs = mock_request.call_args
+        assert args[0] == "DELETE"
+        assert args[1] == "https://evo.example.com/instance/delete/bot_2"
+        # DELETE no lleva body, pero la API key + content-type van igual
+        # (Evolution los ignora en DELETE pero el header sigue siendo
+        # consistente con GET/POST).
+        assert kwargs["headers"]["apikey"] == "k-123"
+
+    async def test_delete_404_raises_communication_error(self, mocker, client):
+        resp = mocker.MagicMock()
+        resp.status_code = 404
+        resp.text = "instance not found"
+        mocker.patch.object(client._client, "request", return_value=resp)
+        with pytest.raises(CommunicationError) as exc:
+            await client.delete("instance/delete/nope")
+        assert exc.value.status_code == 404
+
+    async def test_delete_transport_error_raises_connection_failed(self, mocker, client):
+        mocker.patch.object(
+            client._client,
+            "request",
+            side_effect=httpx.ConnectError("DNS failure"),
+        )
+        with pytest.raises(CommunicationError) as exc:
+            await client.delete("instance/delete/bot_2")
+        assert exc.value.code == ErrorCode.COM_CONNECTION_FAILED
+        assert exc.value.status_code is None
+
+
 class TestAclose:
     async def test_aclose_calls_underlying_client(self, mocker, client):
         mock_aclose = mocker.patch.object(client._client, "aclose")
