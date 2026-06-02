@@ -7,6 +7,7 @@ class ErrorCode(str, Enum):
     COM_SEND_MESSAGE_FAILED = "E-COM-002"
     COM_GET_AUDIO_FAILED = "E-COM-003"
     EVO_INSTANCE_NOT_LINKED = "E-COM-004"
+    EVO_INSTANCE_ALREADY_EXISTS = "E-COM-005"
 
     # RAG errors (E-RAG)
     RAG_NO_PDFS = "E-RAG-001"
@@ -46,6 +47,7 @@ _USER_MESSAGES = {
     ErrorCode.COM_SEND_MESSAGE_FAILED: "No se pudo enviar el mensaje. Intente de nuevo más tarde.",
     ErrorCode.COM_GET_AUDIO_FAILED: "No se pudo procesar el mensaje de audio.",
     ErrorCode.EVO_INSTANCE_NOT_LINKED: "La instancia no está vinculada. Escaneá el QR primero.",
+    ErrorCode.EVO_INSTANCE_ALREADY_EXISTS: "Ya existe una instancia con ese nombre.",
     ErrorCode.RAG_NO_PDFS: "El sistema no tiene manuales cargados para consultar.",
     ErrorCode.RAG_QUERY_FAILED: "Ocurrió un error al procesar su consulta.",
     ErrorCode.RAG_AUDIO_FAILED: "No se pudo procesar el audio.",
@@ -68,6 +70,7 @@ _HTTP_STATUSES = {
     ErrorCode.API_SERVER_ERROR: 500,
     ErrorCode.API_UNAUTHORIZED: 401,
     ErrorCode.EVO_INSTANCE_NOT_LINKED: 409,
+    ErrorCode.EVO_INSTANCE_ALREADY_EXISTS: 409,
     ErrorCode.RAG_NO_PDFS: 503,
     ErrorCode.SYS_DEPENDENCY_MISSING: 503,
     ErrorCode.FAQ_INVALID_DATA: 400,

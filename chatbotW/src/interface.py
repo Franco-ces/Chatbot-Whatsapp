@@ -17,6 +17,7 @@ import secrets
 import csv
 import json
 import uuid
+from pydantic import BaseModel, Field
 
 from ConfigManager import ConfigManager
 from error_handler import register_error_handlers
@@ -24,6 +25,8 @@ from error_codes import ErrorCode
 from exceptions import APIError
 from faq_paths import FAQS_PATH
 from logging_config import get_logger
+from evolution_admin import EvolutionAdmin
+from evolution_http import EvolutionHTTP
 
 logger = get_logger("interface")
 
@@ -468,6 +471,147 @@ async def eliminar_faq(faq_id: str):
         )
     _write_faqs(new_rows)
     return Response(status_code=204)
+# ────────────────────────────────────────────────────────────────────────
+
+# ─── Evolution Instance Admin (PR 4) ───────────────────────────────────
+# Cliente de Evolution construido una sola vez a partir de las env vars
+# del bot. Si falta la key (caso de tests sin .env), la construimos igual
+# con string vacio: los tests mockean los métodos del admin, asi que la
+# URL/key reales no se tocan nunca en esos flujos.
+_EVO_API_URL = os.environ.get("EVOLUTION_API_URL", "http://localhost:8080")
+_EVO_API_KEY = os.environ.get("EVOLUTION_API_KEY", "")
+evolution_http_client = EvolutionHTTP(_EVO_API_URL, _EVO_API_KEY)
+evolution_admin = EvolutionAdmin(evolution_http_client)
+
+
+class InstanceNameRequest(BaseModel):
+    """Validacion del nombre de instancia: 1-64 chars, alfanumerico + _ -.
+
+    Coincide con la regex del design (§API Contract) y con la convencion
+    de Evolution API v2 para `instanceName`. FastAPI + Pydantic v2
+    devuelven 400 via `validation_error_handler` cuando esto falla.
+    """
+
+    name: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+def _validate_instance_name(name: str) -> str:
+    """Re-valida el nombre cuando viene como path param (FastAPI no corre
+    la regex de Pydantic sobre path params automaticamente)."""
+    try:
+        return InstanceNameRequest(name=name).name
+    except Exception:
+        # Re-emitimos como APIError(API_INVALID_PAYLOAD) para mantener el
+        # mismo cuerpo de error que el resto del panel.
+        raise APIError(
+            ErrorCode.API_INVALID_PAYLOAD,
+            detail=f"Nombre de instancia inválido: '{name}'",
+        )
+
+
+def _qr_data_url(base64_value: str) -> str:
+    """Envuelve el base64 en `data:image/png;base64,...` para que el
+    frontend lo use directo en `<img src=...>` sin otra transformacion."""
+    if not base64_value:
+        return ""
+    if base64_value.startswith("data:"):
+        return base64_value
+    return f"data:image/png;base64,{base64_value}"
+
+
+@app.get("/api/evolution/instances")
+async def list_evolution_instances():
+    """Lista todas las instancias registradas en Evolution.
+
+    La UI las renderiza en una tabla y permite crear/nombrar nuevas.
+    200 con `{instances: [InstanceInfo, ...]}`. Errores de Evolution
+    se mapean a 404/400/500 via `EvolutionAdmin._raise_as_api_error`.
+    """
+    items = await evolution_admin.list_instances()
+    return {
+        "instances": [i.model_dump(by_alias=True, exclude_none=True) for i in items]
+    }
+
+
+@app.post("/api/evolution/instances", status_code=201)
+async def create_evolution_instance(req: InstanceNameRequest):
+    """Crea una nueva instancia. 201 con `{name, connectionState}`.
+
+    Si Evolution devuelve 400 (caso tipico: nombre duplicado), el admin
+    lo mapea a APIError(API_INVALID_PAYLOAD). Aca lo re-traducimos a
+    409 + `EVO_INSTANCE_ALREADY_EXISTS` para que la UI pueda mostrar
+    el mensaje correcto sin tener que parsear la causa.
+    """
+    try:
+        info = await evolution_admin.create_instance(req.name)
+    except APIError as e:
+        if e.code == ErrorCode.API_INVALID_PAYLOAD:
+            # La unica razon valida para que Evolution rechace un create
+            # con 400 es "instance already exists" (Evolution v2 no usa 409).
+            raise APIError(
+                ErrorCode.EVO_INSTANCE_ALREADY_EXISTS,
+                detail=f"La instancia '{req.name}' ya existe",
+                cause=e.cause,
+            ) from e
+        raise
+    return info.model_dump(by_alias=True, exclude_none=True)
+
+
+@app.get("/api/evolution/instances/{name}/qr")
+async def get_evolution_instance_qr(name: str):
+    """Devuelve el QR actual y el estado de la instancia.
+
+    La UI polea este endpoint cada 5s mientras la instancia esta en
+    estado `close`; deja de pollear al ver `state == "open"`. 404 si
+    la instancia no existe (mapeado por `evolution_admin`).
+    """
+    _validate_instance_name(name)
+    payload = await evolution_admin.get_qr(name)
+    return {
+        "qr": _qr_data_url(payload.base64),
+        "state": payload.state.value,
+    }
+
+
+@app.get("/api/evolution/instances/{name}/state")
+async def get_evolution_instance_state(name: str):
+    """Devuelve `{state: open|close|connecting|unknown}` para la instancia."""
+    _validate_instance_name(name)
+    state = await evolution_admin.get_state(name)
+    return {"state": state.value}
+
+
+@app.post("/api/evolution/active")
+async def activate_evolution_instance(req: InstanceNameRequest):
+    """Activa una instancia: re-verifica estado, setea webhook, escribe
+    `config_bot.json.active_instance_name` de forma atomica.
+
+    El bot ya se reinicia solo: el `InstanceWatcher` (PR 3) detecta el
+    cambio de mtime en <=1s y el siguiente webhook usa la nueva
+    instancia. No reinicia el contenedor.
+
+    Devuelve `{status: "ok", active: name}` en 200. Si la instancia no
+    esta en estado `open` (drift entre lo que mostro la UI y lo que
+    ve Evolution al click), devuelve 409 con `EVO_INSTANCE_NOT_LINKED`.
+    El bridge (`instance_activation.set_active`) hace el re-verify, asi
+    que no lo duplicamos aca.
+    """
+    # Import local: la mayoria de endpoints del archivo no necesitan el
+    # bridge. Si el modulo no esta disponible (version pre-PR-2), el
+    # endpoint falla con un error claro en vez de romper el import.
+    from instance_activation import set_active as bridge_set_active
+
+    bot_url = os.environ.get("BOT_URL", "")
+    webhook_secret = os.environ.get("WEBHOOK_SECRET", "")
+
+    await bridge_set_active(
+        req.name,
+        admin=evolution_admin,
+        config=config_manager,
+        webhook_url=bot_url,
+        webhook_secret=webhook_secret,
+    )
+    return {"status": "ok", "active": req.name}
 # ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
