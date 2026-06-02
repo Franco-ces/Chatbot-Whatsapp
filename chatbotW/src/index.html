@@ -89,6 +89,7 @@
                     <button @click="switchTab('config')" :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">🔑 Configuración</button>
                     <button @click="switchTab('docs')" :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">📁 Documentos</button>
                     <button @click="switchTab('faqs')" :class="activeTab === 'faqs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">❓ FAQs</button>
+                    <button @click="switchTab('instances')" :class="activeTab === 'instances' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">📡 Instancias</button>
                     <button @click="switchTab('logs')" :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap">📜 Logs</button>
                 </div>
 
@@ -367,6 +368,127 @@
                                 </template>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- ─── TAB: Instancias (Evolution) ─── -->
+                <div x-show="activeTab === 'instances'" x-data="instancesPanel" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold text-gray-800">📡 Instancias de WhatsApp (Evolution)</h2>
+                        <button @click="loadInstances()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200">🔄 Refrescar</button>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">Administrá las instancias de Evolution API. La activa es la que recibe los mensajes entrantes (el bot hace hot-swap sin reiniciar).</p>
+
+                    <!-- Crear instancia -->
+                    <div class="mb-6 border border-gray-200 rounded-xl p-5 bg-gray-50 shadow-sm">
+                        <h3 class="text-lg font-semibold mb-3 text-gray-800">➕ Crear nueva instancia</h3>
+                        <form @submit.prevent="createInstance()" class="flex flex-col sm:flex-row gap-3 sm:items-end">
+                            <div class="flex-1">
+                                <label class="block text-sm font-semibold text-gray-700 mb-1" for="new-instance-name">Nombre</label>
+                                <input id="new-instance-name" type="text" x-model="createForm.name" placeholder="ej. bot_2" pattern="[A-Za-z0-9_-]+" maxlength="64" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" required>
+                                <p class="text-xs text-gray-400 mt-1">Solo letras, números, guión bajo y guión medio. Máx 64 caracteres.</p>
+                            </div>
+                            <button type="submit" :disabled="createForm.saving" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 shadow-sm">
+                                <span x-show="!createForm.saving">Crear</span>
+                                <span x-show="createForm.saving">⏳ Creando...</span>
+                            </button>
+                        </form>
+                        <p x-show="createForm.error" x-text="createForm.error" class="text-xs text-red-600 mt-2 font-medium"></p>
+                    </div>
+
+                    <!-- Lista de instancias -->
+                    <div class="overflow-auto max-h-[500px] custom-scrollbar rounded-lg border border-gray-200">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-200">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Owner</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                <template x-if="loading">
+                                    <tr><td colspan="4" class="p-6 text-center text-gray-500 text-sm">⏳ Cargando instancias...</td></tr>
+                                </template>
+                                <template x-if="!loading && instances.length === 0">
+                                    <tr><td colspan="4" class="p-8 text-center text-gray-500 italic text-sm">📭 No hay instancias registradas. Creá la primera con el formulario de arriba.</td></tr>
+                                </template>
+                                <template x-for="inst in instances" :key="inst.name">
+                                    <tr class="hover:bg-gray-50 transition-colors">
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="inst.name"></td>
+                                        <td class="px-4 py-3 text-xs text-gray-500 font-mono" x-text="inst.ownerJid || '—'"></td>
+                                        <td class="px-4 py-3 text-sm">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                                                  :class="{
+                                                      'bg-green-100 text-green-800': inst.connectionState === 'open',
+                                                      'bg-yellow-100 text-yellow-800': inst.connectionState === 'connecting',
+                                                      'bg-gray-100 text-gray-700': inst.connectionState === 'close',
+                                                      'bg-red-100 text-red-700': inst.connectionState === 'unknown'
+                                                  }"
+                                                  x-text="inst.connectionState"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            <div class="flex gap-1 justify-center">
+                                                <button @click="openQrModal(inst)" :disabled="inst.connectionState === 'open'" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Mostrar QR">📱</button>
+                                                <button @click="openSwapModal(inst)" :disabled="inst.connectionState !== 'open'" class="text-green-600 hover:bg-green-50 p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Activar">⚡</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- ─── Modal: QR ─── -->
+                    <dialog x-ref="qrDialog" @keydown="onModalKeydown" @keydown.tab="trapTabKey($event)" class="rounded-2xl shadow-2xl p-0 max-w-md w-full backdrop:bg-black/50">
+                        <div class="p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">📱 Escanear QR</h3>
+                            <p class="text-sm text-gray-500 mb-4">Abrí WhatsApp en tu teléfono → Dispositivos vinculados → Vincular dispositivo.</p>
+                            <div class="bg-gray-50 rounded-xl p-4 flex items-center justify-center min-h-[260px] border border-gray-200">
+                                <template x-if="selected && _qrPayload && _qrPayload.qr">
+                                    <img :src="_qrPayload.qr" :alt="'QR de ' + (selected && selected.name)" class="max-w-full max-h-72">
+                                </template>
+                                <template x-if="!selected || !_qrPayload || !_qrPayload.qr">
+                                    <div class="text-center text-gray-400 text-sm">Sin QR disponible</div>
+                                </template>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-3">El QR se refresca automáticamente. Cerrá esta ventana una vez vinculado.</p>
+                            <p class="text-xs text-gray-500 mt-1">Estado actual: <span class="font-mono font-semibold" x-text="selected && selected.connectionState"></span></p>
+                            <div class="flex justify-end gap-2 mt-5">
+                                <button @click="closeQrModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-5 rounded-lg transition-colors shadow-sm">Cerrar</button>
+                            </div>
+                        </div>
+                    </dialog>
+
+                    <!-- ─── Modal: Activar (Swap) ─── -->
+                    <div x-show="showSwap" x-cloak
+                         role="dialog" aria-modal="true" aria-labelledby="swap-title"
+                         @keydown.escape="closeSwapModal()" @keydown.tab="trapTabKey($event)"
+                         class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div class="absolute inset-0 bg-black/50" aria-hidden="true"></div>
+                        <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                            <h3 id="swap-title" class="text-lg font-semibold text-gray-800 mb-2">⚡ Activar instancia</h3>
+                            <p class="text-sm text-gray-500 mb-4">Vas a activar la instancia <span class="font-mono font-semibold" x-text="swapTarget && swapTarget.name"></span>. El bot empezará a usarla para los mensajes salientes (hot-swap, sin reiniciar).</p>
+
+                            <label class="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg cursor-pointer mb-4">
+                                <input type="checkbox" x-model="acknowledge" id="ack-swap" class="mt-1 h-4 w-4 text-blue-600 focus:ring-2 focus:ring-blue-500 border-gray-300 rounded">
+                                <span class="text-sm text-gray-800 select-none">Entiendo que los usuarios que estén chateando ahora perderán el contexto de la conversación en vivo (su historial en disco se mantiene).</span>
+                            </label>
+
+                            <p x-show="swapTarget && swapTarget.connectionState !== 'open'" class="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-2 mb-3">
+                                ⚠️ La instancia debe estar en estado <span class="font-mono">open</span> (vinculada) para activarse. Estado actual: <span class="font-mono font-semibold" x-text="swapTarget && swapTarget.connectionState"></span>.
+                            </p>
+
+                            <p x-show="swapError" x-text="swapError" class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2 mb-3 font-medium"></p>
+
+                            <div class="flex justify-end gap-2 mt-5">
+                                <button @click="closeSwapModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-5 rounded-lg transition-colors shadow-sm">Cancelar</button>
+                                <button @click="confirmSwap()" :disabled="!canActivate" :aria-disabled="!canActivate" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-5 rounded-lg transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
+                                    Activar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

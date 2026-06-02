@@ -1,10 +1,12 @@
 import { apiFetch } from './api.js';
 import { initStores } from './store.js';
 import { initAuth } from './auth.js';
+import { initInstancesPanel } from './instances.js';
 
 document.addEventListener('alpine:init', () => {
     initStores(Alpine);
     initAuth(Alpine);
+    initInstancesPanel(Alpine);
 
     Alpine.data('adminPanel', () => ({
         activeTab: 'config',
