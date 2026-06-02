@@ -57,9 +57,14 @@ class EvolutionAdmin:
         """Devuelve todas las instancias registradas en Evolution.
 
         Raises:
-            CommunicationError: error de transporte o HTTP no-2xx.
+            APIError: 404 -> API_NOT_FOUND, 400 -> API_INVALID_PAYLOAD, 5xx -> API_SERVER_ERROR.
+            CommunicationError: error de transporte sin respuesta HTTP.
         """
-        response = await self._http.get("instance/fetchInstances")
+        try:
+            response = await self._http.get("instance/fetchInstances")
+        except CommunicationError as e:
+            self._raise_as_api_error(e, op="list_instances")
+            raise  # noqa
         data = response.json()
         if not isinstance(data, list):
             # Evolution a veces envuelve la lista en un objeto tipo {"instances": [...]}
