@@ -23,6 +23,7 @@ export function initInstancesPanel(Alpine) {
         acknowledge: false,
         swapTarget: null,
         swapError: '',
+        createForm: { name: '', error: '', saving: false },
 
         // ─── Computed ─────────────────────────────────────────────
         get canActivate() {
