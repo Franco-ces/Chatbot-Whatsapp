@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class ConnectionState(str, Enum):
@@ -39,7 +39,26 @@ class InstanceInfo(BaseModel):
 
     name: str
     owner_jid: Optional[str] = Field(None, alias="ownerJid")
-    connection_state: ConnectionState = Field(..., alias="connectionState")
+    # `connectionState` (camelCase) es el alias "historico" del modelo.
+    # `connectionStatus` es el nombre REAL que Evolution v2.x devuelve en
+    # `GET /instance/fetchInstances` (campo raiz de cada item, no
+    # envuelto). Sin este alias la lista revienta con 500 porque Pydantic
+    # no encuentra el campo requerido. `status` (solo aparece en la
+    # respuesta de `POST /instance/create` dentro de `instance.status`)
+    # ya viene normalizado a `connectionState` por
+    # `EvolutionAdmin._extract_instance_payload`, pero lo aceptamos
+    # tambien aca por defensa.
+    #
+    # Acepta cualquiera de los tres al LEER. Al ESCRIBIR (model_dump con
+    # by_alias=True) sigue saliendo como `connectionState` para no
+    # romper al frontend (`instances.js` usa `inst.connectionState`).
+    connection_state: ConnectionState = Field(
+        ...,
+        validation_alias=AliasChoices(
+            "connectionState", "connectionStatus", "status"
+        ),
+        serialization_alias="connectionState",
+    )
     server_url: Optional[str] = Field(None, alias="serverUrl")
     api_key: Optional[str] = Field(None, alias="apiKey")
     integration: Optional[str] = None

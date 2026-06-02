@@ -73,6 +73,38 @@ class TestListInstances:
         out = await admin.list_instances()
         assert out == []
 
+    async def test_accepts_evolution_v2_connectionStatus(self, mocker, admin):
+        """Regression: la respuesta REAL de Evolution v2.x usa
+        `connectionStatus` (no `connectionState`). Sin el fix, este test
+        falla con ValidationError -> 500 en /api/evolution/instances ->
+        la lista nunca aparece en el panel admin."""
+        payload = [
+            {
+                "id": "125e683d-8a73-4034-9257-bd5e7ab8fa6a",
+                "name": "bot_2",
+                "connectionStatus": "close",
+                "ownerJid": None,
+                "integration": "WHATSAPP-BAILEYS",
+            },
+            {
+                "id": "45a21adf-e50f-460f-b19e-ae332ae3dba6",
+                "name": "rag_bot",
+                "connectionStatus": "open",
+                "ownerJid": "5492494210126@s.whatsapp.net",
+                "profileName": "NeuraDocs",
+                "integration": "WHATSAPP-BAILEYS",
+            },
+        ]
+        _mock_get(mocker, admin._http, 200, payload)
+        out = await admin.list_instances()
+        assert len(out) == 2
+        assert out[0].connection_state == ConnectionState.CLOSE
+        assert out[1].connection_state == ConnectionState.OPEN
+        # Y el dump para el frontend debe seguir siendo camelCase.
+        dumped = out[1].model_dump(by_alias=True, exclude_none=True)
+        assert dumped["connectionState"] == "open"
+        assert "connectionStatus" not in dumped
+
 
 class TestCreateInstance:
     async def test_returns_parsed_instance_info(self, mocker, admin):
@@ -115,6 +147,24 @@ class TestGetQr:
         assert out.base64 == "AAAA"
         assert out.state == ConnectionState.CLOSE
         assert out.instance == "bot_1"
+
+    async def test_already_open_returns_state_from_nested_instance(self, mocker, admin):
+        """Regression: cuando la instancia YA esta vinculada (`open`),
+        Evolution v2.x NO devuelve `base64` en el raiz; en su lugar
+        envuelve todo en `{"instance": {"instanceName": ..., "state":
+        "open"}}`. Si no leemos `instance.state` desde adentro, el
+        panel reporta `state="close"` para siempre y el boton "Activar"
+        nunca se desbloquea, aunque el operador ya haya escaneado el
+        QR."""
+        _mock_get(
+            mocker,
+            admin._http,
+            200,
+            {"instance": {"instanceName": "rag_bot", "state": "open"}},
+        )
+        out = await admin.get_qr("rag_bot")
+        assert out.state == ConnectionState.OPEN
+        assert out.base64 == ""  # No hay QR que escanear, OK.
 
 
 class TestGetState:

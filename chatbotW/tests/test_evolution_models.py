@@ -75,6 +75,39 @@ class TestInstanceInfo:
         assert info.connection_state == ConnectionState.CONNECTING
         assert info.owner_jid == "x"
 
+    def test_accepts_connectionStatus_evolution_v2_shape(self):
+        """Regression: Evolution v2.x (`GET /instance/fetchInstances`)
+        devuelve el campo como `connectionStatus` (Status mayuscula), NO
+        `connectionState`. Sin `AliasChoices`, `list_instances()` revienta
+        con 500 porque Pydantic no encuentra el campo requerido."""
+        raw = {
+            "id": "125e683d-8a73-4034-9257-bd5e7ab8fa6a",
+            "name": "bot_2",
+            "connectionStatus": "close",
+            "ownerJid": None,
+            "profileName": None,
+            "profilePicUrl": None,
+            "integration": "WHATSAPP-BAILEYS",
+            "number": None,
+            "businessId": None,
+        }
+        info = InstanceInfo.model_validate(raw)
+        assert info.name == "bot_2"
+        assert info.connection_state == ConnectionState.CLOSE
+        assert info.integration == "WHATSAPP-BAILEYS"
+
+    def test_serialization_alias_remains_connectionState(self):
+        """El frontend (`instances.js`) lee `inst.connectionState` y rompe
+        si lo cambiamos. `model_dump(by_alias=True)` debe seguir
+        emitiendo camelCase, NO `connectionStatus`."""
+        info = InstanceInfo.model_validate(
+            {"name": "bot_x", "connectionStatus": "open"}
+        )
+        dumped = info.model_dump(by_alias=True, exclude_none=True)
+        assert "connectionState" in dumped
+        assert "connectionStatus" not in dumped
+        assert dumped["connectionState"] == "open"
+
 
 class TestWebhookConfig:
     def test_default_events_is_messsages_upsert(self):

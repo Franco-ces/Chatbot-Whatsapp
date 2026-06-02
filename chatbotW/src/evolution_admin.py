@@ -118,8 +118,28 @@ class EvolutionAdmin:
             raise  # noqa
 
         body = response.json()
-        base64_value = body.get("base64") or body.get("code") or body.get("qrcode") or ""
-        state_value = body.get("state") or body.get("status") or "close"
+        # Evolution v2.x tiene DOS formas de responder segun el estado:
+        # - `close` (sin vincular): `{"base64": "...png", "code": "...",
+        #   "count": N}` en el RAIZ.
+        # - `open` (ya vinculada): `{"instance": {"instanceName": "...",
+        #   "state": "open"}}` SIN base64 (no hay nada que escanear).
+        # Si no leemos el state de adentro de `instance`, la UI nunca
+        # detecta el `open` y el boton "Activar" queda bloqueado para
+        # siempre.
+        base64_value = (
+            body.get("base64")
+            or body.get("code")
+            or body.get("qrcode")
+            or ""
+        )
+        nested = body.get("instance") if isinstance(body.get("instance"), dict) else {}
+        state_value = (
+            body.get("state")
+            or body.get("status")
+            or nested.get("state")
+            or nested.get("status")
+            or "close"
+        )
         return QRPayload(
             base64=base64_value,
             instance=name,

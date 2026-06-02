@@ -24,6 +24,11 @@ export function initInstancesPanel(Alpine) {
         swapTarget: null,
         swapError: '',
         createForm: { name: '', error: '', saving: false },
+        // `createForm` se declara aca, no en el HTML, para que el panel
+        // sea self-contained: el state vive en el componente Alpine y
+        // `x-model="createForm.name"` en el form apunta directamente a
+        // esta propiedad. Declararlo dos veces (aca y al final del
+        // objeto) no rompe nada pero ensucia: solo necesitamos UNA.
 
         // ─── Computed ─────────────────────────────────────────────
         get canActivate() {
@@ -71,9 +76,19 @@ export function initInstancesPanel(Alpine) {
                     body: JSON.stringify({ name }),
                 });
                 if (res.status === 201) {
+                    const created = await res.json();
                     window.showToast('Instancia creada', 'success');
                     form.name = '';
                     await this.loadInstances();
+                    // Abrimos el modal QR con la instancia recién creada
+                    // para que el operador la escanee. Sin este paso el
+                    // flow terminaba en el toast y la instancia quedaba
+                    // en estado `close` sin que el bot la vinculara.
+                    // Preferimos la versión de la lista refrescada (tiene
+                    // los alias correctos); caemos a la respuesta del POST
+                    // si no aparece (drift raro entre Evolution y el list).
+                    const fromList = this.instances.find(i => i.name === name);
+                    await this.openQrModal(fromList || created);
                 } else {
                     const err = await res.json().catch(() => ({}));
                     const detail = (err.error && err.error.detail) || 'Error al crear';
@@ -244,14 +259,5 @@ export function initInstancesPanel(Alpine) {
             }
         },
 
-        // ─── Form state ──────────────────────────────────────────
-        // Bound to the "Crear instancia" form via x-data="createForm"
-        // pattern in the HTML. Kept here so the panel owns the form
-        // submission and the loading state.
-        createForm: {
-            name: '',
-            error: '',
-            saving: false,
-        },
     }));
 }
