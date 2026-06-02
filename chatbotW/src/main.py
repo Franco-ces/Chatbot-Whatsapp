@@ -42,6 +42,11 @@ historial_mensajes = defaultdict(list)
 mensajes_procesados: dict[str, float] = {}
 PROCESADOS_TTL = 300  # 5 minutos
 
+# ---- FILTRO DE ANTIGÜEDAD ----
+# Ignorar mensajes con más de X segundos de antigüedad (evita procesar
+# mensajes encolados cuando el bot estaba caído).
+MENSAJE_MAX_ANTIGUEDAD = 300  # 5 minutos
+
 
 def usuario_excedido(remitente: str) -> bool:
     """Verifica si el usuario excedió el límite de mensajes por frecuencia."""
@@ -194,6 +199,13 @@ async def webhook(request: Request, payload: EvolutionWebhook):
             logger.info("Mensaje duplicado ignorado", message_id=msg_id)
             return {"status": "duplicate"}
         mensajes_procesados[msg_id] = time.time()
+
+        # Ignorar mensajes viejos (encolados cuando el bot estaba caído)
+        if payload.data.messageTimestamp:
+            antiguedad = time.time() - payload.data.messageTimestamp
+            if antiguedad > MENSAJE_MAX_ANTIGUEDAD:
+                logger.info("Mensaje viejo ignorado", message_id=msg_id, age_seconds=int(antiguedad))
+                return {"status": "stale"}
 
         # Validar Rate Limit por usuario
         if usuario_excedido(remitente):

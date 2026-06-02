@@ -11,6 +11,7 @@ class WebhookData(BaseModel):
     key: MessageKey
     message: Optional[Dict[str, Any]] = None 
     pushName: Optional[str] = None
+    messageTimestamp: Optional[int] = None
 
 class EvolutionWebhook(BaseModel):
     event: str
