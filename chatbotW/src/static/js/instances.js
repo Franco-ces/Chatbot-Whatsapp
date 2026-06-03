@@ -25,6 +25,7 @@ export function initInstancesPanel(Alpine) {
         swapTarget: null,
         swapError: '',
         createForm: { name: '', error: '', saving: false },
+        openMenus: [], // Nombres de las instancias con menú kebab abierto (permite múltiples)
         // `createForm` se declara aca, no en el HTML, para que el panel
         // sea self-contained: el state vive en el componente Alpine y
         // `x-model="createForm.name"` en el form apunta directamente a
@@ -48,10 +49,107 @@ export function initInstancesPanel(Alpine) {
 
         // ─── Init ─────────────────────────────────────────────────
         init() {
-            this.loadInstances();
+            // No llamar a loadInstances si no estamos autenticados: el
+            // endpoint devuelve 401 y dispara un toast de error confuso
+            // ANTES de que el usuario tenga chance de loguearse. En su
+            // lugar, esperamos al $watch sobre el auth store y cargamos
+            // cuando aparezca el token.
+            //
+            // Ademas, esperamos a `auth.verified` para no disparar el
+            // load con un token muerto que esta en localStorage pero que
+            // el backend ya rechazo. `verify()` corre async al boot;
+            // si saltamos directo al `if (auth.token)`, la request sale
+            // con un token invalido y el 401 se traduce en un toast
+            // espurio. Por eso: (1) si `verified` ya es true, podemos
+            // decidir ya; (2) si no, esperamos al watch y ahi decidimos
+            // con el estado terminal del verify.
+            const auth = Alpine.store('auth');
+            const tryLoad = () => {
+                // Re-leemos el store al disparar: entre el watch y el
+                // callback `auth.token` puede haber cambiado (ej: el
+                // verify determino que era invalido y lo limpio).
+                if (Alpine.store('auth').token) this.loadInstances();
+            };
+            if (auth && auth.verified) {
+                tryLoad();
+            } else {
+                this.$watch('$store.auth.verified', (verified) => {
+                    if (verified) tryLoad();
+                });
+                // Edge case: si el usuario YA esta logueado cuando se
+                // monta el componente (token en localStorage), el watch
+                // sobre `verified` lo cubre. Pero si el token aparece
+                // DESPUES (caso login fresco en la misma sesion), el
+                // watch sobre `token` es el que dispara. Mantenemos
+                // ambos para cubrir las dos ventanas de tiempo.
+                this.$watch('$store.auth.token', (token) => {
+                    if (token && Alpine.store('auth').verified) {
+                        tryLoad();
+                    }
+                });
+            }
+            // Cerrar menús kebab al hacer click fuera de cualquier menú o kebab
+            document.addEventListener('click', (e) => {
+                if (this.openMenus.length === 0) return;
+                const target = e.target;
+                if (!target.closest('[data-kebab-menu]')) {
+                    this.openMenus = [];
+                }
+            });
         },
 
         // ─── List ─────────────────────────────────────────────────
+        async refreshInstancesList() {
+            // Recarga SOLO la lista de instancias. Usado por confirmSwap
+            // despues de activar (el activeName se setea optimistamente;
+            // no queremos pisarlo con el valor stale del server mientras
+            // el write async del config esta en cola).
+            try {
+                const res = await apiFetch('/api/evolution/instances');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.instances = data.instances || [];
+                } else if (res.status === 401) {
+                    // Token expirado/invalido: auth.verify() lo va a
+                    // limpiar de localStorage. No mostramos toast: es
+                    // un estado esperado (el operador va a ver la
+                    // pantalla de login), no un error de UI. Esto es
+                    // una red de seguridad para el caso raro en que
+                    // un request se cuele entre el verify y el init
+                    // del componente. La fix de fondo es el `verified`
+                    // flag en auth.js + el watch en este init().
+                    //
+                    // NO clobereamos `this.instances` aca: si el
+                    // operador ya tenia una lista renderizada (caso
+                    // swap/deactivate con sesion larga en la que el
+                    // token expiro entre la accion y el refresh),
+                    // preservarla es mejor UX que vaciarla de repente.
+                } else {
+                    console.error('Error al cargar instancias', res.status);
+                    window.showToast('Error al cargar instancias', 'error');
+                }
+            } catch (err) {
+                console.error('Error al cargar instancias', err);
+                window.showToast('Error al cargar instancias', 'error');
+            }
+        },
+
+        async refreshActiveInstance() {
+            // Recarga SOLO la instancia activa desde el server. Usado
+            // por el boton Refrescar y por el init post-login.
+            try {
+                const res = await apiFetch('/api/evolution/active');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.activeName = data.name || '';
+                } else {
+                    this.activeName = '';
+                }
+            } catch (err) {
+                this.activeName = '';
+            }
+        },
+
         async loadInstances() {
             this.loading = true;
             try {
@@ -60,26 +158,10 @@ export function initInstancesPanel(Alpine) {
                 // la activa, y 'Activar' solo tiene sentido si NO es la
                 // actual). Si el GET /active falla seguimos: la lista
                 // se muestra igual, solo queda sin marca de activa.
-                const [listRes, activeRes] = await Promise.all([
-                    apiFetch('/api/evolution/instances'),
-                    apiFetch('/api/evolution/active'),
+                await Promise.all([
+                    this.refreshInstancesList(),
+                    this.refreshActiveInstance(),
                 ]);
-                if (listRes.ok) {
-                    const data = await listRes.json();
-                    this.instances = data.instances || [];
-                } else {
-                    console.error('Error al cargar instancias', listRes.status);
-                    window.showToast('Error al cargar instancias', 'error');
-                }
-                if (activeRes.ok) {
-                    const data = await activeRes.json();
-                    this.activeName = data.name || '';
-                } else {
-                    this.activeName = '';
-                }
-            } catch (err) {
-                console.error('Error al cargar instancias', err);
-                window.showToast('Error al cargar instancias', 'error');
             } finally {
                 this.loading = false;
             }
@@ -154,8 +236,11 @@ export function initInstancesPanel(Alpine) {
                     // Preferimos la versión de la lista refrescada (tiene
                     // los alias correctos); caemos a la respuesta del POST
                     // si no aparece (drift raro entre Evolution y el list).
+                    // `fromCreate: true` le pide al modal que auto-active
+                    // cuando el QR marque `open` (solo si no hay otra
+                    // activa). La vista de lista no setea este flag.
                     const fromList = this.instances.find(i => i.name === name);
-                    await this.openQrModal(fromList || created);
+                    await this.openQrModal(fromList || created, { fromCreate: true });
                 } else {
                     const err = await res.json().catch(() => ({}));
                     const detail = (err.error && err.error.detail) || 'Error al crear';
@@ -170,11 +255,79 @@ export function initInstancesPanel(Alpine) {
             }
         },
 
+        // ─── Kebab Menu ─────────────────────────────────────────
+        toggleMenu(instName) {
+            // Alterna el menú kebab: puede haber múltiples abiertos
+            const idx = this.openMenus.indexOf(instName);
+            if (idx >= 0) {
+                this.openMenus.splice(idx, 1);
+            } else {
+                this.openMenus.push(instName);
+            }
+        },
+        isMenuOpen(instName) {
+            return this.openMenus.includes(instName);
+        },
+        closeAllMenus() {
+            this.openMenus = [];
+        },
+
+        // ─── Deactivate Instance ────────────────────────────────
+        async deactivateInstance(inst) {
+            if (!inst || !inst.name) return;
+            const name = inst.name;
+            // Solo se puede desactivar la instancia activa
+            if (!this.isActive(inst)) {
+                window.showToast(
+                    'Solo podés desactivar la instancia activa.',
+                    'error'
+                );
+                return;
+            }
+            const ok = window.confirm(
+                `¿Desactivar la instancia "${name}"? `
+                + 'El bot dejará de recibir mensajes hasta que actives otra.'
+            );
+            if (!ok) return;
+            try {
+                const res = await apiFetch(
+                    `/api/evolution/instances/${encodeURIComponent(name)}/deactivate`,
+                    { method: 'POST' }
+                );
+                if (res.ok) {
+                    window.showToast(`Instancia "${name}" desactivada`, 'success');
+                    // Optimista: el server ya deshabilito el webhook (parte
+                    // critica) y encolo el clear del config. El GET /active
+                    // puede devolver el valor viejo durante ~100s mientras
+                    // el worker drena la cola. Marcamos activeName='' para
+                    // que la UI muestre el estado consistente con lo que
+                    // el usuario espera, y refrescamos SOLO la lista (no
+                    // pisamos activeName con el stale del server).
+                    this.activeName = '';
+                    await this.refreshInstancesList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    const detail = (err.error && err.error.detail)
+                        || `Error al desactivar (HTTP ${res.status})`;
+                    window.showToast(detail, 'error');
+                }
+            } catch (err) {
+                console.error('Error al desactivar instancia', err);
+                window.showToast('Error de conexión al desactivar', 'error');
+            }
+        },
+
         // ─── QR Modal ─────────────────────────────────────────────
-        async openQrModal(inst) {
+        async openQrModal(inst, opts = {}) {
             this.selected = inst;
             this._qrPayload = null;
             this.acknowledge = false; // reset on every modal open
+            // Si entramos desde el flow "crear instancia nueva", queremos
+            // auto-activar en cuanto el QR marque `open` (siempre que no
+            // haya OTRA activa — sino seria un swap silencioso sobre
+            // una instancia sana). La vista de lista nunca setea este
+            // flag, asi que el QR ahi es puramente informativo.
+            this._pendingAutoActivate = opts.fromCreate === true;
             this.showQr = true;
             // Native <dialog> needs .showModal() to be modal + escapeable.
             // x-show only toggles display; we call the API in nextTick so
@@ -203,7 +356,17 @@ export function initInstancesPanel(Alpine) {
                 }
                 this._qrPayload = data;
                 // Si la instancia ya esta abierta, paramos de pollear.
-                if (data.state === 'open') this.stopQrPoll();
+                if (data.state === 'open') {
+                    this.stopQrPoll();
+                    // Auto-activar SOLO si entramos por el flow create
+                    // y no hay otra activa. La condicion de "no hay otra"
+                    // es critica: auto-activar sobre una activa sana
+                    // seria un swap destructivo que el operador no pidio.
+                    if (this._pendingAutoActivate && !this.activeName) {
+                        this._pendingAutoActivate = false;
+                        await this.activateQuietly(this.selected.name);
+                    }
+                }
             } catch (err) {
                 console.error('Error al obtener QR', err);
             }
@@ -221,6 +384,41 @@ export function initInstancesPanel(Alpine) {
             }
         },
 
+        async activateQuietly(name) {
+            // Activacion sin modal ni confirmacion. Pensada para el
+            // flow create->scan->auto: cuando el QR confirma `open`
+            // y no hay otra activa, vinculamos en el mismo tick.
+            // Si algo falla (red, 409, etc.) NO mostramos error bloqueante:
+            // la instancia ya existe y el operador puede tocar "Activar"
+            // a mano desde la lista. Solo avisamos para que sepa que
+            // quedo pendiente.
+            this._pendingAutoActivate = false;
+            try {
+                const res = await apiFetch('/api/evolution/active', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                });
+                if (res.ok) {
+                    window.showToast(`Instancia '${name}' activada`, 'success');
+                    await this.loadInstances();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    const detail = (err.error && err.error.detail) || 'Error al activar';
+                    window.showToast(
+                        `${detail}. Cliqueá Activá para hacerlo a mano.`,
+                        'warning'
+                    );
+                }
+            } catch (err) {
+                console.error('Error al auto-activar instancia', err);
+                window.showToast(
+                    'No se pudo activar automáticamente. Cliqueá Activá.',
+                    'warning'
+                );
+            }
+        },
+
         closeQrModal() {
             this.stopQrPoll();
             const dlg = this.$refs.qrDialog;
@@ -228,6 +426,10 @@ export function initInstancesPanel(Alpine) {
             this.showQr = false;
             this.selected = null;
             this._qrPayload = null;
+            // El flag es por-apertura: si el operador cierra el modal
+            // antes de escanear, no queremos dispararlo en una apertura
+            // posterior (ej: re-abre la lista y toca el boton QR).
+            this._pendingAutoActivate = false;
         },
 
         // ─── Swap Modal ───────────────────────────────────────────
@@ -258,7 +460,15 @@ export function initInstancesPanel(Alpine) {
                 if (res.ok) {
                     window.showToast(`Instancia '${name}' activada`, 'success');
                     this.closeSwapModal();
-                    await this.loadInstances();
+                    // Optimista: la parte crítica (disable_webhook +
+                    // set_webhook) ya está hecha en el server. El write
+                    // del config corre async en background; el GET /active
+                    // puede devolver el valor VIEJO durante ~100s mientras
+                    // el worker drena la cola. Marcamos activeName acorde
+                    // a lo que el usuario espera y refrescamos SOLO la
+                    // lista (no pisamos activeName con el stale del server).
+                    this.activeName = name;
+                    await this.refreshInstancesList();
                 } else {
                     const err = await res.json().catch(() => ({}));
                     const detail = (err.error && err.error.detail) || 'Error al activar';

@@ -15,6 +15,12 @@ services:
     # no existe (mismo volume, path equivocado).
     environment:
       - FAQS_VOLUME_MOUNT=/app/faqs_data
+      # ConfigManager lee CONFIG_BOT_PATH para encontrar el archivo de
+      # config. Lo montamos en un named volume (directorio) para escapar
+      # del bug de WSL2 + Docker Desktop que retiene el lock del bind-mount
+      # 9p a nivel del kernel por >100s. Named volumes usan el FS nativo
+      # de Docker (no 9p) y no tienen ese problema.
+      - CONFIG_BOT_PATH=/app/config_data/config_bot.json
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
@@ -22,7 +28,9 @@ services:
       - ./vectorstore:/app/vectorstore
       - ./cache:/app/cache
       - ./logs:/app/logs
-      - ./config_bot.json:/app/config_bot.json
+      # Named volume compartido con admin-ui para config_bot.json.
+      # El volume es siempre un directorio; el archivo vive adentro.
+      - config_data:/app/config_data
       # Named volume compartido con admin-ui. Los Docker named volumes
       # SIEMPRE se montan como directorios, no como archivos — por eso
       # el path destino es /app/faqs_data (directorio), y faqs.json vive
@@ -48,13 +56,17 @@ services:
     # /app/faqs_data/faqs.json. DEBE coincidir con el path destino
     # del bind-mount `faq_data:` de arriba. Persiste a través de
     # recreates del container.
+    # CONFIG_BOT_PATH apunta al config dentro del named volume
+    # `config_data` (mismo path que whatsapp-bot para que compartan).
     environment:
       - FAQS_VOLUME_MOUNT=/app/faqs_data
+      - CONFIG_BOT_PATH=/app/config_data/config_bot.json
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
       - ./logs:/app/logs
-      - ./config_bot.json:/app/config_bot.json
+      # Mismo volume que whatsapp-bot para compartir config_bot.json.
+      - config_data:/app/config_data
       - ./.env:/app/.env
       - faq_data:/app/faqs_data
 
@@ -103,3 +115,9 @@ volumes:
   # Named volume para faqs.json. Persiste a través de recreates del
   # container; no usa el cache de bind mounts de Docker Desktop WSL2.
   faq_data:
+  # Named volume para config_bot.json. Compartido entre whatsapp-bot y
+  # admin-ui. CRITICO: NO usar bind-mount (./config_bot.json:...) porque
+  # el FS 9p de Docker Desktop en WSL2 retiene locks a nivel del kernel
+  # por >100s, rompiendo `os.replace` atomico. Named volume usa FS nativo
+  # de Docker y no tiene ese problema.
+  config_data:

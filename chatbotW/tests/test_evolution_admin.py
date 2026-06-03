@@ -224,6 +224,10 @@ class TestDeleteInstance:
 
 class TestSetWebhook:
     async def test_sends_url_and_secret_header(self, mocker, admin):
+        """Evolution API v2.3.7 espera `webhook` como OBJETO anidado con
+        `url`, `events`, `enabled`, `headers`, `base64` adentro. El formato
+        v2.1 (webhook como string) devuelve 400 'webhook is not of a type
+        object'. Test protege contra una regresion al formato viejo."""
         _mock_post(mocker, admin._http, 200, {"webhook": "ok"})
         cfg = WebhookConfig(
             url="https://bot.example.com",
@@ -234,9 +238,70 @@ class TestSetWebhook:
         assert args[0] == "POST"
         assert args[1].endswith("/webhook/set/bot_1")
         body = kwargs["json"]
-        assert body["webhook"] == "https://bot.example.com"
-        assert body["headers"]["X-Webhook-Secret"] == "s3cr3t"
-        assert "MESSAGES_UPSERT" in body["events"]
+        # Formato v2.3.7: `webhook` es un objeto anidado, no un string.
+        # Si alguien vuelve al formato viejo (string), este assert explota.
+        assert isinstance(body["webhook"], dict)
+        wh = body["webhook"]
+        assert wh["url"] == "https://bot.example.com"
+        assert wh["headers"]["X-Webhook-Secret"] == "s3cr3t"
+        assert "MESSAGES_UPSERT" in wh["events"]
+        assert wh["enabled"] is True
+        assert wh["base64"] is False
+
+
+class TestDisableWebhook:
+    async def test_disable_webhook_success(self, mocker, admin):
+        """disable_webhook llama al endpoint con enabled=False."""
+        from unittest.mock import AsyncMock
+
+        mock_webhook = WebhookConfig(
+            url="https://bot.example.com",
+            headers={"X-Webhook-Secret": "s3cr3t"},
+        )
+        admin.get_webhook = AsyncMock(return_value=mock_webhook)
+        _mock_post(mocker, admin._http, 200, {"webhook": "ok"})
+
+        await admin.disable_webhook("bot_1")
+
+        admin.get_webhook.assert_awaited_once_with("bot_1")
+        args, kwargs = admin._http._client.request.call_args
+        assert args[0] == "POST"
+        assert args[1].endswith("/webhook/set/bot_1")
+        body = kwargs["json"]
+        assert body["webhook"]["enabled"] is False
+        assert body["webhook"]["url"] == "https://bot.example.com"
+        assert body["webhook"]["headers"] == {"X-Webhook-Secret": "s3cr3t"}
+
+    async def test_disable_webhook_handles_not_found_gracefully(self, mocker, admin):
+        """Si get_webhook devuelve NOT_FOUND (instancia sin webhook),
+        disable_webhook igual setea enabled=False como no-op seguro."""
+        from unittest.mock import AsyncMock
+
+        admin.get_webhook = AsyncMock(
+            side_effect=APIError(ErrorCode.API_NOT_FOUND, detail="Instance not found")
+        )
+        mock_set = AsyncMock()
+        admin.set_webhook = mock_set
+
+        # No debe lanzar excepcion
+        await admin.disable_webhook("missing")
+
+        # Llama set_webhook con enabled=False
+        mock_set.assert_awaited_once()
+        config_arg = mock_set.call_args[0][1]  # segundo positional arg es WebhookConfig
+        assert config_arg.enabled is False
+
+    async def test_disable_webhook_propagates_other_errors(self, mocker, admin):
+        """disable_webhook propaga errores que NO son NOT_FOUND."""
+        from unittest.mock import AsyncMock
+
+        admin.get_webhook = AsyncMock(
+            side_effect=APIError(ErrorCode.API_SERVER_ERROR, detail="Server error")
+        )
+
+        with pytest.raises(APIError) as exc:
+            await admin.disable_webhook("broken")
+        assert exc.value.code == ErrorCode.API_SERVER_ERROR
 
 
 class TestErrorMapping:

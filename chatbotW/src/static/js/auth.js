@@ -3,6 +3,12 @@ import { apiFetch } from './api.js';
 export function initAuth(Alpine) {
     Alpine.store('auth', {
         token: localStorage.getItem('token'),
+        // Flag que indica si `verify()` ya termino (true = sabemos
+        // si el token es valido). Los componentes que dependan de
+        // auth deben esperar a que sea true antes de disparar
+        // requests; asi evitamos cargar datos con un token muerto
+        // que devuelve 401 y dispara toasts de error confusos.
+        verified: false,
 
         async verify() {
             try {
@@ -18,6 +24,11 @@ export function initAuth(Alpine) {
             } catch {
                 this.token = null;
                 localStorage.removeItem('token');
+            } finally {
+                // Marcamos como verificado SIEMPRE (con o sin token,
+                // con exito o error de red): cualquier estado terminal
+                // es valido para que los componentes decidan que hacer.
+                this.verified = true;
             }
         },
 

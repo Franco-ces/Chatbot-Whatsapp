@@ -16,6 +16,7 @@ class WebhookData(BaseModel):
 class EvolutionWebhook(BaseModel):
     event: str
     data: WebhookData
+    instance: Optional[str] = None
 
 def extraer_datos_limpios(payload: EvolutionWebhook):
     """

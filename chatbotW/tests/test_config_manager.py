@@ -6,7 +6,9 @@ Cubre los escenarios del spec:
 - Defaults previos (email, telefono, bot_phone) siguen aplicando
 - El archivo config_bot.json tiene la clave
 """
+import errno
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -19,25 +21,18 @@ import pytest
 def fresh_config(tmp_path, monkeypatch):
     """Recarga ConfigManager apuntando a un archivo temporal."""
     target = tmp_path / "config_bot.json"
-    # Sacar cualquier módulo previamente importado para forzar reimport
+    # Parchear paths.CONFIG_FILE para que apunte al tmp_path
+    import paths
+    monkeypatch.setattr(paths, "CONFIG_FILE", target)
+
+    # Sacar módulos previamente importados para forzar reimport
     for mod in list(sys.modules):
         if mod == "ConfigManager":
             del sys.modules[mod]
-    # Reimportar apuntando al tmp_path
+
+    # Reimportar ConfigManager (ahora usa paths.CONFIG_FILE parcheado)
     spec = __import__("importlib.util").util.spec_from_file_location(
         "ConfigManager", Path(__file__).resolve().parent.parent / "src" / "ConfigManager.py"
-    )
-    cfg_mod = __import__("importlib.util").util.module_from_spec(spec)
-
-    # Parchear __file__ ANTES de ejecutar el módulo para que ROOT_DIR caiga en tmp_path
-    fake_src = tmp_path / "src" / "ConfigManager.py"
-    fake_src.parent.mkdir(parents=True, exist_ok=True)
-    # Leer el original y escribirlo con __file__ apuntando al fake
-    original = (Path(__file__).resolve().parent.parent / "src" / "ConfigManager.py").read_text(encoding="utf-8")
-    fake_src.write_text(original, encoding="utf-8")
-
-    spec = __import__("importlib.util").util.spec_from_file_location(
-        "ConfigManager", str(fake_src)
     )
     cfg_mod = __import__("importlib.util").util.module_from_spec(spec)
     spec.loader.exec_module(cfg_mod)
@@ -224,3 +219,211 @@ def test_cargar_backfills_default_active_instance_name(fresh_config):
     # Y el archivo en disco sigue sin la clave: setdefault no persiste.
     on_disk = json.loads(target.read_text(encoding="utf-8"))
     assert "active_instance_name" not in on_disk
+
+
+# ---------------------------------------------------------------------------
+# Task 2.1–2.2: tests para retry en EBUSY/ETXTBSY en set_active_instance
+# ---------------------------------------------------------------------------
+
+
+def test_set_active_instance_retries_on_ebusy(fresh_config):
+    """Task 2.1: si os.replace falla con ETXTBSY dos veces y luego tiene exito,
+    set_active_instance completa sin error."""
+    cfg_mod, target = fresh_config
+    cm = cfg_mod.ConfigManager()
+
+    call_count = 0
+    original_replace = os.replace
+
+    def flaky_replace(src, dst):
+        nonlocal call_count
+        call_count += 1
+        if call_count <= 2:
+            raise OSError(errno.ETXTBSY, "Text file busy")
+        return original_replace(src, dst)
+
+    with patch("os.replace", side_effect=flaky_replace):
+        # Mockeamos sleep: con jitter+MAX_RETRIES=20 un sleep real tardaria
+        # segundos y el test seria lento. Solo validamos la logica de retry.
+        with patch.object(cfg_mod.time, "sleep"):
+            # No debe lanzar excepcion
+            cm.set_active_instance("bot_2")
+
+    assert cm.config["active_instance_name"] == "bot_2"
+    assert call_count == 3
+
+
+def test_set_active_instance_fails_after_max_ebusy_retries(fresh_config):
+    """Task 2.2: si os.replace siempre falla con ETXTBSY,
+    set_active_instance lanza ConfigError despues de MAX_RETRIES intentos."""
+    cfg_mod, target = fresh_config
+    cm = cfg_mod.ConfigManager()
+
+    call_count = 0
+
+    def always_ebusy(src, dst):
+        nonlocal call_count
+        call_count += 1
+        raise OSError(errno.ETXTBSY, "Text file busy")
+
+    from exceptions import ConfigError
+
+    with patch("os.replace", side_effect=always_ebusy):
+        # Mockeamos sleep para que el test no tarde ~90s con MAX_RETRIES=20.
+        # Solo nos importa que `os.replace` sea llamado MAX_RETRIES veces.
+        with patch.object(cfg_mod.time, "sleep"):
+            with pytest.raises(ConfigError) as exc_info:
+                cm.set_active_instance("bot_2")
+
+    assert exc_info.value.code.value == "E-CFG-002"
+    assert call_count == cfg_mod.MAX_RETRIES
+
+
+def test_max_retries_es_20_para_aguantar_wsl2_bind_mount(fresh_config):
+    """Task 2.4: MAX_RETRIES debe ser 20 para tolerar locks prolongados de
+    Docker Desktop WSL2 bind-mount (los 10 intentos previos daban ~50s y no
+    alcanzaban; el lock puede durar mas de un minuto)."""
+    cfg_mod, target = fresh_config
+    assert cfg_mod.MAX_RETRIES == 20
+
+
+def test_set_active_instance_delay_tiene_jitter(fresh_config):
+    """Task 2.5: el delay entre reintentos incluye jitter aleatorio para
+    evitar thundering-herd si varios procesos pelean por el mismo lock
+    (ej. WSL2 bind-mount). Mockeamos random.uniform para verificar que
+    se suma al base delay exponencial."""
+    cfg_mod, target = fresh_config
+    cm = cfg_mod.ConfigManager()
+
+    sleeps = []
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    with patch("os.replace", side_effect=OSError(errno.ETXTBSY, "busy")):
+        with patch.object(cfg_mod.time, "sleep", side_effect=fake_sleep):
+            with patch.object(cfg_mod.random, "uniform", return_value=0.5) as mock_uniform:
+                from exceptions import ConfigError
+                with pytest.raises(ConfigError):
+                    cm.set_active_instance("bot_2")
+
+    # random.uniform fue llamado (al menos una vez por retry)
+    assert mock_uniform.call_count >= cfg_mod.MAX_RETRIES - 1
+
+    # Cada sleep debe ser >= base exponencial (sin jitter restado)
+    # base para attempt=0 es 0.2, attempt=1 es 0.4, ..., capped a 5.0
+    # Con jitter=0.5, el delay final = base + 0.5
+    expected_base_delays = []
+    base = 0.2
+    for i in range(cfg_mod.MAX_RETRIES - 1):
+        expected_base_delays.append(min(base * (2 ** i), 5.0) + 0.5)
+
+    assert sleeps == pytest.approx(expected_base_delays, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Task 3: tests para set_active_instance_async (write no-bloqueante + FIFO)
+# ---------------------------------------------------------------------------
+
+
+async def test_set_active_instance_async_encola_y_retorna_inmediato(fresh_config):
+    """Task 3.1: set_active_instance_async debe encolar el write y retornar
+    inmediato aunque el write subyacente tarde 100s en EBUSY. Asi el endpoint
+    de activacion puede devolver 202 sin colgar al usuario."""
+    cfg_mod, target = fresh_config
+    cm = cfg_mod.ConfigManager()
+
+    # Mockeamos set_active_instance sincrono para que demore "mucho".
+    import time as time_mod
+
+    def slow_write(name):
+        time_mod.sleep(2.0)  # simula 2s de retry
+        cm.config["active_instance_name"] = name
+        return None
+
+    try:
+        with patch.object(cm, "set_active_instance", side_effect=slow_write):
+            start = time_mod.monotonic()
+            await cm.set_active_instance_async("bot_2")
+            elapsed = time_mod.monotonic() - start
+
+        # El enqueue debe haber retornado casi inmediato (<200ms), NO 2s.
+        assert elapsed < 0.2, f"set_active_instance_async bloqueó {elapsed:.2f}s"
+    finally:
+        await cm.stop_worker()
+
+
+async def test_set_active_instance_async_procesa_en_orden_fifo(fresh_config):
+    """Task 3.2: si encolamos A, B, C en ese orden, el worker debe procesarlos
+    en ese orden. El archivo final tiene el ultimo valor, pero los writes
+    intermedios se aplican en secuencia (no se intercalan)."""
+    cfg_mod, target = fresh_config
+    cm = cfg_mod.ConfigManager()
+
+    # Capturamos el orden real en que se invoca set_active_instance sincrono.
+    write_order = []
+    real_set_active = cm.set_active_instance
+
+    def tracking_set_active(name):
+        write_order.append(name)
+        return real_set_active(name)
+
+    try:
+        with patch.object(cm, "set_active_instance", side_effect=tracking_set_active):
+            await cm.set_active_instance_async("bot_A")
+            await cm.set_active_instance_async("bot_B")
+            await cm.set_active_instance_async("bot_C")
+            # Esperamos a que el worker drene la cola
+            await cm._write_queue.join()
+
+        assert write_order == ["bot_A", "bot_B", "bot_C"]
+        # El archivo final tiene el ultimo valor
+        cm2 = cfg_mod.ConfigManager()
+        assert cm2.config["active_instance_name"] == "bot_C"
+    finally:
+        await cm.stop_worker()
+
+
+async def test_set_active_instance_async_worker_arranca_al_primer_enqueue(fresh_config):
+    """Task 3.3: el worker se crea lazy en el primer set_active_instance_async.
+    Antes de eso, _worker_task debe ser None. Despues, debe estar vivo."""
+    cfg_mod, target = fresh_config
+    cm = cfg_mod.ConfigManager()
+
+    try:
+        assert cm._worker_task is None
+
+        await cm.set_active_instance_async("bot_x")
+        assert cm._worker_task is not None
+    finally:
+        await cm.stop_worker()
+
+
+async def test_set_active_instance_async_maneja_error_sin_morir(fresh_config):
+    """Task 3.4: si un write del worker falla (ej. EBUSY que agota MAX_RETRIES),
+    el worker sigue vivo y procesa los siguientes writes."""
+    cfg_mod, target = fresh_config
+    cm = cfg_mod.ConfigManager()
+
+    fail_count = {"n": 0}
+    real_set_active = cm.set_active_instance
+
+    def maybe_fail(name):
+        fail_count["n"] += 1
+        if fail_count["n"] == 1:
+            from exceptions import ConfigError
+            from error_codes import ErrorCode
+            raise ConfigError(ErrorCode.CFG_WRITE_FAILED, detail="boom")
+        return real_set_active(name)
+
+    try:
+        with patch.object(cm, "set_active_instance", side_effect=maybe_fail):
+            await cm.set_active_instance_async("bot_first")
+            await cm.set_active_instance_async("bot_second")
+            await cm._write_queue.join()
+
+        # El primer write falló, el segundo tuvo éxito.
+        cm2 = cfg_mod.ConfigManager()
+        assert cm2.config["active_instance_name"] == "bot_second"
+    finally:
+        await cm.stop_worker()

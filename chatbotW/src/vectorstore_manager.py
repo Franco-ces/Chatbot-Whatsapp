@@ -1,5 +1,6 @@
 import json
 import hashlib
+from pathlib import Path
 from langchain_community.vectorstores import FAISS
 from logging_config import get_logger
 from paths import BASE_PATH

@@ -174,14 +174,20 @@ class EvolutionAdmin:
         Raises:
             APIError: 404 si la instancia no existe; otros mapeos en `_raise_as_api_error`.
         """
-        # Evolution espera un body con `webhook` (objeto), `webhookByEvents` (false),
-        # `events` (lista en raiz). Ajuste defensivo al formato v2 mas comun.
+        # Evolution v2.3.7 espera `webhook` como OBJETO anidado (url, events,
+        # enabled, headers, base64 adentro). El formato v2.1 mandaba
+        # `webhook` como string en la raiz y devuelve 400 'webhook is not
+        # of a type object' contra v2.3.7. Cambio confirmado contra el
+        # OpenAPI de Evolution Foundation v2.3.7 y probado live con curl
+        # (devuelve 200 con el formato anidado, 400 con el viejo).
         payload = {
-            "webhook": config.url,
-            "webhookByEvents": False,
-            "events": config.events,
-            "enabled": config.enabled,
-            "headers": config.headers,
+            "webhook": {
+                "enabled": config.enabled,
+                "url": config.url,
+                "events": config.events,
+                "headers": config.headers,
+                "base64": False,
+            },
         }
         try:
             await self._http.post(f"webhook/set/{name}", json=payload)
@@ -190,6 +196,71 @@ class EvolutionAdmin:
             raise  # noqa
 
         logger.info("Webhook configured", instance_name=name, url=config.url)
+
+    # ---------------------------------------------------------------
+    # get_webhook
+    # ---------------------------------------------------------------
+    async def get_webhook(self, name: str) -> WebhookConfig | None:
+        """Obtiene la configuración actual del webhook de una instancia.
+
+        Devuelve None si la instancia no tiene webhook configurado.
+
+        Raises:
+            APIError: mapeo via `_raise_as_api_error`.
+            CommunicationError: error de transporte.
+        """
+        try:
+            response = await self._http.get(f"webhook/get/{name}")
+        except CommunicationError as e:
+            self._raise_as_api_error(e, op=f"get_webhook({name})")
+            raise  # noqa
+
+        body = response.json()
+        webhook_data = body.get("webhook") if isinstance(body.get("webhook"), dict) else None
+        if not webhook_data:
+            return None
+        return WebhookConfig(
+            url=webhook_data.get("url", ""),
+            enabled=webhook_data.get("enabled", True),
+            events=webhook_data.get("events", ["MESSAGES_UPSERT"]),
+            headers=webhook_data.get("headers", {}),
+        )
+
+    # ---------------------------------------------------------------
+    # disable_webhook
+    # ---------------------------------------------------------------
+    async def disable_webhook(self, name: str) -> None:
+        """Deshabilita el webhook de una instancia (enabled: false).
+
+        Usa el mismo endpoint que set_webhook pero con enabled=False.
+        La instancia queda "dormida" — existe en Evolution pero no recibe
+        mensajes.
+
+        Si la instancia no tiene webhook configurado (get_webhook falla
+        con NOT_FOUND), igual setea enabled=False como no-op seguro.
+
+        Raises:
+            APIError: mapeo via `_raise_as_api_error` (distinto de NOT_FOUND).
+            CommunicationError: error de transporte.
+        """
+        try:
+            current = await self.get_webhook(name)
+        except APIError as e:
+            if e.code == ErrorCode.API_NOT_FOUND:
+                # Instancia sin webhook configurado — setear enabled=False
+                # es un no-op seguro (no hay webhook que deshabilitar).
+                current = None
+            else:
+                raise
+        await self.set_webhook(
+            name,
+            WebhookConfig(
+                url=current.url if current else "",
+                enabled=False,
+                headers=current.headers if current else {},
+            ),
+        )
+        logger.info("Webhook disabled", instance_name=name)
 
     # ---------------------------------------------------------------
     # delete

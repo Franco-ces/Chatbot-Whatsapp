@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 from collections import defaultdict
-from pathlib import Path
 
 from logging_config import setup_logging, get_logger, request_id_ctx
 from rag_orchestrator import RAGOrchestrator
@@ -23,6 +22,7 @@ from exceptions import AppError
 from sesionLoggerManager import SessionManager
 from health import run_health_probes
 from instance_watcher import InstanceWatcher
+from paths import CONFIG_FILE
 
 rag = None
 wa_client = None
@@ -143,8 +143,7 @@ async def lifespan(app: FastAPI):
     # _active_name actualizado. main.py consulta get_active_name() por
     # request (no por arranque), asi un swap hecho por la UI se ve
     # en el siguiente webhook sin reiniciar.
-    config_path = Path(__file__).resolve().parent.parent / "config_bot.json"
-    instance_watcher = InstanceWatcher(config_path)
+    instance_watcher = InstanceWatcher(CONFIG_FILE)
     await instance_watcher.start()
     initial_name = instance_watcher.get_active_name() or instance
     logger.info("InstanceWatcher inicializado", active_instance_name=initial_name)
@@ -247,7 +246,7 @@ async def webhook(request: Request, payload: EvolutionWebhook):
         # concurrentes pero NO a este: el que empezo con A termina
         # con A. Es la semantica del design (in-flight on old reference
         # complete; new requests pick up new name).
-        instance_name = _resolve_instance_name()
+        instance_name = payload.instance or _resolve_instance_name()
         if not instance_name:
             # Sin nombre activo, no podemos responder. Loggeamos
             # claramente: en un deploy normal esto no deberia pasar

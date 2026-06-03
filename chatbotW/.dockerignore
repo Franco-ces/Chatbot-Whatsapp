@@ -1,0 +1,7 @@
+# Excluir archivos que viven en named volumes o que son host-specific
+# del contexto de build. Sin esto, `COPY . .` en el Dockerfile
+# embebe estos archivos en la imagen, lo que confunde al runtime
+# (ej. el bot leeria /app/config_bot.json baked-in en vez del
+# volume compartido con admin-ui).
+config_bot.json
+.env

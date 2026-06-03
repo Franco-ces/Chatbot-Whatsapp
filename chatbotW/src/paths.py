@@ -4,6 +4,7 @@ Resolución centralizada de rutas relativas a chatbotW/.
 Funciona tanto en desarrollo como en ejecutables (PyInstaller, etc).
 Todos los módulos deben importar aquí las rutas, no calcularlas por su cuenta.
 """
+import os
 import sys
 from pathlib import Path
 
@@ -32,7 +33,10 @@ LOGS_DIR = BASE_PATH / "logs"
 CACHE_DIR = BASE_PATH / "cache"
 VECTORSTORE_DIR = BASE_PATH / "vectorstore"
 CSV_FOLDER = BASE_PATH / "CSVs"
-CONFIG_FILE = BASE_PATH / "config_bot.json"
+# CONFIG_BOT_PATH: en Docker, el config vive en un named volume (montado
+# como directorio). La env var permite que ConfigManager e InstanceWatcher
+# apunten al mismo archivo sin hardcodear el path del volume.
+CONFIG_FILE = Path(os.environ.get("CONFIG_BOT_PATH")) if os.environ.get("CONFIG_BOT_PATH") else BASE_PATH / "config_bot.json"
 ENV_FILE = BASE_PATH / ".env"
 
 # En desarrollo: src/static. En ejecutable: static/ (al nivel del .exe)

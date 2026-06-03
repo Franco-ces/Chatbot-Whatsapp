@@ -572,12 +572,21 @@ async def list_evolution_instances():
 
 @app.post("/api/evolution/instances", status_code=201)
 async def create_evolution_instance(req: InstanceNameRequest):
-    """Crea una nueva instancia. 201 con `{name, connectionState}`.
+    """Crea una nueva instancia. 201 con `{name, connectionState, warning?}`.
 
     Si Evolution devuelve 400 (caso tipico: nombre duplicado), el admin
     lo mapea a APIError(API_INVALID_PAYLOAD). Aca lo re-traducimos a
     409 + `EVO_INSTANCE_ALREADY_EXISTS` para que la UI pueda mostrar
     el mensaje correcto sin tener que parsear la causa.
+
+    Ademas del create, este endpoint configura el webhook de la instancia
+    hacia el bot (mismo flujo que la activacion). Sin esto, la instancia
+    queda en Evolution pero el bot nunca recibe mensajes hasta que el
+    admin pulse "Activar" — un hazard de UX que sufrio el operador.
+    Si el set_webhook falla (red, 500, etc.), el create sigue siendo 201
+    pero devuelve un `warning` no-bloqueante para que la UI lo muestre.
+    Si la instancia arranca en `close` (caso normal, aun sin escanear),
+    se agrega un warning pidiendo escanear el QR.
     """
     try:
         info = await evolution_admin.create_instance(req.name)
@@ -591,7 +600,62 @@ async def create_evolution_instance(req: InstanceNameRequest):
                 cause=e.cause,
             ) from e
         raise
-    return info.model_dump(by_alias=True, exclude_none=True)
+
+    # Setup de webhook. Si falla, NO abortamos: la instancia ya existe
+    # en Evolution, revertirla seria peor que dejarla con un warning.
+    # El admin puede reintentar via "Activar" mas tarde.
+    warnings: list[str] = []
+    bot_url = os.environ.get("BOT_URL", "")
+    webhook_secret = os.environ.get("WEBHOOK_SECRET", "")
+    if bot_url:
+        from evolution_models import WebhookConfig
+        try:
+            await evolution_admin.set_webhook(
+                req.name,
+                WebhookConfig(
+                    url=bot_url,
+                    headers={"X-Webhook-Secret": webhook_secret},
+                ),
+            )
+        except Exception as e:  # noqa: BLE001 - queremos degradar, no propagar
+            logger.warning(
+                "Webhook setup failed during instance create",
+                instance_name=req.name,
+                error=str(e),
+            )
+            warnings.append(
+                "Instancia creada, pero el webhook no se configuró. "
+                "Activá la instancia para que el bot reciba mensajes."
+            )
+    else:
+        # BOT_URL vacio: el bot no esta expuesto. Avisamos para que el
+        # operador entienda por que los mensajes no van a llegar.
+        logger.warning(
+            "BOT_URL not set, skipping webhook setup on create",
+            instance_name=req.name,
+        )
+        warnings.append(
+            "Instancia creada, pero BOT_URL no está configurado. "
+            "El bot no podrá recibir mensajes hasta definir la URL pública."
+        )
+
+    # Hint de UX: instancia recién creada siempre arranca en `close`
+    # (aun no escaneada). Sin este hint, el operador asume que 'ya esta'
+    # y se come el silencio del bot. El copy refleja el auto-activate
+    # del flow create->scan->open: si no hay OTRA activa, la nueva se
+    # vincula sola al escanear el QR; si ya hay una, queda esperando
+    # que el operador la active a mano.
+    from evolution_models import ConnectionState as _CS
+    if info.connection_state == _CS.CLOSE:
+        warnings.append(
+            "Instancia creada. Escaneá el QR. Si no hay otra activa, "
+            "esta se vincula sola."
+        )
+
+    response = info.model_dump(by_alias=True, exclude_none=True)
+    if warnings:
+        response["warning"] = " | ".join(warnings)
+    return response
 
 
 @app.get("/api/evolution/instances/{name}/qr")
@@ -618,20 +682,26 @@ async def get_evolution_instance_state(name: str):
     return {"state": state.value}
 
 
-@app.post("/api/evolution/active")
+@app.post("/api/evolution/active", status_code=202)
 async def activate_evolution_instance(req: InstanceNameRequest):
-    """Activa una instancia: re-verifica estado, setea webhook, escribe
-    `config_bot.json.active_instance_name` de forma atomica.
+    """Activa una instancia: re-verifica estado, setea webhook, encola el
+    write async de `config_bot.json.active_instance_name`.
 
     El bot ya se reinicia solo: el `InstanceWatcher` (PR 3) detecta el
     cambio de mtime en <=1s y el siguiente webhook usa la nueva
     instancia. No reinicia el contenedor.
 
-    Devuelve `{status: "ok", active: name}` en 200. Si la instancia no
-    esta en estado `open` (drift entre lo que mostro la UI y lo que
-    ve Evolution al click), devuelve 409 con `EVO_INSTANCE_NOT_LINKED`.
-    El bridge (`instance_activation.set_active`) hace el re-verify, asi
-    que no lo duplicamos aca.
+    Devuelve **202 Accepted** con `{status: "accepted", active: name}`.
+    La escritura atomica del config corre en background (puede tardar
+    hasta ~100s si el bind-mount de WSL2 tiene EBUSY prolongado), asi el
+    cliente no espera el write. La parte critica (disable_webhook +
+    set_webhook) SI esta cubierta por el `activation_lock` en el bridge,
+    asi no quedan dos instancias con webhook activo en Evolution.
+
+    Si la instancia no esta en estado `open` (drift entre lo que mostro
+    la UI y lo que ve Evolution al click), devuelve 409 con
+    `EVO_INSTANCE_NOT_LINKED`. El bridge hace el re-verify, asi que no
+    lo duplicamos aca.
     """
     # Import local: la mayoria de endpoints del archivo no necesitan el
     # bridge. Si el modulo no esta disponible (version pre-PR-2), el
@@ -648,7 +718,7 @@ async def activate_evolution_instance(req: InstanceNameRequest):
         webhook_url=bot_url,
         webhook_secret=webhook_secret,
     )
-    return {"status": "ok", "active": req.name}
+    return {"status": "accepted", "active": req.name}
 
 
 @app.get("/api/evolution/active")
@@ -665,8 +735,40 @@ async def get_active_evolution_instance():
     """
     config_manager.cargar()  # Relee del disco por si el watcher swapeo.
     config_active = config_manager.config.get("active_instance_name", "")
+    # Solo usar env var como fallback si config_bot.json no tiene
+    # el campo (nunca fue seteado). Si esta seteado en "", significa
+    # que alguien desactivó explicitamente — no debemos ignorar eso.
     env_active = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
-    return {"name": config_active or env_active}
+    if config_active:
+        return {"name": config_active}
+    # Si config_bot.json no tiene active_instance_name (o es None),
+    # usar env var como fallback solo si el campo no existe en config
+    # (no si existe y es vacío).
+    if "active_instance_name" not in config_manager.config:
+        return {"name": env_active}
+    return {"name": ""}
+
+
+@app.post("/api/evolution/instances/{name}/deactivate", status_code=202)
+async def deactivate_evolution_instance(name: str):
+    """Desactiva una instancia: deshabilita su webhook en Evolution, y si
+    era la activa limpia `active_instance_name` en config (async, via
+    bridge.deactivate que comparte el `activation_lock` con set_active).
+
+    Devuelve **202 Accepted** con `{status: "accepted", deactivated: name}`.
+    La limpieza del config (si corresponde) corre en background; el
+    cliente no espera el write.
+
+    404 si la instancia no existe en Evolution.
+    """
+    from instance_activation import deactivate as bridge_deactivate
+
+    await bridge_deactivate(
+        name,
+        admin=evolution_admin,
+        config=config_manager,
+    )
+    return {"status": "accepted", "deactivated": name}
 
 
 @app.delete("/api/evolution/instances/{name}", status_code=204)
