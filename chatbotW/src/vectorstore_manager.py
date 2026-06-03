@@ -1,8 +1,8 @@
-from pathlib import Path
 import json
 import hashlib
 from langchain_community.vectorstores import FAISS
 from logging_config import get_logger
+from paths import BASE_PATH
 
 logger = get_logger("vectorstore_manager")
 
@@ -11,7 +11,7 @@ class VectorStoreManager:
 
     @staticmethod
     def _get_base_path():
-        return Path(__file__).resolve().parent.parent
+        return BASE_PATH
 
     @staticmethod
     def _get_vectorstore_path():

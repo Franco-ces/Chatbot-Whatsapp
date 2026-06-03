@@ -26,8 +26,9 @@ class DocumentManager:
 
     def __init__(self, api_key, folder_path="PDFs"):
         self.api_key = api_key
-        # Resolvemos la ruta relativa al directorio padre del módulo
-        self.folder_path = Path(__file__).resolve().parent.parent / folder_path
+        # Resolvemos la ruta relativa a chatbotW/ (centralizada en paths.py)
+        from paths import BASE_PATH
+        self.folder_path = BASE_PATH / folder_path
 
         # Cache de embeddings para evitar llamadas redundantes
         self.cache = EmbeddingCache()

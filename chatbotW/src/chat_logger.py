@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 from datetime import datetime
+from paths import LOGS_DIR
 
 
 class ChatLogger:
@@ -12,8 +13,7 @@ class ChatLogger:
     """
 
     def __init__(self, phone_number="0000000000", contact_name="unknown"):
-        base_path = Path(__file__).resolve().parent.parent
-        self.logs_dir = base_path / "logs"
+        self.logs_dir = LOGS_DIR
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
         safe_name = self._sanitize_filename(contact_name)

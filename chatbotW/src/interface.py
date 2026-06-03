@@ -39,24 +39,19 @@ app.add_middleware(
 
 register_error_handlers(app)
 
-FILE_PATH = Path(__file__).resolve()
-ROOT_DIR = FILE_PATH.parent.parent
-PDF_FOLDER = ROOT_DIR / "PDFs"
-LOGS_DIR = ROOT_DIR / "logs"
-ENV_FILE = ROOT_DIR / ".env"
-STATIC_DIR = FILE_PATH.parent / "static"
-# FAQS_PATH viene de `faq_paths` (resolución centralizada). En Docker
-# se setea FAQS_VOLUME_MOUNT al directorio del named volume; en dev
-# local la env var no existe y se usa ROOT_DIR/"faqs.json".
+# Importar rutas centralizadas que funcionan tanto en desarrollo como en ejecutables
+from paths import BASE_PATH, PDF_FOLDER, LOGS_DIR, CSV_FOLDER, ENV_FILE, STATIC_DIR, FAQS_FILE
 
+# Los directorios ya se crean en paths.py, pero aseguramos que FAQS_FILE existe
 PDF_FOLDER.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
-CSV_FOLDER = ROOT_DIR / "CSVs"
 CSV_FOLDER.mkdir(parents=True, exist_ok=True)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
-# Si FAQS_VOLUME_MOUNT apunta a un directorio nuevo, lo creamos para que
-# el primer POST no falle con FileNotFoundError.
-FAQS_PATH.parent.mkdir(parents=True, exist_ok=True)
+FAQS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+# FAQS_FILE viene de `faq_paths` (resolución centralizada)
+# Aquí para compatibilidad con código existente
+ROOT_DIR = BASE_PATH
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -101,7 +96,7 @@ config_manager = ConfigManager()
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    html_path = FILE_PATH.parent / "index.html"
+    html_path = STATIC_DIR.parent / "index.html"  # STATIC_DIR es src/static, parent es src
     with open(html_path, "r", encoding="utf-8") as f:
         return f.read()
 

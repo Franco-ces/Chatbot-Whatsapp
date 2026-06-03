@@ -16,10 +16,11 @@ no hay forma de que se desincronicen.
 """
 import os
 from pathlib import Path
+from paths import BASE_PATH
 
 
-# chatbotW/ → un nivel arriba de src/, donde vive (o vivía) faqs.json.
-_ROOT_DIR = Path(__file__).resolve().parent.parent
+# chatbotW/ → resuelto centralmente en paths.py
+_ROOT_DIR = BASE_PATH
 
 
 def resolve_faqs_path() -> Path:

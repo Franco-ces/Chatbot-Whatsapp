@@ -1,11 +1,11 @@
 import csv
 from pathlib import Path
 import sys
+from paths import CSV_FOLDER
 
 def verificar_datos():
-    # Obtiene la ruta de la carpeta CSVs (asumiendo que este script esta en src/)
-    base_path = Path(__file__).resolve().parent.parent
-    csvs_path = base_path / "CSVs"
+    # Obtiene la ruta de la carpeta CSVs (centralizada en paths.py)
+    csvs_path = CSV_FOLDER
     
     if not csvs_path.exists():
         print("[ERROR] La carpeta 'CSVs' no existe en la ruta esperada.")

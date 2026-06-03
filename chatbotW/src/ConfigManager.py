@@ -1,13 +1,14 @@
 import json
 from pathlib import Path
 from logging_config import get_logger
+from paths import BASE_PATH
 
 logger = get_logger("config_manager")
 
 class ConfigManager:
     def __init__(self, filename="config_bot.json"):
         # Define la ruta en la raíz del proyecto (un nivel arriba de /src)
-        self.path = Path(__file__).resolve().parent.parent / filename
+        self.path = BASE_PATH / filename
         
         # Intentamos cargar; si no existe, inicializamos y creamos el archivo
         if self.path.exists():

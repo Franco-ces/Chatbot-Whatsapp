@@ -1,18 +1,15 @@
-from pathlib import Path
 import json
 import hashlib
 from logging_config import get_logger
+from paths import CACHE_DIR
 
 logger = get_logger("embedding_cache")
 
 
 class EmbeddingCache:
     def __init__(self):
-        # BASE DEL PROYECTO
-        base_path = Path(__file__).resolve().parent.parent
-
-        # CARPETA CACHE
-        self.cache_dir = base_path / "cache"
+        # CARPETA CACHE (centralizada en paths.py)
+        self.cache_dir = CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # ARCHIVO CACHE
