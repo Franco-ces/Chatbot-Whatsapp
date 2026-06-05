@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Admin - Chatbot WhatsApp</title>
+    <title>NeuraDocs - Panel Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -41,12 +41,12 @@
 
     <!-- LOGIN VIEW -->
     <template x-if="!$store.auth.token">
-        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-600 to-green-800">
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-800 to-blue-600">
             <div class="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 w-full max-w-md border border-white/20">
                 <div class="text-center mb-8">
-                    <div class="text-5xl mb-4">💬</div>
-                    <h1 class="text-2xl font-bold text-gray-800">Panel Admin</h1>
-                    <p class="text-gray-500 text-sm mt-1">Chatbot WhatsApp</p>
+                    <img src="/static/images/logo.jpeg" alt="NeuraDocs" class="h-20 w-auto mx-auto mb-4">
+                    <h1 class="text-2xl font-bold text-gray-800">NeuraDocs</h1>
+                    <p class="text-gray-500 text-sm mt-1">Panel Admin - Chatbot WhatsApp</p>
                 </div>
                 <form @submit.prevent="doLogin" x-data="loginForm">
                     <div class="mb-4">
@@ -68,11 +68,14 @@
     <template x-if="$store.auth.token">
         <div x-data="adminPanel">
             <!-- NAVBAR -->
-            <nav class="bg-green-700 text-white shadow-lg sticky top-0 z-40">
+            <nav class="bg-gradient-to-r from-blue-800 to-blue-600 text-white shadow-lg sticky top-0 z-40">
                 <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <span class="text-xl">💬</span>
-                        <span class="font-bold text-lg tracking-tight">Panel Admin</span>
+                    <div class="flex items-center gap-3">
+                        <img src="/static/images/logo.jpeg" alt="NeuraDocs" class="h-10 w-auto">
+                        <div class="flex flex-col">
+                            <span class="font-bold text-lg tracking-tight leading-tight">NeuraDocs</span>
+                            <span class="text-xs text-blue-200 leading-tight">Panel Admin</span>
+                        </div>
                     </div>
                     <div class="flex items-center gap-3">
                         <button @click="$store.app.botPhone && window.open('https://wa.me/' + $store.app.botPhone, '_blank')"
