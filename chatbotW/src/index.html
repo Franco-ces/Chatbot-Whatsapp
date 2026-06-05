@@ -78,7 +78,7 @@
                         <button @click="$store.app.botPhone && window.open('https://wa.me/' + $store.app.botPhone, '_blank')"
                                 :class="$store.app.botPhone ? 'bg-green-600 hover:bg-green-500 cursor-pointer shadow-sm' : 'bg-green-800 opacity-50 cursor-not-allowed'"
                                 :disabled="!$store.app.botPhone"
-                                :title="$store.app.botPhone ? 'Abrir WhatsApp' : 'Configurá el número del bot'"
+                                :title="$store.app.botPhone ? 'Abrir WhatsApp' : 'Instancia no conectada o sin número'"
                                 class="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
                             <span>📱</span>
                             <span x-text="$store.app.botPhone ? 'WhatsApp' : 'Sin configurar'"></span>
@@ -139,11 +139,6 @@
                                 <input type="text" x-model="configPhoneNum" placeholder="11 1234-5678" class="flex-1 px-4 py-2 outline-none">
                             </div>
                         </div>
-                    </div>
-                    <div class="mt-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">📱 Número de WhatsApp del Bot</label>
-                        <input type="text" x-model="configBotPhone" placeholder="5491112345678 (sin + ni espacios)" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
-                        <p class="text-xs text-gray-400 mt-1">Se usa para el link directo a WhatsApp en el navbar.</p>
                     </div>
                     <div class="flex gap-3 mt-6">
                         <button @click="saveContactConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Datos</button>

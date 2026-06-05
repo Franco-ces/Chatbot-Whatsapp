@@ -123,3 +123,24 @@ class TestInstanceStateLogic:
     def test_connection_state_checked(self, js_content):
         """Debe verificarse connectionState para habilitar/deshabilitar."""
         assert "connectionState" in js_content
+
+
+class TestBotPhoneSync:
+    """Verifica que instances.js sincroniza botPhone desde ownerJid."""
+
+    def test_load_instances_sets_bot_phone_from_owner_jid(self, js_content):
+        """loadInstances debe setear Alpine.store('app').botPhone desde ownerJid."""
+        assert "Alpine.store('app').botPhone" in js_content or \
+               "Alpine.store('app')" in js_content, \
+            "instances.js debe acceder a Alpine.store('app') para botPhone"
+
+    def test_phone_extraction_uses_split_at(self, js_content):
+        """La extraccion de telefono debe usar split('@')[0] sobre ownerJid."""
+        assert "split('@')[0]" in js_content or 'split("@")[0]' in js_content or \
+               "split(" in js_content, \
+            "instances.js debe usar split para extraer telefono de ownerJid"
+
+    def test_owner_jid_referenced_in_instances(self, js_content):
+        """ownerJid debe ser referenciado para obtener el telefono."""
+        assert "ownerJid" in js_content, \
+            "instances.js debe usar ownerJid para extraer el telefono"

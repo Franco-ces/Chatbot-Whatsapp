@@ -26,7 +26,6 @@ document.addEventListener('alpine:init', () => {
         configEmail: '',
         configPhoneCode: '+54',
         configPhoneNum: '',
-        configBotPhone: '',
         configStatus: '',
         configStatusClass: '',
 
@@ -116,8 +115,6 @@ document.addEventListener('alpine:init', () => {
                     }
                 }
                 this.configPhoneNum = numeroSinCodigo;
-                this.configBotPhone = data.bot_phone || '';
-                Alpine.store('app').botPhone = this.configBotPhone;
             } catch (err) {
                 console.error("Error al cargar config", err);
             }
@@ -131,7 +128,6 @@ document.addEventListener('alpine:init', () => {
             const formData = new FormData();
             if(this.configEmail) formData.append("email", this.configEmail);
             if(this.configPhoneNum) formData.append("telefono", telefonoFinal);
-            formData.append("bot_phone", this.configBotPhone);
 
             try {
                 const res = await apiFetch('/api/config', { method: 'POST', body: formData });
@@ -139,7 +135,6 @@ document.addEventListener('alpine:init', () => {
                 this.configStatus = data.message;
                 this.configStatusClass = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
                 window.showToast(data.message, data.status === "success" ? 'success' : 'error');
-                Alpine.store('app').botPhone = this.configBotPhone;
             } catch (err) {
                 this.configStatus = "❌ Error al guardar datos";
                 this.configStatusClass = "mt-3 text-red-600 font-medium h-5";

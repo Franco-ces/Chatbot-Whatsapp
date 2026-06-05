@@ -162,9 +162,22 @@ export function initInstancesPanel(Alpine) {
                     this.refreshInstancesList(),
                     this.refreshActiveInstance(),
                 ]);
+                // Sincronizar botPhone desde la instancia activa.
+                // El telefono se extrae de ownerJid: "5491112345678@s.whatsapp.net"
+                // → "5491112345678". Si no hay activa o ownerJid es null,
+                // botPhone queda vacio y el boton de WhatsApp se deshabilita.
+                this._syncBotPhone();
             } finally {
                 this.loading = false;
             }
+        },
+
+        _syncBotPhone() {
+            const active = this.instances.find(i => i.name === this.activeName);
+            const phone = (active && active.ownerJid)
+                ? active.ownerJid.split('@')[0]
+                : '';
+            Alpine.store('app').botPhone = phone;
         },
 
         async deleteInstance(inst) {
@@ -305,6 +318,7 @@ export function initInstancesPanel(Alpine) {
                     // pisamos activeName con el stale del server).
                     this.activeName = '';
                     await this.refreshInstancesList();
+                    this._syncBotPhone();
                 } else {
                     const err = await res.json().catch(() => ({}));
                     const detail = (err.error && err.error.detail)
@@ -469,6 +483,7 @@ export function initInstancesPanel(Alpine) {
                     // lista (no pisamos activeName con el stale del server).
                     this.activeName = name;
                     await this.refreshInstancesList();
+                    this._syncBotPhone();
                 } else {
                     const err = await res.json().catch(() => ({}));
                     const detail = (err.error && err.error.detail) || 'Error al activar';

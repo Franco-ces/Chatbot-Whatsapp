@@ -153,9 +153,9 @@ async def obtener_config():
     return config_manager.config
 
 @app.post("/api/config")
-async def guardar_config(email: str = Form(None), telefono: str = Form(None), bot_phone: str = Form(None)):
+async def guardar_config(email: str = Form(None), telefono: str = Form(None)):
     try:
-        config_manager.guardar(nuevo_email=email, nuevo_tel=telefono, nuevo_bot_phone=bot_phone)
+        config_manager.guardar(nuevo_email=email, nuevo_tel=telefono)
         return {"status": "success", "message": "Datos de contacto actualizados"}
     except Exception as e:
         raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))

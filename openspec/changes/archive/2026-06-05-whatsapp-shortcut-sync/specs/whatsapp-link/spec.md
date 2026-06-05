@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The WhatsApp shortcut button in the admin navbar opens a `wa.me` chat link. It derives its phone number automatically from the active Evolution instance's `ownerJid` field. This spec defines how the phone number is sourced and how the button behaves when no number is available.
+The WhatsApp shortcut button in the admin navbar opens a `wa.me` chat link. It requires a phone number to construct the link. This spec defines how the phone number is sourced from the active Evolution instance and how the button behaves when no number is available.
 
 ## Requirements
 
@@ -50,25 +50,6 @@ The WhatsApp button MUST be visually disabled (greyed out, non-interactive) and 
 - THEN the WhatsApp button SHALL be enabled and clickable
 - AND clicking the button SHALL open `https://wa.me/{botPhone}` in a new tab
 
-### Requirement: WhatsApp Link in Navbar
-
-The frontend MUST render a clickable link in the navbar/header that opens `https://wa.me/{bot_phone}` in a new tab.
-
-#### Scenario: Link renders
-
-- GIVEN `bot_phone` is `5491112345678`
-- THEN the navbar contains `<a href="https://wa.me/5491112345678" target="_blank">Abrir WhatsApp</a>`
-
-#### Scenario: Link visible from any tab
-
-- GIVEN the user is on the Logs, Docs, or Config tab
-- THEN the WhatsApp link is always visible in the navbar
-
-#### Scenario: No bot_phone configured
-
-- GIVEN `bot_phone` is not set
-- THEN the WhatsApp link is hidden or shows a disabled state
-
 ### Requirement: Phone Sync on Instance Change
 
 The phone number MUST update automatically when the admin switches the active Evolution instance, without requiring a page reload.
@@ -104,5 +85,3 @@ The `bot_phone` field MUST be removed from `config_bot.json` defaults, the `Conf
 - GIVEN the admin calls `GET /api/config`
 - WHEN the response is returned
 - THEN the response SHALL NOT contain a `bot_phone` field
-
-
