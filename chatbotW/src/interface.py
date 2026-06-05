@@ -153,8 +153,11 @@ async def serve_frontend():
 @app.post("/api/apikey")
 async def guardar_api_key(key: str = Form(...)):
     try:
-        set_key(str(ENV_FILE), "GOOGLE_API_KEY", key)
         os.environ["GOOGLE_API_KEY"] = key
+        try:
+            set_key(str(ENV_FILE), "GOOGLE_API_KEY", key)
+        except OSError:
+            pass  # Bind-mount (Docker/WSL2) no permite persistir a .env
         return {"status": "success", "message": "API Key guardada y actualizada en vivo"}
     except Exception as e:
         raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
