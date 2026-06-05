@@ -125,6 +125,19 @@ async def lifespan(app: FastAPI):
             pass  # Bind-mount (Docker/WSL2) no permite os.replace
 
     google_key = os.getenv("GOOGLE_API_KEY")
+
+    # Si GOOGLE_API_KEY no está en env, intentar leer del volumen compartido
+    if not google_key:
+        try:
+            config_dir = os.path.dirname(os.environ.get("CONFIG_BOT_PATH", ""))
+            api_key_file = os.path.join(config_dir, "google_api_key.txt") if config_dir else ""
+            if api_key_file and os.path.exists(api_key_file):
+                with open(api_key_file, "r") as f:
+                    google_key = f.read().strip()
+                if google_key:
+                    os.environ["GOOGLE_API_KEY"] = google_key
+        except (OSError, ValueError):
+            pass
     evolution_key = os.getenv("EVOLUTION_API_KEY")
     evolution_url = os.getenv("EVOLUTION_API_URL")
     instance = os.getenv("EVOLUTION_INSTANCE_NAME")
@@ -166,10 +179,45 @@ async def lifespan(app: FastAPI):
     # Arrancamos el loop de limpieza de sesiones expiradas
     task = asyncio.create_task(cleanup_loop())
 
+    # Watcher para detectar GOOGLE_API_KEY desde el volumen compartido
+    _api_key_last_mtime = [0.0]
+
+    async def _watch_api_key():
+        """Polea google_api_key.txt en config_data cada 5s para hot-reload."""
+        while True:
+            await asyncio.sleep(5)
+            try:
+                config_dir = os.path.dirname(os.environ.get("CONFIG_BOT_PATH", ""))
+                api_key_file = os.path.join(config_dir, "google_api_key.txt") if config_dir else ""
+                if api_key_file and os.path.exists(api_key_file):
+                    mtime = os.path.getmtime(api_key_file)
+                    if mtime > _api_key_last_mtime[0]:
+                        _api_key_last_mtime[0] = mtime
+                        with open(api_key_file, "r") as f:
+                            key = f.read().strip()
+                        if key and key != os.getenv("GOOGLE_API_KEY"):
+                            os.environ["GOOGLE_API_KEY"] = key
+                            global rag
+                            try:
+                                rag = RAGOrchestrator(key)
+                                logger.info("RAG reinicializado con GOOGLE_API_KEY desde panel admin")
+                            except Exception as e:
+                                logger.warning("No se pudo reinicializar RAG", detail=str(e))
+            except (OSError, ValueError):
+                pass
+
+    api_key_task = asyncio.create_task(_watch_api_key())
+
     logger.info("Dependencias cargadas. Servidor listo para recibir mensajes.")
     yield
 
     # Shutdown: cancelamos loops y watchers
+    api_key_task.cancel()
+    try:
+        await api_key_task
+    except asyncio.CancelledError:
+        pass
+
     task.cancel()
     try:
         await task

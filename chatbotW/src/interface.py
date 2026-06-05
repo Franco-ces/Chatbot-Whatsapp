@@ -158,6 +158,15 @@ async def guardar_api_key(key: str = Form(...)):
             set_key(str(ENV_FILE), "GOOGLE_API_KEY", key)
         except OSError:
             pass  # Bind-mount (Docker/WSL2) no permite persistir a .env
+        # Persistir en volumen compartido para que el bot lea la key
+        try:
+            config_dir = os.path.dirname(os.environ.get("CONFIG_BOT_PATH", ""))
+            if config_dir:
+                api_key_path = os.path.join(config_dir, "google_api_key.txt")
+                with open(api_key_path, "w") as f:
+                    f.write(key)
+        except (OSError, ValueError):
+            pass
         return {"status": "success", "message": "API Key guardada y actualizada en vivo"}
     except Exception as e:
         raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
