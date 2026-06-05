@@ -74,6 +74,14 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
             if audio_b64:
                 audio_bytes = base64.b64decode(audio_b64)
 
+        # --- RAG RELOAD (hot-reload de CSVs/PDFs antes de cada query) ---
+        # Verifica cambios en archivos y refresca el vectorstore si es necesario.
+        # Si falla, no bloquea la respuesta: se usa el retriever anterior (stale).
+        try:
+            await rag_instance.actualizar_memoria()
+        except Exception as e:
+            logger.warning("RAG reload failed, using stale retriever", detail=str(e))
+
         rag_start = time.perf_counter()
         resultado = await rag_instance.preguntar(
             query_text=texto,

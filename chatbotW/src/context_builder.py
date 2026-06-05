@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 from price_lookup import buscar_precios
 from logging_config import get_logger
@@ -22,8 +23,9 @@ async def construir_contexto(retriever, texto_busqueda: str, folder_path) -> str
     docs = await asyncio.to_thread(retriever.invoke, busqueda_final)
     contexto_docs = "\n\n".join(doc.page_content for doc in docs)
 
-    # 2. Price lookup
-    contexto_precios = buscar_precios(texto_busqueda, folder_path)
+    # 2. Price lookup — CSVs live in CSVs/, not in PDFs/
+    csv_folder = Path(folder_path).parent / "CSVs"
+    contexto_precios = buscar_precios(texto_busqueda, csv_folder)
 
     # 3. Combine both contexts
     contexto_total = f"--- MANUALES TÉCNICOS Y DETALLES ---\n{contexto_docs}\n\n--- INFORMACIÓN COMERCIAL (PRECIOS Y STOCK) ---\n{contexto_precios}"

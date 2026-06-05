@@ -99,6 +99,8 @@ class DocumentManager:
         """
         Verifica rápidamente si hubo cambios en la carpeta de PDFs o Precios.
         Retorna True si se detectaron cambios y se reconstruyó el retriever.
+        Si setup_retriever() falla, captura la excepción y retorna False
+        (el retriever anterior sigue activo).
         """
         hash_actual = VectorStoreManager.calcular_hash_archivos(self.folder_path)
         metadata_path = VectorStoreManager._get_metadata_path()
@@ -111,8 +113,16 @@ class DocumentManager:
 
         if hash_actual != hash_guardado:
             logger.info("Change detected in files, updating RAG memory")
-            self.retriever = self.setup_retriever()
-            logger.info("RAG memory updated successfully")
-            return True
+            try:
+                self.retriever = self.setup_retriever()
+                logger.info("RAG memory updated successfully")
+                return True
+            except Exception as e:
+                logger.warning(
+                    "Failed to rebuild vectorstore, keeping stale retriever",
+                    error_code=ErrorCode.RAG_QUERY_FAILED.value,
+                    detail=str(e),
+                )
+                return False
 
         return False

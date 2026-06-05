@@ -2,25 +2,29 @@
 schema: spec-driven
 
 context: |
-  Tech stack: Python 3.12, FastAPI, Uvicorn, LangChain, Google Generative AI (Gemini),
-    FAISS vectorstore, Evolution API (WhatsApp), PyMuPDF, Pydantic
+  Tech stack: Python 3.12, FastAPI 0.104.1, Uvicorn 0.24.0, LangChain + langchain-google-genai,
+    Google Generative AI (Gemini), FAISS vectorstore, Evolution API (WhatsApp), PyMuPDF,
+    Pydantic, httpx 0.28.1, python-jose, structlog
   Architecture: Monolithic FastAPI webhook-based chatbot with RAG pipeline over PDFs.
-    Inbound webhook via Evolution API → payload_parser → bot_service → RAGLangchain →
-    WhatsAppClient outbound. Optional audio processing via Gemini. Admin UI via interface.py.
-  Testing: No testing infrastructure detected (no pytest, no unittest config, no test files)
-  Style: No formatting or linting conventions detected
-  Dependencies: requerimientos.txt (no pyproject.toml or setup.py)
-  Deployment: Docker Compose (whatsapp-bot + evolution-api + postgres + redis)
+    Two FastAPI apps: bot webhook (port 5000) + admin UI (port 8000).
+    Inbound webhook via Evolution API → payload_parser → bot_service → RAG orchestration →
+    WhatsAppClient outbound. Audio processing via Gemini. Admin UI for PDF/config/log management.
+    Flat module structure in src/ (no package nesting, bare imports).
+  Testing: pytest 8.3.4 + pytest-asyncio 0.24.0 + pytest-mock 3.14.0 (30 test files).
+    Tests run in Docker or via local venv. No coverage, no linter, no type checker, no formatter.
+  Style: No formatting or linting conventions. Spanish comments and user-facing strings.
+  Dependencies: requirements.txt (pinned versions for fastapi, uvicorn, pytest)
+  Deployment: Docker Compose (whatsapp-bot + admin-ui + evolution-api + postgres + redis)
 
-strict_tdd: false
+strict_tdd: true
 
 testing:
   runner:
-    available: false
-    command: ""
-    framework: ""
+    available: true
+    command: "pytest"
+    framework: "pytest 8.3.4"
   layers:
-    unit: false
+    unit: true
     integration: false
     e2e: false
   coverage:
@@ -52,11 +56,11 @@ rules:
     - Keep tasks completable in one session
   apply:
     - Follow existing code patterns (Python 3.12, FastAPI style)
-    - Add tests alongside implementation (TDD recommended going forward)
-    tdd: false
-    test_command: ""
+    - Add tests alongside implementation (TDD enforced)
+    tdd: true
+    test_command: "pytest"
   verify:
-    test_command: ""
+    test_command: "pytest"
     build_command: ""
     coverage_threshold: 0
   archive:

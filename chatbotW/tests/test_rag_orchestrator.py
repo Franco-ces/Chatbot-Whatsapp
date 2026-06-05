@@ -118,7 +118,8 @@ class TestRAGOrchestratorPreguntar:
 class TestRAGOrchestratorActualizarMemoria:
     """Tests for actualizar_memoria() delegation."""
 
-    def test_memory_updated_refreshes_retriever(self):
+    @pytest.mark.asyncio
+    async def test_memory_updated_refreshes_retriever(self):
         """GIVEN files changed WHEN actualizar_memoria() called THEN retriever refreshed and returns True."""
         with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
              patch("rag_orchestrator.QueryProcessor"), \
@@ -137,7 +138,7 @@ class TestRAGOrchestratorActualizarMemoria:
 
             # Setup retriever will be called twice: once in __init__, once in actualizar_memoria
             mock_dm.setup_retriever.return_value = new_retriever
-            result = rag.actualizar_memoria()
+            result = await rag.actualizar_memoria()
 
             assert result is True
             mock_dm.actualizar_memoria.assert_called_once()
@@ -145,7 +146,8 @@ class TestRAGOrchestratorActualizarMemoria:
             assert mock_dm.setup_retriever.call_count == 2
             assert rag.retriever is new_retriever
 
-    def test_memory_unchanged_retriever_untouched(self):
+    @pytest.mark.asyncio
+    async def test_memory_unchanged_retriever_untouched(self):
         """GIVEN no files changed WHEN actualizar_memoria() called THEN retriever unchanged and returns False."""
         with patch("rag_orchestrator.DocumentManager") as mock_dm_cls, \
              patch("rag_orchestrator.QueryProcessor"), \
@@ -161,7 +163,7 @@ class TestRAGOrchestratorActualizarMemoria:
             from rag_orchestrator import RAGOrchestrator
             rag = RAGOrchestrator("key")
 
-            result = rag.actualizar_memoria()
+            result = await rag.actualizar_memoria()
 
             assert result is False
             mock_dm.actualizar_memoria.assert_called_once()

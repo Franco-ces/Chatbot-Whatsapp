@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 
 from document_manager import DocumentManager
@@ -18,6 +19,9 @@ class RAGOrchestrator:
     """
 
     def __init__(self, api_key, folder_path="PDFs"):
+        # Lock para serializar reconstrucciones concurrentes del vectorstore
+        self._reload_lock = asyncio.Lock()
+
         # Creamos los componentes especializados
         self.doc_manager = DocumentManager(api_key, folder_path)
 
@@ -84,11 +88,14 @@ class RAGOrchestrator:
             return None
         return hit.respuesta if hit is not None else None
 
-    def actualizar_memoria(self):
+    async def actualizar_memoria(self):
         """
         Verifica cambios en archivos y refresca el retriever si es necesario.
+        Serializado con _reload_lock para evitar reconstrucciones concurrentes.
         """
-        actualizado = self.doc_manager.actualizar_memoria()
-        if actualizado:
-            self.retriever = self.doc_manager.setup_retriever()
-        return actualizado
+        async with self._reload_lock:
+            actualizado = self.doc_manager.actualizar_memoria()
+            if actualizado:
+                logger.info("CSV/PDF change detected, rebuilding vectorstore")
+                self.retriever = self.doc_manager.setup_retriever()
+            return actualizado

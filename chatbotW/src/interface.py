@@ -67,7 +67,7 @@ if not SECRET_KEY:
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
 
-EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/"}
+EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/", "/api/reload-rag"}
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -505,6 +505,41 @@ async def eliminar_faq(faq_id: str):
         )
     _write_faqs(new_rows)
     return Response(status_code=204)
+# ────────────────────────────────────────────────────────────────────────
+
+# ─── RAG Reload Endpoint (CSV Hot-Reload safety valve) ─────────────────
+# Reference to the shared RAG instance. Set by main.py after creation.
+# When running as separate process (interface on port 8000), this stays None
+# and the endpoint returns a no-op response. The bot handles reload
+# automatically per-query via bot_service.py.
+_rag_instance = None
+
+
+def set_rag_instance(rag):
+    """Set the shared RAG instance for manual reload endpoint."""
+    global _rag_instance
+    _rag_instance = rag
+
+
+@app.post("/api/reload-rag")
+async def reload_rag():
+    """Manual RAG reload trigger for admin safety valve.
+
+    Calls actualizar_memoria() on the shared RAG instance if available.
+    When running in a separate process, returns no_changes since the bot
+    handles hot-reload automatically per-query.
+    """
+    if _rag_instance is None:
+        return {"status": "no_changes", "detail": "RAG instance not available in this process"}
+
+    try:
+        updated = await _rag_instance.actualizar_memoria()
+        if updated:
+            return {"status": "reloaded"}
+        return {"status": "no_changes"}
+    except Exception as e:
+        logger.error("Manual RAG reload failed", detail=str(e))
+        raise APIError(ErrorCode.RAG_QUERY_FAILED, detail=str(e))
 # ────────────────────────────────────────────────────────────────────────
 
 # ─── Evolution Instance Admin (PR 4) ───────────────────────────────────

@@ -24,6 +24,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
+      - ./CSVs:/app/CSVs
       - ./audios:/app/audios
       - ./vectorstore:/app/vectorstore
       - ./cache:/app/cache
@@ -64,6 +65,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
+      - ./CSVs:/app/CSVs
       - ./logs:/app/logs
       # Mismo volume que whatsapp-bot para compartir config_bot.json.
       - config_data:/app/config_data
