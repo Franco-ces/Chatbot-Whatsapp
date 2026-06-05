@@ -12,8 +12,8 @@ cd "$SCRIPT_DIR/chatbotW"
 # Verificar que docker está instalado
 command -v docker &>/dev/null || { echo "Falta docker. Instalalo: sudo apt install docker.io" >&2; exit 1; }
 
-# Levantar contenedores
+[[ "${1:-}" == "--verbose" ]] && set -x  # Modo verbose: mostrar cada comando
+
 docker compose up -d --build
 
-echo ""
-echo -e "\033[0;32m[OK] Contenedores levantados. Abrí http://localhost:8000 para configurar.\033[0m"
+echo -e "\n\033[0;32m[OK] Contenedores levantados. Abrí http://localhost:8000 para configurar.\033[0m"
