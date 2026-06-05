@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import set_key
+
 import uvicorn
 import os
 import shutil
@@ -28,6 +28,31 @@ from logging_config import get_logger
 from evo_client import build_evolution_admin
 
 logger = get_logger("interface")
+
+
+def _write_env(key: str, value: str) -> None:
+    """Escribe una variable en .env sin usar os.replace() (falla en WSL2 bind-mounts).
+
+    Reemplaza la línea existente o agrega al final. Preserve comentarios,
+    formato y el resto del archivo intacto.
+    """
+    import re
+    env_path = str(ENV_FILE)
+    with open(env_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    pattern = rf"^{re.escape(key)}=.*$"
+    replacement = f"{key}={value}"
+    if re.search(pattern, content, flags=re.MULTILINE):
+        content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+    else:
+        if not content.endswith("\n"):
+            content += "\n"
+        content += f"{replacement}\n"
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
 
 app = FastAPI()
 
@@ -63,9 +88,9 @@ if not SECRET_KEY:
     SECRET_KEY = secrets.token_urlsafe(32)
     os.environ["SECRET_KEY"] = SECRET_KEY
     try:
-        set_key(str(ENV_FILE), "SECRET_KEY", SECRET_KEY)
+        _write_env("SECRET_KEY", SECRET_KEY)
     except OSError:
-        pass  # Bind-mount (Docker/WSL2) no permite os.replace
+        pass  # Bind-mount (Docker/WSL2) no permite escribir
 
 # Auto-generar WEBHOOK_SECRET si no está seteado (misma lógica que SECRET_KEY)
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
@@ -73,9 +98,9 @@ if not WEBHOOK_SECRET:
     WEBHOOK_SECRET = secrets.token_hex(32)
     os.environ["WEBHOOK_SECRET"] = WEBHOOK_SECRET
     try:
-        set_key(str(ENV_FILE), "WEBHOOK_SECRET", WEBHOOK_SECRET)
+        _write_env("WEBHOOK_SECRET", WEBHOOK_SECRET)
     except OSError:
-        pass  # Bind-mount (Docker/WSL2) no permite os.replace
+        pass  # Bind-mount (Docker/WSL2) no permite escribir
 
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
@@ -155,9 +180,9 @@ async def guardar_api_key(key: str = Form(...)):
     try:
         os.environ["GOOGLE_API_KEY"] = key
         try:
-            set_key(str(ENV_FILE), "GOOGLE_API_KEY", key)
+            _write_env("GOOGLE_API_KEY", key)
         except OSError:
-            pass  # Bind-mount (Docker/WSL2) no permite persistir a .env
+            pass  # Bind-mount (Docker/WSL2) no permite escribir
         # Persistir en volumen compartido para que el bot lea la key
         try:
             config_dir = os.path.dirname(os.environ.get("CONFIG_BOT_PATH", ""))
