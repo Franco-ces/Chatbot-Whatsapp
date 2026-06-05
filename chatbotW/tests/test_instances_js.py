@@ -328,7 +328,7 @@ class TestCopyWaLinkMethod:
 
 class TestLinkColumnLayout:
     """Verifica que la columna Link esté entre Owner y Estado, con el botón
-    fa-copy, binding :disabled, y colspan=5 en loading/empty rows."""
+    SVG de portapapeles, binding :disabled, y colspan=5 en loading/empty rows."""
 
     def test_th_link_exists_between_owner_and_estado(self, html_content):
         """El TH 'Link' debe estar entre Owner y Estado, con hidden md:table-cell."""
@@ -386,8 +386,8 @@ class TestLinkColumnLayout:
             f"La 3ra celda debe tener 'hidden md:table-cell', tiene: '{tds[2]}'"
         )
 
-    def test_td_button_uses_fa_copy_icon(self, html_content):
-        """La celda Link debe contener <i class='fas fa-copy'> y @click='copyWaLink(inst)'."""
+    def test_td_button_has_clipboard_svg_icon(self, html_content):
+        """La celda Link debe contener un SVG de portapapeles y @click='copyWaLink(inst)'."""
         import re
         # Buscar el botón de copiar dentro del template
         template_match = re.search(
@@ -397,8 +397,11 @@ class TestLinkColumnLayout:
         )
         assert template_match, "No se encontró el template"
         template_html = template_match.group(0)
-        assert 'fas fa-copy' in template_html, (
-            "El template debe contener <i class='fas fa-copy'>"
+        assert 'viewBox="0 0 24 24"' in template_html, (
+            "El template debe contener un SVG con viewBox='0 0 24 24'"
+        )
+        assert 'stroke="currentColor"' in template_html, (
+            "El SVG debe usar stroke='currentColor' para heredar el color del botón"
         )
         assert 'copyWaLink(inst)' in template_html, (
             "El template debe contener @click='copyWaLink(inst)'"
