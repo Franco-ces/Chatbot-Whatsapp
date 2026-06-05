@@ -39,9 +39,14 @@
         </template>
     </div>
 
-    <!-- LOGIN VIEW -->
-    <template x-if="!$store.auth.token">
-        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-800 to-blue-600">
+    <!-- LOGIN VIEW (loader mientras verify() corre; login si no hay token) -->
+    <template x-if="!$store.auth.verified">
+        <div class="min-h-screen flex items-center justify-center bg-gray-100">
+            <div class="text-gray-500 font-medium">⏳ Verificando sesión…</div>
+        </div>
+    </template>
+    <template x-if="$store.auth.verified && !$store.auth.token">
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-600 to-green-800">
             <div class="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 w-full max-w-md border border-white/20">
                 <div class="text-center mb-8">
                     <img src="/static/images/logo.jpeg" alt="NeuraDocs" class="h-20 w-auto mx-auto mb-4">
@@ -64,8 +69,8 @@
         </div>
     </template>
 
-    <!-- APP VIEW -->
-    <template x-if="$store.auth.token">
+    <!-- APP VIEW (solo se muestra si verified && token) -->
+    <template x-if="$store.auth.verified && $store.auth.token">
         <div x-data="adminPanel">
             <!-- NAVBAR -->
             <nav class="bg-gradient-to-r from-blue-800 to-blue-600 text-white shadow-lg sticky top-0 z-40">
@@ -390,14 +395,15 @@
                         <form @submit.prevent="createInstance()" class="flex flex-col sm:flex-row gap-3 sm:items-center">
                             <div class="flex-1">
                                 <label class="block text-sm font-semibold text-gray-700 mb-1" for="new-instance-name">Nombre</label>
-                                <input id="new-instance-name" type="text" x-model="createForm.name" placeholder="ej. bot_2" pattern="[A-Za-z0-9_-]+" maxlength="64" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" required>
-                                <p class="text-xs text-gray-400 mt-1">Solo letras, números, guión bajo y guión medio. Máx 64 caracteres.</p>
+                                <input id="new-instance-name" type="text" x-model="createForm.name" placeholder="ej. bot_2" pattern="[A-Za-z0-9_-]+" maxlength="64" aria-describedby="new-instance-name-help" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" required>
                             </div>
                             <button type="submit" :disabled="createForm.saving" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 shadow-sm">
                                 <span x-show="!createForm.saving">Crear</span>
                                 <span x-show="createForm.saving">⏳ Creando...</span>
                             </button>
+                            <p id="new-instance-name-help" class="text-xs text-gray-400 sm:hidden">Solo letras, números, guión bajo y guión medio. Máx 64 caracteres.</p>
                         </form>
+                        <p class="text-xs text-gray-400 mt-1 hidden sm:block">Solo letras, números, guión bajo y guión medio. Máx 64 caracteres.</p>
                         <p x-show="createForm.error" x-text="createForm.error" class="text-xs text-red-600 mt-2 font-medium"></p>
                     </div>
 
@@ -408,21 +414,30 @@
                                 <tr class="bg-gray-50 border-b border-gray-200">
                                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre</th>
                                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Owner</th>
+                                    <th class="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Link</th>
                                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
                                     <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-100">
                                 <template x-if="loading">
-                                    <tr><td colspan="4" class="p-6 text-center text-gray-500 text-sm">⏳ Cargando instancias...</td></tr>
+                                    <tr><td colspan="5" class="p-6 text-center text-gray-500 text-sm">⏳ Cargando instancias...</td></tr>
                                 </template>
                                 <template x-if="!loading && instances.length === 0">
-                                    <tr><td colspan="4" class="p-8 text-center text-gray-500 italic text-sm">📭 No hay instancias registradas. Creá la primera con el formulario de arriba.</td></tr>
+                                    <tr><td colspan="5" class="p-8 text-center text-gray-500 italic text-sm">📭 No hay instancias registradas. Creá la primera con el formulario de arriba.</td></tr>
                                 </template>
                                 <template x-for="inst in instances" :key="inst.name">
                                     <tr class="hover:bg-gray-50 transition-colors">
                                         <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="inst.name"></td>
                                         <td class="px-4 py-3 text-xs text-gray-600 font-mono" x-text="inst.ownerJid || '—'"></td>
+                                        <td class="hidden md:table-cell px-4 py-3 text-center">
+                                            <button @click="copyWaLink(inst)"
+                                                    :disabled="!inst.ownerJid"
+                                                    class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    title="Copiar link de WhatsApp">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </td>
                                         <td class="px-4 py-3 text-sm">
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
                                                   :class="{

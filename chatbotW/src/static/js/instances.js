@@ -331,6 +331,40 @@ export function initInstancesPanel(Alpine) {
             }
         },
 
+        // ─── Copy wa.me link ──────────────────────────────────────
+        async copyWaLink(inst) {
+            // Defense in depth: el binding :disabled del HTML ya cubre
+            // ownerJid null, pero si alguien llama al metodo por devtools
+            // o si el binding se desincroniza, no queremos terminar con
+            // un clipboard.writeText("https://wa.me/") (URL invalida).
+            if (!inst || !inst.ownerJid) return;
+
+            // Mismo regex que SesionLoggerManager._limpiar_numero
+            // (src/sesionLoggerManager.py:160) y que el navbar del bot
+            // (index.html:83). Strip de cualquier sufijo @-lo-que-sea,
+            // no solo @s.whatsapp.net, por si Evolution cambia el formato.
+            const local = String(inst.ownerJid).replace(/@.*$/, '');
+
+            // Edge case: JID corrupto tipo "@s.whatsapp.net" — el strip
+            // devuelve "". Sin este guard copiariamos un link roto y
+            // el usuario no se entera.
+            if (!local) {
+                window.showToast('Número inválido para esta instancia', 'error');
+                return;
+            }
+
+            const url = 'https://wa.me/' + local;
+            // Admin UI = 127.0.0.1:8000 (contexto seguro), no hace falta
+            // fallback execCommand. try/catch convierte cualquier rechazo
+            // del browser en un toast legible.
+            try {
+                await navigator.clipboard.writeText(url);
+                window.showToast('Link copiado', 'success');
+            } catch (err) {
+                window.showToast('No se pudo copiar el link', 'error');
+            }
+        },
+
         // ─── QR Modal ─────────────────────────────────────────────
         async openQrModal(inst, opts = {}) {
             this.selected = inst;
