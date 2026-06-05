@@ -4,7 +4,7 @@ import hmac
 import os
 import sys
 import uuid
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -22,7 +22,7 @@ from exceptions import AppError
 from sesionLoggerManager import SessionManager
 from health import run_health_probes
 from instance_watcher import InstanceWatcher
-from paths import CONFIG_FILE
+from paths import CONFIG_FILE, ENV_FILE
 
 rag = None
 wa_client = None
@@ -113,13 +113,24 @@ async def lifespan(app: FastAPI):
 
     load_dotenv()
 
+    # Generar WEBHOOK_SECRET si no está en .env
+    import secrets as _secrets
+    webhook_secret = os.getenv("WEBHOOK_SECRET", "")
+    if not webhook_secret:
+        webhook_secret = _secrets.token_hex(32)
+        os.environ["WEBHOOK_SECRET"] = webhook_secret
+        try:
+            set_key(str(ENV_FILE), "WEBHOOK_SECRET", webhook_secret)
+        except OSError:
+            pass  # Bind-mount (Docker/WSL2) no permite os.replace
+
     google_key = os.getenv("GOOGLE_API_KEY")
     evolution_key = os.getenv("EVOLUTION_API_KEY")
     evolution_url = os.getenv("EVOLUTION_API_URL")
     instance = os.getenv("EVOLUTION_INSTANCE_NAME")
 
     try:
-        if not google_key or not evolution_key or not evolution_url or not instance:
+        if not evolution_key or not evolution_url or not instance:
             logger.error("Faltan variables de entorno requeridas", error_code=ErrorCode.SYS_DEPENDENCY_MISSING.value)
             sys.exit(1)
 
@@ -130,7 +141,11 @@ async def lifespan(app: FastAPI):
             api_key=evolution_key,
         )
 
-        rag = RAGOrchestrator(google_key)
+        if google_key:
+            rag = RAGOrchestrator(google_key)
+        else:
+            logger.warning("GOOGLE_API_KEY no configurada. El bot arrancará SIN RAG. Cargala desde el panel admin.")
+            rag = None
     except Exception as e:
         logger.error("Fallo al inicializar RAG", error_code=ErrorCode.SYS_DEPENDENCY_MISSING.value, detail=str(e))
         logger.warning("El bot arrancará SIN RAG. Las consultas a PDFs no estarán disponibles.")

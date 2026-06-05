@@ -103,7 +103,8 @@ class TestWebhookInstanceRouting:
         mock_session = MagicMock()
         mock_procesar = AsyncMock()
 
-        with patch("main.rag", MagicMock()), \
+        with patch.dict("os.environ", {"WEBHOOK_SECRET": ""}, clear=False), \
+             patch("main.rag", MagicMock()), \
              patch("main.wa_client", mock_wa), \
              patch("main.session_manager", mock_session), \
              patch("main.instance_watcher", _make_watcher_stub("watcher_instance")), \
@@ -143,7 +144,8 @@ class TestWebhookInstanceRouting:
         mock_session = MagicMock()
         mock_procesar = AsyncMock()
 
-        with patch("main.rag", MagicMock()), \
+        with patch.dict("os.environ", {"WEBHOOK_SECRET": ""}, clear=False), \
+             patch("main.rag", MagicMock()), \
              patch("main.wa_client", mock_wa), \
              patch("main.session_manager", mock_session), \
              patch("main.instance_watcher", _make_watcher_stub("watcher_fallback")), \
@@ -180,7 +182,8 @@ class TestWebhookInstanceRouting:
         mock_wa = MagicMock()
         mock_wa.enviar_mensaje = AsyncMock()
 
-        with patch("main.rag", MagicMock()), \
+        with patch.dict("os.environ", {"WEBHOOK_SECRET": ""}, clear=False), \
+             patch("main.rag", MagicMock()), \
              patch("main.wa_client", mock_wa), \
              patch("main.session_manager", MagicMock()), \
              patch("main.instance_watcher", _make_watcher_stub("")), \
@@ -236,7 +239,8 @@ class TestWebhookValidPayload:
         mock_wa.obtener_audio_base64 = AsyncMock()
         mock_session = MagicMock()
 
-        with patch("main.rag", mock_rag), \
+        with patch.dict("os.environ", {"WEBHOOK_SECRET": ""}, clear=False), \
+             patch("main.rag", mock_rag), \
              patch("main.wa_client", mock_wa), \
              patch("main.session_manager", mock_session), \
              patch("main.instance_watcher", _make_watcher_stub()), \
@@ -265,7 +269,8 @@ class TestWebhookValidPayload:
         from main import app
         import httpx
 
-        with patch("main.rag", MagicMock()), \
+        with patch.dict("os.environ", {"WEBHOOK_SECRET": ""}, clear=False), \
+             patch("main.rag", MagicMock()), \
              patch("main.wa_client", MagicMock()), \
              patch("main.session_manager", MagicMock()):
 
@@ -296,7 +301,8 @@ class TestWebhookValidPayload:
         mock_wa = MagicMock()
         mock_wa.enviar_mensaje = AsyncMock()
 
-        with patch("main.rag", MagicMock()), \
+        with patch.dict("os.environ", {"WEBHOOK_SECRET": ""}, clear=False), \
+             patch("main.rag", MagicMock()), \
              patch("main.wa_client", mock_wa), \
              patch("main.session_manager", MagicMock()), \
              patch("main.instance_watcher", _make_watcher_stub()), \

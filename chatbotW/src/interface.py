@@ -62,7 +62,20 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     SECRET_KEY = secrets.token_urlsafe(32)
     os.environ["SECRET_KEY"] = SECRET_KEY
-    set_key(str(ENV_FILE), "SECRET_KEY", SECRET_KEY)
+    try:
+        set_key(str(ENV_FILE), "SECRET_KEY", SECRET_KEY)
+    except OSError:
+        pass  # Bind-mount (Docker/WSL2) no permite os.replace
+
+# Auto-generar WEBHOOK_SECRET si no está seteado (misma lógica que SECRET_KEY)
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+if not WEBHOOK_SECRET:
+    WEBHOOK_SECRET = secrets.token_hex(32)
+    os.environ["WEBHOOK_SECRET"] = WEBHOOK_SECRET
+    try:
+        set_key(str(ENV_FILE), "WEBHOOK_SECRET", WEBHOOK_SECRET)
+    except OSError:
+        pass  # Bind-mount (Docker/WSL2) no permite os.replace
 
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
