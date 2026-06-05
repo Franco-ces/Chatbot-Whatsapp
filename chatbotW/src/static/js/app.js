@@ -77,7 +77,7 @@ document.addEventListener('alpine:init', () => {
         // --- API KEY ---
         async saveApiKey() {
             if (!this.apiKey) {
-                this.apiStatus = "⚠️ Escribe una clave";
+                this.apiStatus = "⚠ Escribe una clave";
                 this.apiStatusClass = "mt-3 text-orange-500 font-medium h-5";
                 return;
             }
@@ -90,7 +90,7 @@ document.addEventListener('alpine:init', () => {
                 this.apiStatusClass = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
                 window.showToast(data.message, data.status === "success" ? 'success' : 'error');
             } catch (err) {
-                this.apiStatus = "❌ Error de conexión";
+                this.apiStatus = "✕ Error de conexión";
                 window.showToast('Error de conexión al guardar API Key', 'error');
             }
         },
@@ -136,7 +136,7 @@ document.addEventListener('alpine:init', () => {
                 this.configStatusClass = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
                 window.showToast(data.message, data.status === "success" ? 'success' : 'error');
             } catch (err) {
-                this.configStatus = "❌ Error al guardar datos";
+                this.configStatus = "✕ Error al guardar datos";
                 this.configStatusClass = "mt-3 text-red-600 font-medium h-5";
                 window.showToast('Error al guardar datos', 'error');
             }
@@ -160,7 +160,7 @@ document.addEventListener('alpine:init', () => {
 
             for (let f of files) {
                 if (!f.name.toLowerCase().endsWith('.pdf')) {
-                    this.pdfUploadStatus = "❌ Solo se permiten archivos .pdf";
+                    this.pdfUploadStatus = "✕ Solo se permiten archivos .pdf";
                     this.pdfUploadStatusClass = "mt-3 text-red-600 text-sm font-medium h-5";
                     window.showToast(`"${f.name}" no es un PDF`, 'error');
                     return;
@@ -174,13 +174,13 @@ document.addEventListener('alpine:init', () => {
 
             try {
                 await apiFetch('/api/pdfs', { method: 'POST', body: formData });
-                this.pdfUploadStatus = "✅ Subida exitosa";
+                this.pdfUploadStatus = "✓ Subida exitosa";
                 this.pdfUploadStatusClass = "mt-3 text-green-600 text-sm font-medium h-5";
                 window.showToast('PDFs subidos', 'success');
                 event.target.value = ''; // clear input
                 this.loadPdfs();
             } catch (err) {
-                this.pdfUploadStatus = "❌ Error al subir";
+                this.pdfUploadStatus = "✕ Error al subir";
                 this.pdfUploadStatusClass = "mt-3 text-red-600 text-sm font-medium h-5";
                 window.showToast('Error al subir PDFs', 'error');
             }
@@ -239,13 +239,13 @@ document.addEventListener('alpine:init', () => {
                     const errData = await res.json();
                     throw new Error(errData.detail || 'Error al subir');
                 }
-                this.csvUploadStatus = "✅ Subida exitosa";
+                this.csvUploadStatus = "✓ Subida exitosa";
                 this.csvUploadStatusClass = "mt-3 text-green-600 text-sm font-medium h-5";
                 window.showToast('CSVs subidos', 'success');
                 event.target.value = '';
                 this.loadCsvs();
             } catch (err) {
-                this.csvUploadStatus = `❌ ${err.message}`;
+                this.csvUploadStatus = `✕ ${err.message}`;
                 this.csvUploadStatusClass = "mt-3 text-red-600 text-sm font-medium h-5";
                 window.showToast(err.message, 'error');
             }
@@ -296,7 +296,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async readLog(filename) {
-            this.currentLogTitle = `📂 ${filename}`;
+            this.currentLogTitle = `${filename}`;
             this.currentLogContent = '';
             this.loadingLog = true;
             try {
@@ -363,7 +363,7 @@ document.addEventListener('alpine:init', () => {
 
                     if (type === 'id_usuario' || type === 'id_audio') {
                         // Reemplazamos los verdaderos \n por <br> para que HTML los dibuje bien
-                        let formatted = type === 'id_audio' ? '🎤 <i>Mensaje de audio</i>' : this.escapeHtml(content).replace(/\n/g, '<br>');
+                        let formatted = type === 'id_audio' ? '<i class=\"fas fa-microphone text-gray-500 mr-1\"></i> <i>Mensaje de audio</i>' : this.escapeHtml(content).replace(/\n/g, '<br>');
                         
                         html += `
                             <div class="flex justify-end animate-fade-in">

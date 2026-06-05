@@ -35,7 +35,7 @@ export function initStores(Alpine) {
                 this.headers = data.headers;
                 this.rows = data.rows;
             } catch (err) {
-                this.status = '❌ Error al cargar datos';
+                this.status = '✕ Error al cargar datos';
                 this.statusClass = 'text-red-600';
             } finally {
                 this.loading = false;
@@ -57,15 +57,15 @@ export function initStores(Alpine) {
                 });
                 const data = await res.json();
                 if (res.ok) {
-                    this.status = '✅ Cambios guardados';
+                    this.status = '✓ Cambios guardados';
                     this.statusClass = 'text-green-600';
                     this.dirty = false;
                 } else {
-                    this.status = `❌ ${data.detail || 'Error al guardar'}`;
+                    this.status = `✕ ${data.detail || 'Error al guardar'}`;
                     this.statusClass = 'text-red-600';
                 }
             } catch (err) {
-                this.status = '❌ Error de conexión';
+                this.status = '✕ Error de conexión';
                 this.statusClass = 'text-red-600';
             } finally {
                 this.saving = false;
