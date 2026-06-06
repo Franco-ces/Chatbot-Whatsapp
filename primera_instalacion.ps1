@@ -1,5 +1,5 @@
 # =============================================================================
-# Instalacion — Chatbot WhatsApp (PowerShell)
+# Instalacion -- Chatbot WhatsApp (PowerShell)
 # Backend auto-genera WEBHOOK_SECRET, la UI maneja instancias.
 # =============================================================================
 $ErrorActionPreference = "Stop"
@@ -56,7 +56,7 @@ $OriginalLocation = Get-Location
 
 try {
     Write-Host "=============================================" -ForegroundColor Cyan
-    Write-Host "  Instalacion — Chatbot WhatsApp" -ForegroundColor Cyan
+    Write-Host "  Instalacion -- Chatbot WhatsApp" -ForegroundColor Cyan
     Write-Host "=============================================" -ForegroundColor Cyan
     Write-Host ""
 
