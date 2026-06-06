@@ -124,17 +124,17 @@ detect_ports() {
     local range_end=5010
 
     # Buscar puerto para el bot
-    BOT_PORT=$(_find_free_port "$bot_target" "$range_end")
+    BOT_PORT=$(_find_free_port "$bot_target" $((bot_target + 10)))
     BOT_PORT="${BOT_PORT:-$bot_target}"
     export BOT_PORT
 
     # Buscar puerto para admin UI
-    ADMIN_PORT=$(_find_free_port "$admin_target" "$range_end")
+    ADMIN_PORT=$(_find_free_port "$admin_target" $((admin_target + 10)))
     ADMIN_PORT="${ADMIN_PORT:-$admin_target}"
     export ADMIN_PORT
 
     # Buscar puerto para Evolution API
-    EVO_PORT=$(_find_free_port "$evo_target" "$range_end")
+    EVO_PORT=$(_find_free_port "$evo_target" $((evo_target + 10)))
     EVO_PORT="${EVO_PORT:-$evo_target}"
     export EVO_PORT
 
