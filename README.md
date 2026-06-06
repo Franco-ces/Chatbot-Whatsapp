@@ -39,7 +39,18 @@ El script verificará la disponibilidad de puertos y, al finalizar, informará e
 
 ---
 
-### 📱 2. Configuración de la Instancia y Vinculación
+### 🔑 2. Configuración de la API Key de Gemini
+
+Para que el motor de Inteligencia Artificial (el flujo RAG y la transcripción de audio) pueda funcionar, necesitás configurar tu clave de Google Gemini:
+
+1. Dirigirse a [Google AI Studio](https://aistudio.google.com/) y obtener una nueva API Key.
+2. Acceder al Panel de Administración (por defecto `http://localhost:8000`).
+3. Dirigirse a la pestaña **Configuración** en el menú superior.
+4. Ingresar tu API Key de Gemini en el campo correspondiente y presioná guardar. El bot detectará la clave automáticamente sin necesidad de reiniciar los servicios.
+
+---
+
+### 📱 3. Configuración de la Instancia y Vinculación
 
 La configuración de WhatsApp se realiza de manera centralizada desde el Panel de Administración:
 
@@ -70,6 +81,53 @@ El bot procesa las solicitudes siguiendo una jerarquía de resolución:
 2. **Consulta de Productos (CSV):** Si se detecta una intención de búsqueda de producto, se utiliza un algoritmo de *fuzzy matching* para localizar el precio y stock en los archivos CSV.
 3. **Generación RAG (PDFs):** En caso de no hallar un match previo, el sistema recupera fragmentos relevantes de los PDFs mediante FAISS y genera una respuesta contextualizada con Gemini.
 4. **Procesamiento de Audio:** Los mensajes de voz son transcritos a texto mediante la API de Gemini antes de ingresar al flujo de resolución.
+
+---
+
+## 💡 Buenas Prácticas para la Base de Conocimiento
+
+El rendimiento y la precisión de las respuestas del bot dependen directamente de la calidad de los archivos cargados. Asegurate de seguir estas pautas para optimizar el comportamiento:
+
+### 📄 Documentos PDF (Flujo RAG)
+* **Texto digital y seleccionable:** Evitá subir PDFs que sean imágenes escaneadas. Los documentos deben contener texto real seleccionable para que FAISS y Gemini puedan indexar y recuperar la información. Si usás escaneos de documentos físicos, aplicales un proceso de OCR antes de subirlos.
+* **Información estructurada:** Redactá el contenido de forma clara y directa. El uso de títulos jerárquicos ayuda a que el proceso de partición de texto (*chunking*) conserve el contexto de cada párrafo de manera óptima.
+
+### 📊 Catálogos en CSV (Precios y Stock)
+* **Estructura consistente:** El archivo CSV debe mantener siempre las columnas esperadas por el sistema para asegurar la correcta lectura de precios y stock.
+* **Nombres descriptivos:** El algoritmo de búsqueda aproximada (*fuzzy matching*) funciona mejor si los nombres de los productos son claros y legibles (ej: `"Remera de Algodón Negra"` rinde mucho mejor que abreviaciones confusas como `"Rem Alg Neg"`).
+
+---
+
+## 🔍 Monitoreo y Diagnóstico (Health Checks)
+
+El bot cuenta con un endpoint de diagnóstico integrado para verificar que todos los servicios y conexiones del ecosistema estén en condiciones óptimas.
+
+### 🩺 Endpoint de Salud (Deep Health Check)
+Podés consultar el estado detallado del sistema realizando una petición `GET` al bot (puerto `5000`):
+
+* **URL de consulta:** `http://localhost:5000/health`
+* **¿Qué verifica internamente?**
+  * **RAG (`rag`):** Comprueba si la base de conocimientos basada en FAISS y Gemini se inicializó y cargó correctamente.
+  * **Evolution API (`evolution_api`):** Evalúa la latencia y la conectividad directa con la API de WhatsApp, asegurando que la instancia que el bot está usando responda correctamente.
+
+#### Ejemplo de respuesta saludable (`status: ok`):
+```json
+{
+  "status": "ok",
+  "components": {
+    "rag": {
+      "status": "ok",
+      "duration_ms": 0
+    },
+    "evolution_api": {
+      "status": "ok",
+      "duration_ms": 145
+    }
+  }
+}
+```
+
+*Si alguno de los componentes falla, el estado global pasará a `degraded` o `unhealthy`, devolviendo detalles específicos del error (como fallas de conexión o credenciales incorrectas), ideal para integrarlo con sistemas de monitoreo.*
 
 ---
 
