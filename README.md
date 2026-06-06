@@ -18,24 +18,9 @@ Es necesario contar con la siguiente infraestructura instalada:
 
 ---
 
-### ⚙️ 1. Configuración de Credenciales
+### 📥 1. Despliegue de Contenedores
 
-El sistema requiere una clave de API de Google Gemini para la generación de respuestas, la transcripción de audio y la creación de embeddings semánticos.
-
-1. Obtener una API Key a través de [Google AI Studio](https://aistudio.google.com/apikey).
-2. Crear el archivo de entorno `.env` a partir de la plantilla proporcionada:
-   * **Windows (PowerShell):** `cp chatbotW/.env.example chatbotW/.env`
-   * **Linux/macOS:** `cp chatbotW/.env.example chatbotW/.env`
-3. Editar el archivo `chatbotW/.env` e ingresar la clave obtenida:
-   ```env
-   GOOGLE_API_KEY=su_api_key_de_gemini_aqui
-   ```
-
----
-
-### 📥 2. Despliegue de Contenedores
-
-El proyecto incluye scripts que automatizan el levantamiento de la infraestructura necesaria.
+El proyecto incluye scripts que automatizan el levantamiento de la infraestructura necesaria. Si el archivo `.env` no existe, el script lo creará automáticamente a partir de la plantilla incluida.
 
 #### En Windows (PowerShell):
 Ejecutar en la raíz del proyecto:
@@ -50,16 +35,15 @@ chmod +x primera_instalacion.sh
 ./primera_instalacion.sh
 ```
 
-**Procesos ejecutados:**
-El script se encarga de construir las imágenes y desplegar los microservicios en modo *detached* utilizando Docker Compose. Una vez finalizado, el sistema estará operativo en los puertos locales.
+El script verificará la disponibilidad de puertos y, al finalizar, informará en cuáles está operativo cada servicio.
 
 ---
 
-### 📱 3. Configuración de la Instancia y Vinculación
+### 📱 2. Configuración de la Instancia y Vinculación
 
 A diferencia de versiones anteriores, la configuración de WhatsApp se realiza ahora de manera centralizada desde el Panel de Administración:
 
-1. Acceder al Panel de Administración en: `http://localhost:8000`.
+1. Acceder al Panel de Administración (la URL se muestra al finalizar la instalación, por defecto `http://localhost:8000`).
 2. Dirigirse a la sección de **Instancias**.
 3. Crear una nueva instancia (ej. `rag_bot`).
 4. Generar y escanear el **Código QR** desde la aplicación de WhatsApp en el dispositivo móvil (**Dispositivos vinculados** $\rightarrow$ **Vincular un dispositivo**).
@@ -72,7 +56,7 @@ A diferencia de versiones anteriores, la configuración de WhatsApp se realiza a
 El ecosistema se compone de dos interfaces principales:
 
 ### 1. Panel de Administración (Admin UI)
-* **Acceso:** `http://localhost:8000`
+* **Acceso:** URL informada al finalizar la instalación (por defecto `http://localhost:8000`).
 * **Capacidades Administrativas:**
   * **Gestión de Documentación:** Carga y depuración de archivos PDF para la base de conocimientos.
   * **Control de Precios y Stock:** Editor de archivos CSV para la gestión de catálogos de productos.
@@ -163,3 +147,7 @@ Comandos operativos para la administración del sistema desde la raíz de `chatb
   ```bash
   docker compose down -v && docker compose up -d --build
   ```
+
+---
+
+Si presenta problemas durante la instalación o ejecución, consulte la [Guía de Resolución de Problemas](TROUBLESHOOTING.md).
