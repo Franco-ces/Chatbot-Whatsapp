@@ -31,8 +31,7 @@ Ejecutar en la raíz del proyecto:
 #### En Linux / macOS (Bash):
 Ejecutar en la raíz del proyecto:
 ```bash
-chmod +x primera_instalacion.sh
-./primera_instalacion.sh
+sudo bash primera_instalacion.sh
 ```
 
 El script verificará la disponibilidad de puertos y, al finalizar, informará en cuáles está operativo cada servicio.
