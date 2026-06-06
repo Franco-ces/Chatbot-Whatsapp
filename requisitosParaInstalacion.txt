@@ -1,8 +1,0 @@
-Tener corriendo Docker desktop
-
-Correr el archivo primera_instalacion correspondiente
-    En windows: irm primera_instalacion.ps1
-
-    En linux: bash primera_instalacion.sh
-
-Levantar Docker con comandos(en comandos.txt estan los correspondientes)
