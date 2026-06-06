@@ -5,22 +5,16 @@ services:
     hostname: bot.local
     restart: unless-stopped
     working_dir: /app/src
-    command: uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port ${BOT_PORT:-5000} --reload
     ports:
-      - "5000:5000"
+      - "${BOT_PORT:-5000}:${BOT_PORT:-5000}"
     env_file:
       - .env
-    # DEBE coincidir con admin-ui. Sin esta env var, `faq_paths` cae
-    # al fallback _ROOT_DIR/faqs.json y el bot busca un archivo que
-    # no existe (mismo volume, path equivocado).
-    environment:
-      - FAQS_VOLUME_MOUNT=/app/faqs_data
-      # ConfigManager lee CONFIG_BOT_PATH para encontrar el archivo de
-      # config. Lo montamos en un named volume (directorio) para escapar
-      # del bug de WSL2 + Docker Desktop que retiene el lock del bind-mount
-      # 9p a nivel del kernel por >100s. Named volumes usan el FS nativo
-      # de Docker (no 9p) y no tienen ese problema.
-      - CONFIG_BOT_PATH=/app/config_data/config_bot.json
+    environment: &bot-env
+      # Ambos servicios DEBEN compartir estos paths para que
+      # faq_paths.py y ConfigManager resuelvan las mismas rutas.
+      FAQS_VOLUME_MOUNT: /app/faqs_data
+      CONFIG_BOT_PATH: /app/config_data/config_bot.json
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
@@ -29,97 +23,120 @@ services:
       - ./vectorstore:/app/vectorstore
       - ./cache:/app/cache
       - ./logs:/app/logs
-      # Named volume compartido con admin-ui para config_bot.json.
-      # El volume es siempre un directorio; el archivo vive adentro.
       - config_data:/app/config_data
-      # Named volume compartido con admin-ui. Los Docker named volumes
-      # SIEMPRE se montan como directorios, no como archivos — por eso
-      # el path destino es /app/faqs_data (directorio), y faqs.json vive
-      # ADENTRO como archivo regular. FAQS_VOLUME_MOUNT en ambos
-      # servicios apunta a este mismo directorio. Persiste a través de
-      # `docker compose down` + `up` y no toca el cache de bind mounts
-      # de Docker Desktop WSL2.
       - faq_data:/app/faqs_data
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   admin-ui:
     build: .
     container_name: admin_ui
     restart: unless-stopped
     working_dir: /app/src
-    command: uvicorn interface:app --host 0.0.0.0 --port 8000
+    command: uvicorn interface:app --host 0.0.0.0 --port ${ADMIN_PORT:-8000}
     ports:
-      - "8000:8000"
+      - "${ADMIN_PORT:-8000}:${ADMIN_PORT:-8000}"
     env_file:
       - .env
-    # FAQS_VOLUME_MOUNT le dice a `interface.FAQS_PATH` que el archivo
-    # vive en el named volume `faq_data` montado en /app/faqs_data
-    # (directorio), en vez de en ROOT_DIR. FAQS_PATH queda como
-    # /app/faqs_data/faqs.json. DEBE coincidir con el path destino
-    # del bind-mount `faq_data:` de arriba. Persiste a través de
-    # recreates del container.
-    # CONFIG_BOT_PATH apunta al config dentro del named volume
-    # `config_data` (mismo path que whatsapp-bot para que compartan).
     environment:
-      - FAQS_VOLUME_MOUNT=/app/faqs_data
-      - CONFIG_BOT_PATH=/app/config_data/config_bot.json
+      <<: *bot-env
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
       - ./CSVs:/app/CSVs
       - ./logs:/app/logs
-      # Mismo volume que whatsapp-bot para compartir config_bot.json.
       - config_data:/app/config_data
-      - ./.env:/app/.env
       - faq_data:/app/faqs_data
+      # Bind-mount de .env para que _write_env() pueda persistir
+      # la API key y otros secrets. Ya no causa "Device or resource
+      # busy" porque usamos escritura directa en vez de os.replace().
+      - ./.env:/app/.env
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   evolution-api:
     image: evoapicloud/evolution-api:v2.3.7
     container_name: evolution_api
-    restart: always
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${EVO_PORT:-8080}:${EVO_PORT:-8080}"
     depends_on:
-      - evolution_postgres
-      - evolution_redis
+      evolution_postgres:
+        condition: service_healthy
+      evolution_redis:
+        condition: service_healthy
     environment:
-      - SERVER_URL=http://localhost:8080
-      - AUTHENTICATION_TYPE=apikey
-      - AUTHENTICATION_API_KEY=franquitoGoat
-      - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://evo:evopass@evolution_postgres:5432/evolution?schema=public
-      - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://evolution_redis:6379/0
+      SERVER_URL: http://localhost:${EVO_PORT:-8080}
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVO_API_KEY}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@evolution_postgres:5432/${POSTGRES_DB}?schema=public
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://evolution_redis:6379/0
     volumes:
       - evolution_instances:/evolution/instances
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   evolution_postgres:
     image: postgres:15-alpine
     container_name: evolution_postgres
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=evo
-      - POSTGRES_PASSWORD=evopass
-      - POSTGRES_DB=evolution
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - evolution_db:/var/lib/postgresql/data
-    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   evolution_redis:
     image: redis:alpine
     container_name: evolution_redis
-    restart: always
+    restart: unless-stopped
     volumes:
       - evolution_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
 volumes:
   evolution_instances:
   evolution_db:
   evolution_redis_data:
-  # Named volume para faqs.json. Persiste a través de recreates del
-  # container; no usa el cache de bind mounts de Docker Desktop WSL2.
   faq_data:
-  # Named volume para config_bot.json. Compartido entre whatsapp-bot y
-  # admin-ui. CRITICO: NO usar bind-mount (./config_bot.json:...) porque
-  # el FS 9p de Docker Desktop en WSL2 retiene locks a nivel del kernel
-  # por >100s, rompiendo `os.replace` atomico. Named volume usa FS nativo
-  # de Docker y no tiene ese problema.
   config_data:
+
+networks:
+  backend:
+    driver: bridge

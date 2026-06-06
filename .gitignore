@@ -41,3 +41,6 @@ chatbotW/config_bot.json
 
 # Tests (cached)
 chatbotW/.pytest_cache/
+chatbotW/logs/
+*.bak
+
