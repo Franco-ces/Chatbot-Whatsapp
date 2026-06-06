@@ -2,6 +2,23 @@ from enum import Enum
 
 
 class ErrorCode(str, Enum):
+    """
+    Sistema centralizado de gestión de errores del proyecto.
+    
+    Este catálogo implementa un patrón de 'Error Codes' para desacoplar la lógica 
+    de negocio de la presentación de errores al usuario y la respuesta HTTP.
+    
+    Convención de Nomenclatura: E-[CATEGORÍA]-[SECUENCIA]
+    - E-COM: Errores de Comunicación (WhatsApp/Evolution API)
+    - E-RAG: Errores del pipeline de Recuperación Aumentada por Generación
+    - E-CFG: Errores de Configuración y persistencia de archivos
+    - E-API: Errores de interfaz de API (Request/Response)
+    - E-SYS: Errores críticos del sistema o dependencias
+    - E-FAQ: Errores en la gestión de Preguntas Frecuentes
+    
+    El uso de (str, Enum) asegura que los códigos sean serializables a JSON 
+    automáticamente sin necesidad de conversiones manuales.
+    """
     # Communication errors (E-COM)
     COM_CONNECTION_FAILED = "E-COM-001"
     COM_SEND_MESSAGE_FAILED = "E-COM-002"

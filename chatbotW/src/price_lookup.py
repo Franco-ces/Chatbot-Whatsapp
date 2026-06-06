@@ -1,6 +1,19 @@
 # src/price_lookup.py
 """
 Búsqueda de precios en archivos CSV con tolerancia a errores tipográficos.
+
+Este módulo implementa una estrategia de 'Fuzzy Matching' (Coincidencia Difusa) 
+utilizando la librería difflib. El objetivo es mejorar la experiencia de usuario (UX) 
+en interfaces de chat, donde es común encontrar errores de ortografía, abreviaturas 
+o variaciones en la escritura de los productos.
+
+Estrategia de matching:
+1. Match Exacto: Si la query es una subcadena del producto/categoría (Fast Path).
+2. Match Difuso: Si el ratio de similitud de Gestalt (SequenceMatcher) es >= 0.6.
+3. Filtro de Ruido: Se ignoran palabras menores a 3 caracteres para evitar falsos positivos.
+
+Esta aproximación permite que consultas como 'Samung A54' encuentren correctamente 
+el producto 'Samsung Galaxy A54'.
 """
 import csv
 import os

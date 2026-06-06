@@ -1,3 +1,17 @@
+"""
+Servicio de Orquestación de Mensajes (Bot Service).
+
+Este módulo implementa el núcleo de la lógica de respuesta del bot siguiendo el 
+patrón 'Chain of Responsibility' (Cadena de Responsabilidad). Cada mensaje 
+atraviesa una serie de filtros de resolución en orden de costo y precisión:
+
+1. Capa de FAQ (Atajo Semántico): Respuestas curadas por el operador. Latencia mínima.
+2. Capa de Cache LRU: Respuestas exactas previas para optimizar recursos.
+3. Capa de RAG (Retrieval Augmented Generation): Consulta a documentos PDF vía FAISS y Gemini.
+4. Capa de Generación LLM: Respuesta final basada en contexto recuperado.
+
+Este diseño asegura que el sistema sea eficiente en costos de API y rápido en la respuesta.
+"""
 import base64
 import time
 import traceback

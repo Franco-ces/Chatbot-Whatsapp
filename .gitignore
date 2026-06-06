@@ -29,6 +29,7 @@ secrets.yaml
 # SDD
 openspec/
 skills-lock.json
+sdd/
 
 # Generated / cache
 chatbotW/cache/

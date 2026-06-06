@@ -13,11 +13,20 @@ logger = get_logger("rag_orchestrator")
 
 class RAGOrchestrator:
     """
-    Coordinador delgado que delega a DocumentManager y QueryProcessor.
-    Preserva la interfaz pública de RAGLangchain para compatibilidad
-    con main.py y bot_service.py.
+    Orquestador de RAG (Retrieval Augmented Generation).
+    
+    Implementa el 'Patrón Facade' (Fachada) para proporcionar una interfaz única y 
+    simplificada al sistema de recuperación de información. Su objetivo es 
+    encapsular la complejidad de la interacción entre:
+    
+    - DocumentManager: Gestión de archivos, fragmentación y creación del índice FAISS.
+    - QueryProcessor: Procesamiento de la consulta, aplicación de guardrails y generación.
+    - FAQMatcher: Sistema de atajos semánticos para respuestas predefinidas.
+    
+    De esta manera, el resto de la aplicación (como bot_service.py) puede interactuar 
+    con el sistema de conocimiento sin conocer los detalles internos de la implementación 
+    de LangChain o los modelos de embeddings.
     """
-
     def __init__(self, api_key, folder_path="PDFs"):
         # Lock para serializar reconstrucciones concurrentes del vectorstore
         self._reload_lock = asyncio.Lock()

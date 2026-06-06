@@ -5,6 +5,24 @@ from langchain_community.vectorstores import FAISS
 from logging_config import get_logger
 from paths import BASE_PATH
 
+"""
+Gestor de Almacenamiento Vectorial (Vector Store Manager).
+
+Este módulo se encarga de la persistencia y carga del índice de vectores FAISS. 
+Para optimizar el tiempo de arranque y el consumo de API de embeddings, implementa 
+una estrategia de 'Sincronización basada en Hash'.
+
+Lógica de optimización:
+1. Calcula un hash MD5 combinando los nombres y las fechas de modificación (mtime) 
+   de todos los PDFs y CSVs en el sistema.
+2. Compara este hash con el almacenado en `metadata.json`.
+3. Si el hash coincide, carga el índice desde el disco (milisegundos).
+4. Si el hash difiere, dispara la reconstrucción completa del índice (segundos/minutos).
+
+Esto garantiza que el bot siempre tenga el conocimiento actualizado sin penalizar 
+el rendimiento en cada reinicio.
+"""
+
 logger = get_logger("vectorstore_manager")
 
 

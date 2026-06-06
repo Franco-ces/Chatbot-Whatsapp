@@ -1,4 +1,19 @@
 # src/main.py
+"""
+Servidor Principal de la API del Chatbot (FastAPI).
+
+Este módulo actúa como el punto de entrada del sistema y gestiona la infraestructura 
+de red y el ciclo de vida de las dependencias. Implementa las siguientes capacidades:
+
+1. Gestión de Lifespan: Inicialización asíncrona de dependencias pesadas (FAISS, RAG) 
+   y limpieza de recursos al apagar el servidor.
+2. Modelo de Concurrencia: Utiliza tareas asíncronas (asyncio.create_task) para procesar 
+   webhooks sin bloquear la respuesta al servidor de Evolution API, evitando re-envíos.
+3. Background Workers: Implementa loops de limpieza automática para sesiones expiradas 
+   y un watcher para el hot-reload de la API Key de Google sin reiniciar el proceso.
+4. Seguridad y Robustez: Middleware de logging con Request-ID, verificación de secretos 
+   vía HMAC y Rate Limiting basado en ventanas de tiempo por usuario.
+"""
 import asyncio
 import hmac
 import os
