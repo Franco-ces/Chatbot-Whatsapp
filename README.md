@@ -12,7 +12,7 @@ El sistema ha sido diseñado para un despliegue simplificado, donde la configura
 
 ### 📋 Prerrequisitos
 
-Es necesario contar con la siguiente infraestructura instalada:
+Es necesario contar con la siguiente infraestructura instalada y corriendo:
 * **Docker Desktop** (incluyendo Docker Compose).
   * [Documentación oficial de Docker](https://www.docker.com/products/docker-desktop/)
 
@@ -41,7 +41,7 @@ El script verificará la disponibilidad de puertos y, al finalizar, informará e
 
 ### 📱 2. Configuración de la Instancia y Vinculación
 
-A diferencia de versiones anteriores, la configuración de WhatsApp se realiza ahora de manera centralizada desde el Panel de Administración:
+La configuración de WhatsApp se realiza de manera centralizada desde el Panel de Administración:
 
 1. Acceder al Panel de Administración (la URL se muestra al finalizar la instalación, por defecto `http://localhost:8000`).
 2. Dirigirse a la sección de **Instancias**.
