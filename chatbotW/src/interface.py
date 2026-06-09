@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 import uvicorn
 import os
@@ -23,39 +24,24 @@ from pydantic import BaseModel, Field
 from ConfigManager import ConfigManager
 from error_handler import register_error_handlers
 from error_codes import ErrorCode
-from exceptions import APIError
+from exceptions import APIError, AppError
 from faq_paths import FAQS_PATH
 from logging_config import get_logger
 from evo_client import build_evolution_admin
+import telemetry
 
 logger = get_logger("interface")
 
 
-def _write_env(key: str, value: str) -> None:
-    """Escribe una variable en .env sin usar os.replace() (falla en WSL2 bind-mounts).
-
-    Reemplaza la línea existente o agrega al final. Preserve comentarios,
-    formato y el resto del archivo intacto.
-    """
-    import re
-    env_path = str(ENV_FILE)
-    with open(env_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    pattern = rf"^{re.escape(key)}=.*$"
-    replacement = f"{key}={value}"
-    if re.search(pattern, content, flags=re.MULTILINE):
-        content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
-    else:
-        if not content.endswith("\n"):
-            content += "\n"
-        content += f"{replacement}\n"
-
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.write(content)
+@asynccontextmanager
+async def _telemetry_lifespan(app: FastAPI):
+    """Initialize telemetry pool on startup, close on shutdown."""
+    await telemetry.init_pool()
+    yield
+    await telemetry.close_pool()
 
 
-app = FastAPI()
+app = FastAPI(lifespan=_telemetry_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -82,6 +68,33 @@ FAQS_FILE.parent.mkdir(parents=True, exist_ok=True)
 ROOT_DIR = BASE_PATH
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+def _write_env(key: str, value: str) -> None:
+    """Escribe una variable en .env sin usar os.replace() (falla en WSL2 bind-mounts).
+
+    Reemplaza la línea existente o agrega al final. Preserve comentarios,
+    formato y el resto del archivo intacto.
+    """
+    import re
+    env_path = str(ENV_FILE)
+    with open(env_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    pattern = rf"^{re.escape(key)}=.*$"
+    replacement = f"{key}={value}"
+    if re.search(pattern, content, flags=re.MULTILINE):
+        content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+    else:
+        if not content.endswith("\n"):
+            content += "\n"
+        content += f"{replacement}\n"
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+
 
 # ─── Auth Configuration ────────────────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -942,6 +955,27 @@ async def delete_evolution_instance(name: str):
         raise
 
     return Response(status_code=204)
+# ────────────────────────────────────────────────────────────────────────
+
+# ─── Telemetry Summary Endpoint ────────────────────────────────────────
+@app.get("/api/telemetry/summary")
+async def get_telemetry_summary(days: int = 7):
+    """Devuelve datos agregados de telemetría para el dashboard de admin.
+
+    Args:
+        days: Número de días hacia atrás para la agregación (default 7).
+
+    Returns:
+        JSON con estructura TS-2 del spec de telemetría.
+    """
+    try:
+        data = await telemetry.get_summary(telemetry._pool, days=days)
+        return {"status": "success", "data": data}
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error("Telemetry summary failed", detail=str(e))
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
 # ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

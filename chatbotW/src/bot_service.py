@@ -12,6 +12,7 @@ atraviesa una serie de filtros de resolución en orden de costo y precisión:
 
 Este diseño asegura que el sistema sea eficiente en costos de API y rápido en la respuesta.
 """
+import asyncio
 import base64
 import time
 import traceback
@@ -20,6 +21,7 @@ from exceptions import AppError, CommunicationError
 from error_codes import ErrorCode
 from logging_config import get_logger
 from cache import LRUCache
+import telemetry as _telemetry
 
 logger = get_logger("bot_service")
 
@@ -36,7 +38,7 @@ _USER_ERROR_MSG = (
 async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: str,
                          mensaje_data: dict, es_audio: bool,
                          session_manager=None, push_name="",
-                         *, instance_name: str):
+                         *, instance_name: str, telemetry_pool=None):
     """
     Ejecuta el ciclo de vida del bot: log, obtiene audio (si aplica),
     consulta al RAG, log respuesta y envía el mensaje.
@@ -48,7 +50,11 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
     propaga a TODAS las llamadas outbound (enviar_mensaje x4 +
     obtener_audio_base64 x1). Sin default para que el caller no pueda
     olvidarlo.
+
+    `telemetry_pool` es el pool de asyncpg para registrar la interacción.
+    Si es None, la telemetría se deshabilita (no-op).
     """
+    start_time = time.perf_counter()
     logger.info("Starting bot processing", remitente=remitente, push_name=push_name or "N/A")
 
     # Log del mensaje del usuario (antes de procesar, para no perderlo si falla)
@@ -66,18 +72,36 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
             faq_answer = rag_instance.check_faq(texto)
             if faq_answer:
                 logger.info("FAQ shortcut (bot_service layer)")
+                faq_duration_ms = int((time.perf_counter() - start_time) * 1000)
                 if session_manager:
                     session_manager.agregar_mensaje(remitente, faq_answer, es_bot=True, push_name=push_name)
                 await wa_client.enviar_mensaje(remitente, faq_answer, instance_name=instance_name)
+                asyncio.create_task(_telemetry.record_interaction(
+                    telemetry_pool,
+                    remitente=remitente, push_name=push_name, texto=texto,
+                    es_audio=False, respuesta=faq_answer,
+                    cacheable=False, cache_hit=False, faq_hit=True,
+                    error_code=None, rag_duration_ms=None,
+                    send_duration_ms=None, total_duration_ms=faq_duration_ms,
+                ))
                 return
 
         # --- CACHE CHECK (exact match, text-only) ---
         if texto and not es_audio:
             cached = _question_cache.get(texto)
             if cached:
+                cache_duration_ms = int((time.perf_counter() - start_time) * 1000)
                 if session_manager:
                     session_manager.agregar_mensaje(remitente, cached, es_bot=True, push_name=push_name)
                 await wa_client.enviar_mensaje(remitente, cached, instance_name=instance_name)
+                asyncio.create_task(_telemetry.record_interaction(
+                    telemetry_pool,
+                    remitente=remitente, push_name=push_name, texto=texto,
+                    es_audio=False, respuesta=cached,
+                    cacheable=False, cache_hit=True, faq_hit=False,
+                    error_code=None, rag_duration_ms=None,
+                    send_duration_ms=None, total_duration_ms=cache_duration_ms,
+                ))
                 return
 
         audio_bytes = None
@@ -106,6 +130,7 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         transcripcion = resultado.transcripcion
         respuesta_texto = resultado.respuesta
         rag_duration_ms = int((time.perf_counter() - rag_start) * 1000)
+        respuesta_cacheable = resultado.cacheable
 
         logger.info("RAG responded successfully", rag_duration_ms=rag_duration_ms)
 
@@ -115,7 +140,7 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         # Las respuestas de fallback (rechazo de guardrail, handoff, FAQ shortcut,
         # "no tengo información") llegan con cacheable=False y NO se persisten,
         # porque cachear el fallback "no info" envenenaba el cache LRU.
-        if texto and not es_audio and respuesta_texto and resultado.cacheable:
+        if texto and not es_audio and respuesta_texto and respuesta_cacheable:
             _question_cache.set(texto, respuesta_texto)
 
         # Log de la respuesta del bot
@@ -128,21 +153,58 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         send_duration_ms = int((time.perf_counter() - send_start) * 1000)
         logger.info("Message sent", send_duration_ms=send_duration_ms, resultado=str(resultado)[:200])
 
+        total_duration_ms = int((time.perf_counter() - start_time) * 1000)
+        asyncio.create_task(_telemetry.record_interaction(
+            telemetry_pool,
+            remitente=remitente, push_name=push_name, texto=texto,
+            es_audio=es_audio, respuesta=respuesta_texto,
+            cacheable=respuesta_cacheable, cache_hit=False, faq_hit=False,
+            error_code=None, rag_duration_ms=rag_duration_ms,
+            send_duration_ms=send_duration_ms, total_duration_ms=total_duration_ms,
+        ))
+
     except CommunicationError as e:
         error_code = e.code.value
+        total_duration_ms = int((time.perf_counter() - start_time) * 1000)
         logger.error("Communication error", error_code=error_code, detail=e.detail)
         await _notificar_error(wa_client, remitente, e, instance_name=instance_name)
+        asyncio.create_task(_telemetry.record_interaction(
+            telemetry_pool,
+            remitente=remitente, push_name=push_name, texto=texto,
+            es_audio=es_audio, respuesta=None,
+            cacheable=False, cache_hit=False, faq_hit=False,
+            error_code=error_code, rag_duration_ms=None,
+            send_duration_ms=None, total_duration_ms=total_duration_ms,
+        ))
 
     except AppError as e:
         error_code = e.code.value
+        total_duration_ms = int((time.perf_counter() - start_time) * 1000)
         logger.error("Application error", error_code=error_code, detail=e.detail)
         await _notificar_error(wa_client, remitente, e, instance_name=instance_name)
+        asyncio.create_task(_telemetry.record_interaction(
+            telemetry_pool,
+            remitente=remitente, push_name=push_name, texto=texto,
+            es_audio=es_audio, respuesta=None,
+            cacheable=False, cache_hit=False, faq_hit=False,
+            error_code=error_code, rag_duration_ms=None,
+            send_duration_ms=None, total_duration_ms=total_duration_ms,
+        ))
 
     except Exception as e:
         error_code = ErrorCode.SYS_UNEXPECTED.value
+        total_duration_ms = int((time.perf_counter() - start_time) * 1000)
         logger.error("Unexpected error", error_code=error_code, detail=str(e))
         app_error = AppError(ErrorCode.SYS_UNEXPECTED, detail=str(e), cause=e)
         await _notificar_error(wa_client, remitente, app_error, instance_name=instance_name)
+        asyncio.create_task(_telemetry.record_interaction(
+            telemetry_pool,
+            remitente=remitente, push_name=push_name, texto=texto,
+            es_audio=es_audio, respuesta=None,
+            cacheable=False, cache_hit=False, faq_hit=False,
+            error_code=error_code, rag_duration_ms=None,
+            send_duration_ms=None, total_duration_ms=total_duration_ms,
+        ))
 
 
 async def _notificar_error(wa_client, remitente: str, error: AppError, *, instance_name: str):

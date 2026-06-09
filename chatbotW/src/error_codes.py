@@ -52,6 +52,9 @@ class ErrorCode(str, Enum):
     FAQ_WRITE_FAILED = "E-FAQ-002"
     FAQ_NOT_FOUND = "E-FAQ-003"
 
+    # Telemetry errors (E-TEL)
+    TELEMETRY_DB_ERROR = "E-TEL-001"
+
     @property
     def user_message(self) -> str:
         return _USER_MESSAGES[self]
@@ -83,6 +86,7 @@ _USER_MESSAGES = {
     ErrorCode.FAQ_INVALID_DATA: "Datos inválidos para la FAQ.",
     ErrorCode.FAQ_WRITE_FAILED: "No se pudo guardar la FAQ en disco.",
     ErrorCode.FAQ_NOT_FOUND: "FAQ no encontrada.",
+    ErrorCode.TELEMETRY_DB_ERROR: "Error en el sistema de telemetría.",
 }
 
 _HTTP_STATUSES = {
@@ -98,4 +102,5 @@ _HTTP_STATUSES = {
     ErrorCode.FAQ_INVALID_DATA: 400,
     ErrorCode.FAQ_WRITE_FAILED: 500,
     ErrorCode.FAQ_NOT_FOUND: 404,
+    ErrorCode.TELEMETRY_DB_ERROR: 503,
 }

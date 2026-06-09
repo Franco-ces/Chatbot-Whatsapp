@@ -15,6 +15,10 @@ services:
       # faq_paths.py y ConfigManager resuelvan las mismas rutas.
       FAQS_VOLUME_MOUNT: /app/faqs_data
       CONFIG_BOT_PATH: /app/config_data/config_bot.json
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: evolution_postgres
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
@@ -27,6 +31,9 @@ services:
       - faq_data:/app/faqs_data
     networks:
       - backend
+    depends_on:
+      evolution_postgres:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -57,6 +64,9 @@ services:
       - ./.env:/app/.env
     networks:
       - backend
+    depends_on:
+      evolution_postgres:
+        condition: service_healthy
     deploy:
       resources:
         limits:

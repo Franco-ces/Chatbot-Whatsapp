@@ -38,6 +38,7 @@ from sesionLoggerManager import SessionManager
 from health import run_health_probes
 from instance_watcher import InstanceWatcher
 from paths import CONFIG_FILE, ENV_FILE
+import telemetry
 
 rag = None
 wa_client = None
@@ -191,6 +192,9 @@ async def lifespan(app: FastAPI):
     initial_name = instance_watcher.get_active_name() or instance
     logger.info("InstanceWatcher inicializado", active_instance_name=initial_name)
 
+    # Inicializar pool de telemetría
+    await telemetry.init_pool()
+
     # Arrancamos el loop de limpieza de sesiones expiradas
     task = asyncio.create_task(cleanup_loop())
 
@@ -244,6 +248,9 @@ async def lifespan(app: FastAPI):
 
     if session_manager:
         session_manager.limpiar_sesiones_expiradas()
+
+    # Cerrar pool de telemetría
+    await telemetry.close_pool()
 
     logger.info("Apagando servidor y liberando recursos...")
 
@@ -371,6 +378,7 @@ async def webhook(request: Request, payload: EvolutionWebhook):
                 session_manager=session_manager,
                 push_name=push_name,
                 instance_name=instance_name,
+                telemetry_pool=telemetry._pool,
             )
         )
 

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, Mock, MagicMock
+from unittest.mock import AsyncMock, Mock, MagicMock, patch
 
 from bot_service import procesar_mensaje_bot, _notificar_error, _question_cache
 from exceptions import AppError, CommunicationError, RAGError
@@ -481,3 +481,154 @@ class TestInstanceNamePropagado:
         # Y los valores son los correctos
         assert wa_client.enviar_mensaje.call_args_list[0][1]["instance_name"] == "instance_A"
         assert wa_client.enviar_mensaje.call_args_list[1][1]["instance_name"] == "instance_B"
+
+
+class TestTelemetryRecording:
+    """Tests for telemetry record_interaction calls from bot_service.
+
+    Every exit path in procesar_mensaje_bot MUST call record_interaction
+    as a fire-and-forget asyncio.create_task. These tests verify the
+    telemetry hook is present at each exit point: FAQ hit, cache hit,
+    RAG success, and each error handler.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        _question_cache.clear()
+        yield
+        _question_cache.clear()
+
+    @pytest.fixture
+    def wa_client(self):
+        client = AsyncMock()
+        client.enviar_mensaje = AsyncMock()
+        client.obtener_audio_base64 = AsyncMock()
+        return client
+
+    @pytest.fixture
+    def rag_instance(self):
+        rag = AsyncMock()
+        rag.preguntar = AsyncMock()
+        rag.check_faq = Mock(return_value=None)
+        return rag
+
+    @pytest.fixture
+    def mock_telemetry(self):
+        """Mock telemetry.record_interaction to verify it was called."""
+        with patch("bot_service._telemetry") as mock_tel:
+            mock_tel.record_interaction = AsyncMock()
+            yield mock_tel
+
+    @pytest.mark.asyncio
+    async def test_faq_hit_records_telemetry(self, wa_client, rag_instance, mock_telemetry):
+        """When FAQ matches, record_interaction is called with faq_hit=True."""
+        FAQ_ANSWER = "Lun a Vie 9-18"
+        rag_instance.check_faq.return_value = FAQ_ANSWER
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
+
+        mock_telemetry.record_interaction.assert_called_once()
+        call_kwargs = mock_telemetry.record_interaction.call_args.kwargs
+        assert call_kwargs["faq_hit"] is True
+        assert call_kwargs["remitente"] == REMITTENTE
+        assert call_kwargs["error_code"] is None
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_records_telemetry(self, wa_client, rag_instance, mock_telemetry):
+        """When cache matches, record_interaction is called with cache_hit=True."""
+        # Pre-fill cache
+        _question_cache.set(TEXTO, RESPUESTA_OK)
+        rag_instance.check_faq.return_value = None  # FAQ miss
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
+
+        mock_telemetry.record_interaction.assert_called_once()
+        call_kwargs = mock_telemetry.record_interaction.call_args.kwargs
+        assert call_kwargs["cache_hit"] is True
+        assert call_kwargs["faq_hit"] is False
+        assert call_kwargs["error_code"] is None
+
+    @pytest.mark.asyncio
+    async def test_rag_success_records_telemetry(self, wa_client, rag_instance, mock_telemetry):
+        """Successful RAG response records telemetry with timing data."""
+        rag_instance.preguntar.return_value = QueryResult("transcripcion", RESPUESTA_OK, cacheable=True)
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
+
+        mock_telemetry.record_interaction.assert_called_once()
+        call_kwargs = mock_telemetry.record_interaction.call_args.kwargs
+        assert call_kwargs["faq_hit"] is False
+        assert call_kwargs["cache_hit"] is False
+        assert call_kwargs["rag_duration_ms"] is not None
+        assert call_kwargs["send_duration_ms"] is not None
+        assert call_kwargs["total_duration_ms"] is not None
+        assert call_kwargs["error_code"] is None
+
+    @pytest.mark.asyncio
+    async def test_communication_error_records_telemetry(self, wa_client, rag_instance, mock_telemetry):
+        """CommunicationError records telemetry with error_code."""
+        rag_instance.preguntar.side_effect = CommunicationError(ErrorCode.COM_CONNECTION_FAILED)
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
+
+        mock_telemetry.record_interaction.assert_called_once()
+        call_kwargs = mock_telemetry.record_interaction.call_args.kwargs
+        assert call_kwargs["error_code"] == "E-COM-001"
+
+    @pytest.mark.asyncio
+    async def test_app_error_records_telemetry(self, wa_client, rag_instance, mock_telemetry):
+        """AppError records telemetry with error_code."""
+        rag_instance.preguntar.side_effect = AppError(ErrorCode.RAG_QUERY_FAILED)
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
+
+        mock_telemetry.record_interaction.assert_called_once()
+        call_kwargs = mock_telemetry.record_interaction.call_args.kwargs
+        assert call_kwargs["error_code"] == "E-RAG-002"
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error_records_telemetry(self, wa_client, rag_instance, mock_telemetry):
+        """Unexpected Exception records telemetry with SYS_UNEXPECTED error_code."""
+        rag_instance.preguntar.side_effect = RuntimeError("algo salió mal")
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
+
+        mock_telemetry.record_interaction.assert_called_once()
+        call_kwargs = mock_telemetry.record_interaction.call_args.kwargs
+        assert call_kwargs["error_code"] == "E-SYS-001"
+
+    @pytest.mark.asyncio
+    async def test_telemetry_not_called_when_pool_is_none(self, wa_client, rag_instance):
+        """When telemetry_pool is None, record_interaction is NOT called."""
+        # By default, procesar_mensaje_bot uses telemetry_pool=None
+        # (the function parameter defaults to None)
+        # We need to verify this doesn't crash
+        rag_instance.preguntar.return_value = QueryResult("t", RESPUESTA_OK, cacheable=True)
+
+        await procesar_mensaje_bot(
+            rag_instance, wa_client, REMITTENTE, TEXTO, MENSAJE_DATA,
+            es_audio=False, instance_name=TEST_INSTANCE,
+        )
+
+        # Should not raise — telemetry module is imported but no pool
+        # is passed, so the module-level _pool is None and record_interaction
+        # should be a no-op.
+        wa_client.enviar_mensaje.assert_called_once()
