@@ -8,7 +8,7 @@ import uvicorn
 import os
 import shutil
 from pathlib import Path
-from typing import List
+from typing import List, Any
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -119,7 +119,8 @@ if not WEBHOOK_SECRET:
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
 
-EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/", "/api/reload-rag"}
+EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/", "/api/reload-rag",
+                  "/api/reportes/tipos", "/api/reportes/generar"}
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -976,6 +977,47 @@ async def get_telemetry_summary(days: int = 7):
     except Exception as e:
         logger.error("Telemetry summary failed", detail=str(e))
         raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+# ────────────────────────────────────────────────────────────────────────
+
+# ─── Report Engine Endpoints ───────────────────────────────────────────
+from report_generator import listar_tipos, generar_reporte
+
+
+class GenerarReporteRequest(BaseModel):
+    tipo: str
+    parametros: dict[str, Any] = {}
+
+
+@app.get("/api/reportes/tipos")
+async def reportes_listar_tipos():
+    """Lista los tipos de informe disponibles."""
+    return {"tipos": listar_tipos()}
+
+
+@app.post("/api/reportes/generar")
+async def reportes_generar(req: GenerarReporteRequest):
+    """Genera un PDF y lo devuelve como descarga."""
+    pool = telemetry._pool
+    if not pool:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail="Base de datos no disponible")
+
+    try:
+        pdf_bytes = await generar_reporte(req.tipo, pool, req.parametros)
+    except ValueError as e:
+        # Map validation errors to appropriate API errors
+        msg = str(e)
+        if "no encontrado" in msg:
+            raise AppError(ErrorCode.API_NOT_FOUND, detail=msg)
+        raise AppError(ErrorCode.API_INVALID_PAYLOAD, detail=msg)
+    except Exception as e:
+        logger.error("Report generation failed", detail=str(e))
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="reporte_{req.tipo}.pdf"'},
+    )
 # ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
