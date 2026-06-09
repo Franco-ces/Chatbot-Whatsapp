@@ -43,6 +43,12 @@ document.addEventListener('alpine:init', () => {
 
         // FAQs state
         faqs: [],
+
+        // Dashboard state
+        telemetryData: null,
+        telemetryLoading: false,
+        telemetryError: '',
+        charts: [],
         faqForm: {
             open: false,
             editId: null,
@@ -63,6 +69,8 @@ document.addEventListener('alpine:init', () => {
                 if (val === 'docs') { this.loadPdfs(); this.loadCsvs(); }
                 if (val === 'faqs') this.loadFaqs();
                 if (val === 'logs') { this.loadLogs(); this.searchQuery = ''; }
+                if (val === 'dashboard') this.loadTelemetry();
+                if (val !== 'dashboard') this.destroyCharts();
             });
             this.$nextTick(() => {
                 this.loadContactConfig();
@@ -539,6 +547,78 @@ document.addEventListener('alpine:init', () => {
             } catch (err) {
                 window.showToast('Error de conexión al eliminar', 'error');
             }
+        },
+
+        // --- DASHBOARD ---
+        async loadTelemetry() {
+            this.destroyCharts();
+            this.telemetryLoading = true;
+            this.telemetryError = '';
+            this.telemetryData = null;
+            try {
+                const res = await apiFetch('/api/telemetry/summary?days=7');
+                const json = await res.json();
+                if (json.status !== 'success') throw new Error(json.message);
+                this.telemetryData = json.data;
+                this.$nextTick(() => this.initCharts());
+            } catch (e) {
+                this.telemetryError = 'Error al cargar el dashboard';
+            } finally {
+                this.telemetryLoading = false;
+            }
+        },
+
+        initCharts() {
+            this.destroyCharts();
+            if (!window.Chart || !this.telemetryData) return;
+            const data = this.telemetryData;
+
+            Chart.defaults.font.family = "'Inter', sans-serif";
+
+            // Messages per day bar chart
+            this.charts.push(new Chart(this.$refs.chartMessages, {
+                type: 'bar',
+                data: {
+                    labels: data.messages_by_day.map(d => d.date.slice(5)),
+                    datasets: [{ label: 'Mensajes', data: data.messages_by_day.map(d => d.count), backgroundColor: '#3B82F6' }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            }));
+
+            // Error rate doughnut
+            this.charts.push(new Chart(this.$refs.chartErrors, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Éxito', 'Error'],
+                    datasets: [{ data: [data.total_messages - data.total_errors, data.total_errors], backgroundColor: ['#22C55E', '#EF4444'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' } } }
+            }));
+
+            // Avg durations bar chart
+            this.charts.push(new Chart(this.$refs.chartDurations, {
+                type: 'bar',
+                data: {
+                    labels: ['RAG', 'Envío', 'Total'],
+                    datasets: [{ label: 'ms', data: [data.avg_rag_duration_ms, data.avg_send_duration_ms, data.avg_total_duration_ms], backgroundColor: ['#F59E0B', '#3B82F6', '#8B5CF6'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            }));
+
+            // Source distribution doughnut
+            this.charts.push(new Chart(this.$refs.chartSources, {
+                type: 'doughnut',
+                data: {
+                    labels: ['FAQ', 'Cache', 'RAG / Generación'],
+                    datasets: [{ data: [data.total_faq_hits, data.total_cache_hits, data.total_messages - data.total_faq_hits - data.total_cache_hits], backgroundColor: ['#06B6D4', '#F59E0B', '#3B82F6'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' } } }
+            }));
+        },
+
+        destroyCharts() {
+            this.charts.forEach(c => c.destroy());
+            this.charts = [];
         },
     }));
 });

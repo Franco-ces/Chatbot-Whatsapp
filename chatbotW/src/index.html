@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -105,6 +106,7 @@
                     <button @click="switchTab('docs')" :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-folder-open mr-1.5"></i> Documentos</button>
                     <button @click="switchTab('faqs')" :class="activeTab === 'faqs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-circle-question mr-1.5"></i> FAQs</button>
                     <button @click="switchTab('instances')" :class="activeTab === 'instances' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-satellite-dish mr-1.5"></i> Instancias</button>
+                    <button @click="switchTab('dashboard')" :class="activeTab === 'dashboard' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-chart-pie mr-1.5"></i> Dashboard</button>
                     <button @click="switchTab('logs')" :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-scroll mr-1.5"></i> Logs</button>
                 </div>
 
@@ -578,6 +580,60 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- ─── TAB: Dashboard ─── -->
+                <div x-show="activeTab === 'dashboard'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold text-gray-800"><i class="fas fa-chart-pie text-blue-500 mr-2"></i> Dashboard</h2>
+                        <button @click="loadTelemetry()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200"><i class="fas fa-rotate-right mr-1"></i> Actualizar</button>
+                    </div>
+
+                    <!-- Loading -->
+                    <div x-show="telemetryLoading" class="text-center py-12 text-gray-500">
+                        <i class="fas fa-spinner fa-spin mr-2"></i> Cargando datos...
+                    </div>
+
+                    <!-- Error -->
+                    <div x-show="telemetryError" class="text-center py-12 text-red-600 font-medium">Error al cargar el dashboard</div>
+
+                    <!-- Empty state -->
+                    <div x-show="!telemetryLoading && !telemetryError && telemetryData && telemetryData.total_messages === 0" class="text-center py-12 text-gray-400">
+                        <i class="fas fa-chart-simple text-4xl mb-3"></i><br>Sin datos aún
+                    </div>
+
+                    <!-- Content -->
+                    <template x-if="telemetryData && telemetryData.total_messages > 0">
+                        <div>
+                            <!-- 4 metric cards -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-center">
+                                    <p class="text-xs text-blue-600 uppercase font-semibold tracking-wide">Mensajes</p>
+                                    <p class="text-2xl font-bold text-blue-800 mt-1" x-text="telemetryData.total_messages"></p>
+                                </div>
+                                <div class="bg-red-50 border border-red-100 rounded-xl p-4 text-center">
+                                    <p class="text-xs text-red-600 uppercase font-semibold tracking-wide">Errores</p>
+                                    <p class="text-2xl font-bold text-red-800 mt-1" x-text="telemetryData.total_errors"></p>
+                                </div>
+                                <div class="bg-green-50 border border-green-100 rounded-xl p-4 text-center">
+                                    <p class="text-xs text-green-600 uppercase font-semibold tracking-wide">Tiempo Prom.</p>
+                                    <p class="text-2xl font-bold text-green-800 mt-1" x-text="telemetryData.avg_total_duration_ms + 'ms'"></p>
+                                </div>
+                                <div class="bg-purple-50 border border-purple-100 rounded-xl p-4 text-center">
+                                    <p class="text-xs text-purple-600 uppercase font-semibold tracking-wide">Tasa Error</p>
+                                    <p class="text-2xl font-bold text-purple-800 mt-1" x-text="telemetryData.error_rate + '%'"></p>
+                                </div>
+                            </div>
+
+                            <!-- Charts 2x2 grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><canvas x-ref="chartMessages" class="h-64 w-full"></canvas></div>
+                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><canvas x-ref="chartErrors" class="h-64 w-full"></canvas></div>
+                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><canvas x-ref="chartDurations" class="h-64 w-full"></canvas></div>
+                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><canvas x-ref="chartSources" class="h-64 w-full"></canvas></div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
