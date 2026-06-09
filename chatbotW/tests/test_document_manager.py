@@ -53,6 +53,44 @@ class TestDocumentManagerConstructor:
             assert dm.cache is mock_cache_cls.return_value
 
 
+class TestDocumentManagerEmbeddingsModel:
+    """Verifica que DocumentManager lea el modelo de embeddings desde ConfigManager."""
+
+    def test_constructor_reads_gemini_embeddings_model_from_config(self):
+        """Config con gemini_embeddings_model → GoogleGenerativeAIEmbeddings llamado con ese modelo."""
+        from document_manager import DocumentManager
+
+        mock_cm = MagicMock()
+        mock_cm.config = {"gemini_embeddings_model": "models/gemini-embedding-001"}
+
+        with patch("document_manager.EmbeddingCache"), \
+             patch("document_manager.GoogleGenerativeAIEmbeddings") as mock_emb_cls, \
+             patch("document_manager.ConfigManager", return_value=mock_cm):
+            dm = DocumentManager("test-key")
+
+            mock_emb_cls.assert_called_once_with(
+                model="models/gemini-embedding-001",
+                google_api_key="test-key",
+            )
+
+    def test_default_embeddings_model_when_config_missing(self):
+        """Config sin gemini_embeddings_model → default models/gemini-embedding-2-preview."""
+        from document_manager import DocumentManager
+
+        mock_cm = MagicMock()
+        mock_cm.config = {"email": "x@y.com"}  # no gemini_embeddings_model
+
+        with patch("document_manager.EmbeddingCache"), \
+             patch("document_manager.GoogleGenerativeAIEmbeddings") as mock_emb_cls, \
+             patch("document_manager.ConfigManager", return_value=mock_cm):
+            dm = DocumentManager("test-key")
+
+            mock_emb_cls.assert_called_once_with(
+                model="models/gemini-embedding-2-preview",
+                google_api_key="test-key",
+            )
+
+
 class TestDocumentManagerRetrieverSetup:
     """Tests for setup_retriever() behavior."""
 

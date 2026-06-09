@@ -71,6 +71,11 @@ class ConfigManager:
             # Es el campo que el instance_watcher (PR 3) relee via mtime para
             # hacer hot-swap de la WhatsAppClient sin reiniciar el contenedor.
             self.config.setdefault("active_instance_name", "")
+            # Modelo de Gemini para generacion (RAG) y transcripcion de audio.
+            # Audio comparte la misma key (no hay config separada).
+            self.config.setdefault("gemini_model", "gemini-3.1-flash-lite")
+            # Modelo de embeddings para FAISS index. Cambiar invalida el vectorstore.
+            self.config.setdefault("gemini_embeddings_model", "models/gemini-embedding-2-preview")
 
     def guardar(self, nuevo_email=None, nuevo_tel=None):
         """Actualiza los valores en memoria y los persiste en el disco."""

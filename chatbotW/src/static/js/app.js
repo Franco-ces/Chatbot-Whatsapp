@@ -29,6 +29,12 @@ document.addEventListener('alpine:init', () => {
         configStatus: '',
         configStatusClass: '',
 
+        // Gemini model config state
+        geminiModel: '',
+        geminiEmbeddingsModel: '',
+        geminiConfigStatus: '',
+        geminiConfigStatusClass: '',
+
         // Upload state
         pdfUploadStatus: '',
         pdfUploadStatusClass: '',
@@ -115,6 +121,10 @@ document.addEventListener('alpine:init', () => {
                     }
                 }
                 this.configPhoneNum = numeroSinCodigo;
+
+                // Load Gemini model config
+                this.geminiModel = data.gemini_model || '';
+                this.geminiEmbeddingsModel = data.gemini_embeddings_model || '';
             } catch (err) {
                 console.error("Error al cargar config", err);
             }
@@ -139,6 +149,28 @@ document.addEventListener('alpine:init', () => {
                 this.configStatus = "✕ Error al guardar datos";
                 this.configStatusClass = "mt-3 text-red-600 font-medium h-5";
                 window.showToast('Error al guardar datos', 'error');
+            }
+        },
+
+        // --- GEMINI MODEL CONFIG ---
+        async saveGeminiConfig() {
+            this.geminiConfigStatus = "⏳ Guardando...";
+            this.geminiConfigStatusClass = "mt-3 text-blue-500 text-sm font-medium h-5";
+
+            const formData = new FormData();
+            if (this.geminiModel) formData.append("gemini_model", this.geminiModel);
+            if (this.geminiEmbeddingsModel) formData.append("gemini_embeddings_model", this.geminiEmbeddingsModel);
+
+            try {
+                const res = await apiFetch('/api/config', { method: 'POST', body: formData });
+                const data = await res.json();
+                this.geminiConfigStatus = data.message;
+                this.geminiConfigStatusClass = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
+                window.showToast(data.message, data.status === "success" ? 'success' : 'error');
+            } catch (err) {
+                this.geminiConfigStatus = "✕ Error al guardar modelos";
+                this.geminiConfigStatusClass = "mt-3 text-red-600 font-medium h-5";
+                window.showToast('Error al guardar modelos', 'error');
             }
         },
 

@@ -18,6 +18,33 @@ def processor(mock_client):
     return AudioProcessor(mock_client)
 
 
+class TestAudioProcessorModelParam:
+    """Verifica que AudioProcessor acepte y use un modelo inyectado."""
+
+    def test_constructor_stores_model(self, mock_client):
+        """AudioProcessor(client, model='gemini-2.5-pro') → processor.model == 'gemini-2.5-pro'."""
+        proc = AudioProcessor(mock_client, model="gemini-2.5-pro")
+        assert proc.model == "gemini-2.5-pro"
+
+    def test_default_model_gemini_flash_lite(self, mock_client):
+        """AudioProcessor(client) → processor.model == 'gemini-3.1-flash-lite'."""
+        proc = AudioProcessor(mock_client)
+        assert proc.model == "gemini-3.1-flash-lite"
+
+    @pytest.mark.asyncio
+    async def test_extraer_transcripcion_uses_injected_model(self, mock_client):
+        """Verifica que generate_content se llama con el modelo inyectado."""
+        mock_response = MagicMock()
+        mock_response.text = "transcripcion"
+        mock_client.aio.models.generate_content.return_value = mock_response
+
+        proc = AudioProcessor(mock_client, model="gemini-2.5-pro")
+        await proc.extraer_transcripcion_memoria(b"audio-data")
+
+        call_kwargs = mock_client.aio.models.generate_content.call_args
+        assert call_kwargs[1]["model"] == "gemini-2.5-pro"
+
+
 class TestExtraerTranscripcionMemoria:
 
     @pytest.mark.asyncio

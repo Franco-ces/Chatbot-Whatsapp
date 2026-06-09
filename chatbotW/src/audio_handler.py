@@ -1,8 +1,9 @@
 from google.genai import types
 
 class AudioProcessor:
-    def __init__(self, client):
+    def __init__(self, client, model="gemini-3.1-flash-lite"):
         self.client = client
+        self.model = model
 
     async def extraer_transcripcion_memoria(self, audio_bytes: bytes, mime_type: str = "audio/ogg"):
         """
@@ -20,7 +21,7 @@ class AudioProcessor:
         
         # Enviamos los bytes a la API de Google sin haber tocado el disco local
         respuesta = await self.client.aio.models.generate_content(
-            model="gemini-3.1-flash-lite",
+            model=self.model,
             contents=[audio_part, "Transcribe textualmente la consulta de este audio de forma clara y directa."]
         )
         

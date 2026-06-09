@@ -15,6 +15,7 @@ import pytest
 
 JS_PATH = Path(__file__).resolve().parent.parent / "src" / "static" / "js" / "instances.js"
 HTML_PATH = Path(__file__).resolve().parent.parent / "src" / "index.html"
+APP_JS_PATH = Path(__file__).resolve().parent.parent / "src" / "static" / "js" / "app.js"
 
 
 @pytest.fixture
@@ -465,3 +466,62 @@ class TestLinkColumnLayout:
             assert icon in template_html, (
                 f"El kebab debe contener {icon}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Configurable Gemini Model: frontend tests
+# ---------------------------------------------------------------------------
+
+
+class TestGeminiModelInputs:
+    """Verifica que index.html contenga los inputs de Gemini model y app.js tenga la lógica."""
+
+    def test_index_html_has_generation_model_input(self, html_content):
+        """index.html debe contener un input con id='geminiModelInput'."""
+        assert 'id="geminiModelInput"' in html_content, (
+            "index.html debe contener un input con id='geminiModelInput'"
+        )
+
+    def test_index_html_has_embeddings_model_input(self, html_content):
+        """index.html debe contener un input con id='geminiEmbeddingsInput'."""
+        assert 'id="geminiEmbeddingsInput"' in html_content, (
+            "index.html debe contener un input con id='geminiEmbeddingsInput'"
+        )
+
+    def test_index_html_has_generation_model_label(self, html_content):
+        """index.html debe tener un label 'Modelo de generación' asociado al input de generación."""
+        assert 'Modelo de generación' in html_content or 'Modelo de generacion' in html_content, (
+            "index.html debe contener el label 'Modelo de generación'"
+        )
+
+    def test_index_html_has_embeddings_model_label(self, html_content):
+        """index.html debe tener un label 'Modelo de embeddings' asociado al input de embeddings."""
+        assert 'Modelo de embeddings' in html_content, (
+            "index.html debe contener el label 'Modelo de embeddings'"
+        )
+
+    def test_index_html_has_generation_model_warning(self, html_content):
+        """index.html debe contener un warning badge sobre rate limits/costos para el modelo de generación."""
+        assert 'rate limit' in html_content.lower() or 'costo' in html_content.lower() or 'calidad' in html_content.lower(), (
+            "index.html debe contener un warning sobre rate limits, costos o calidad para el modelo de generación"
+        )
+
+    def test_index_html_has_embeddings_model_critical_warning(self, html_content):
+        """index.html debe contener un warning CRITICAL sobre invalidación del vectorstore para embeddings."""
+        assert 'vectorstore' in html_content.lower() or 'reindexar' in html_content.lower() or 'reindex' in html_content.lower(), (
+            "index.html debe contener un warning CRITICAL sobre invalidación del vectorstore para embeddings"
+        )
+
+    def test_app_js_has_gemini_model_state(self):
+        """app.js debe contener la variable de estado geminiModel."""
+        app_js = APP_JS_PATH.read_text(encoding="utf-8")
+        assert "geminiModel" in app_js, (
+            "app.js debe contener la variable de estado geminiModel"
+        )
+
+    def test_app_js_has_gemini_embeddings_model_state(self):
+        """app.js debe contener la variable de estado geminiEmbeddingsModel."""
+        app_js = APP_JS_PATH.read_text(encoding="utf-8")
+        assert "geminiEmbeddingsModel" in app_js, (
+            "app.js debe contener la variable de estado geminiEmbeddingsModel"
+        )

@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 import secrets
 import csv
 import json
+import re
 import uuid
 from pydantic import BaseModel, Field
 
@@ -203,10 +204,47 @@ async def obtener_config():
     return config_manager.config
 
 @app.post("/api/config")
-async def guardar_config(email: str = Form(None), telefono: str = Form(None)):
+async def guardar_config(
+    email: str = Form(None),
+    telefono: str = Form(None),
+    gemini_model: str = Form(None),
+    gemini_embeddings_model: str = Form(None),
+):
     try:
+        # Validar gemini_model si se provee
+        if gemini_model is not None:
+            gemini_model = gemini_model.strip()
+            if not gemini_model:
+                raise APIError(
+                    ErrorCode.API_INVALID_PAYLOAD,
+                    detail="gemini_model no puede estar vacío",
+                )
+            if not re.match(r"^[A-Za-z0-9/.\-]+$", gemini_model):
+                raise APIError(
+                    ErrorCode.API_INVALID_PAYLOAD,
+                    detail="gemini_model contiene caracteres inválidos",
+                )
+            config_manager.config["gemini_model"] = gemini_model
+
+        # Validar gemini_embeddings_model si se provee
+        if gemini_embeddings_model is not None:
+            gemini_embeddings_model = gemini_embeddings_model.strip()
+            if not gemini_embeddings_model:
+                raise APIError(
+                    ErrorCode.API_INVALID_PAYLOAD,
+                    detail="gemini_embeddings_model no puede estar vacío",
+                )
+            if not re.match(r"^[A-Za-z0-9/.\-]+$", gemini_embeddings_model):
+                raise APIError(
+                    ErrorCode.API_INVALID_PAYLOAD,
+                    detail="gemini_embeddings_model contiene caracteres inválidos",
+                )
+            config_manager.config["gemini_embeddings_model"] = gemini_embeddings_model
+
         config_manager.guardar(nuevo_email=email, nuevo_tel=telefono)
         return {"status": "success", "message": "Datos de contacto actualizados"}
+    except APIError:
+        raise
     except Exception as e:
         raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
 # ---------------------------------------------------------

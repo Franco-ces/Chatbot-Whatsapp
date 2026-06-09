@@ -152,6 +152,28 @@
                         <button @click="saveContactConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Datos</button>
                     </div>
                     <p x-text="configStatus" :class="configStatusClass" class="mt-3 font-medium text-sm h-5"></p>
+
+                    <hr class="my-8 border-gray-100">
+
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800"><i class="fas fa-robot text-blue-500 mr-2"></i> Modelos de Gemini</h2>
+                    <p class="text-sm text-gray-500 mb-6">Configurá los modelos de IA que usa el bot. Los valores por defecto funcionan bien para la mayoría de los casos.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Modelo de generación</label>
+                            <input type="text" id="geminiModelInput" x-model="geminiModel" placeholder="gemini-3.1-flash-lite" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                            <p class="text-xs text-yellow-600 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i> Los rate limits, costos y calidad de respuesta pueden variar según el modelo.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Modelo de embeddings</label>
+                            <input type="text" id="geminiEmbeddingsInput" x-model="geminiEmbeddingsModel" placeholder="models/gemini-embedding-2-preview" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                            <p class="text-xs text-red-600 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i> <strong>CRÍTICO:</strong> Cambiar este modelo invalida el vectorstore. Deberás reindexar todos los documentos.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 mt-6">
+                        <button @click="saveGeminiConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Modelos</button>
+                    </div>
+                    <p x-text="geminiConfigStatus" :class="geminiConfigStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                 </div>
 
                 <!-- ─── TAB: Documentos ─── -->

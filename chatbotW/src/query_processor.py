@@ -62,8 +62,14 @@ class QueryProcessor:
         # Cliente Gemini
         self.client = genai.Client(api_key=self.api_key)
 
-        # Procesador de audio
-        self.audio_processor = AudioProcessor(self.client)
+        # Gestión de configuración (email, teléfono, modelo Gemini)
+        self.config_manager = ConfigManager()
+
+        # Procesador de audio — modelo configurable desde config
+        self.audio_processor = AudioProcessor(
+            self.client,
+            model=self.config_manager.config.get("gemini_model", "gemini-3.1-flash-lite"),
+        )
 
         # LLM auxiliar para Guardrails con Langchain
         self.llm_guardrail = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", google_api_key=self.api_key)
@@ -154,6 +160,7 @@ class QueryProcessor:
 
         # lee el disco por si la interfaz cambió algo
         self.config_manager.cargar()
+        model_name = self.config_manager.config.get("gemini_model", "gemini-3.1-flash-lite")
 
         # Preparamos las instrucciones de sistema pasándole el contexto unificado
         instrucciones_sistema = self.prompt_template.format(
@@ -172,7 +179,7 @@ class QueryProcessor:
         contenidos_gemini.append(mensaje_usuario)
 
         response = await self.client.aio.models.generate_content(
-            model="gemini-3.1-flash-lite",
+            model=model_name,
             contents=contenidos_gemini,
             config=types.GenerateContentConfig(
                 system_instruction=instrucciones_sistema

@@ -17,13 +17,22 @@ class TestQueryProcessorConstructor:
              patch("query_processor.ChatGoogleGenerativeAI") as mock_llm_cls, \
              patch("query_processor.ConfigManager") as mock_cfg_cls:
 
+            # ConfigManager returns config with gemini_model key
+            cfg_instance = mock_cfg_cls.return_value
+            cfg_instance.config = {
+                "email": "test@test.com",
+                "telefono": "123",
+                "gemini_model": "gemini-2.5-pro",
+            }
+
             from query_processor import QueryProcessor
             qp = QueryProcessor("test-key")
 
             mock_genai_cls.assert_called_once_with(api_key="test-key")
-            mock_audio_cls.assert_called_once_with(mock_genai_cls.return_value)
+            mock_audio_cls.assert_called_once_with(
+                mock_genai_cls.return_value, model="gemini-2.5-pro"
+            )
             mock_llm_cls.assert_called_once_with(model="gemini-3.1-flash-lite", google_api_key="test-key")
-            mock_cfg_cls.assert_called_once()
             assert qp.prompt_template is not None
 
 
@@ -306,6 +315,35 @@ class TestQueryProcessorProcesar:
             call_args = genai_client.aio.models.generate_content.call_args
             config = call_args[1].get("config") or call_args.kwargs.get("config")
             assert "Sin historial previo." in config.system_instruction
+
+    @pytest.mark.asyncio
+    async def test_procesar_uses_config_model_for_generate_content(self, mock_qp):
+        """Config con gemini_model='gemini-2.5-pro' → generate_content llamado con ese modelo."""
+        qp, genai_client = mock_qp
+        # Setear el modelo en config
+        qp.config_manager.config["gemini_model"] = "gemini-2.5-pro"
+
+        mock_retriever = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = "respuesta"
+        genai_client.aio.models.generate_content.return_value = mock_response
+
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+             patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
+             patch("pathlib.Path.exists", return_value=False):
+            await qp.procesar(
+                query_text="test",
+                audio_bytes=None,
+                retriever=mock_retriever,
+                folder_path=Path("/tmp/test"),
+                remitente="test",
+                session_manager=None
+            )
+
+            call_kwargs = genai_client.aio.models.generate_content.call_args
+            model_used = call_kwargs[1]["model"] if "model" in call_kwargs[1] else call_kwargs.kwargs.get("model")
+            assert model_used == "gemini-2.5-pro"
 
     @pytest.mark.asyncio
     async def test_config_reloaded_each_query(self, mock_qp):

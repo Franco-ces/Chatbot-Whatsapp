@@ -11,6 +11,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # Recursos locales
 from vectorstore_manager import VectorStoreManager
 from embedding_cache import EmbeddingCache
+from ConfigManager import ConfigManager
 from exceptions import RAGError
 from error_codes import ErrorCode
 from logging_config import get_logger
@@ -33,9 +34,13 @@ class DocumentManager:
         # Cache de embeddings para evitar llamadas redundantes
         self.cache = EmbeddingCache()
 
-        # Modelo de embeddings de Google
+        # Modelo de embeddings de Google — configurable desde config_bot.json
+        config_manager = ConfigManager()
+        embeddings_model_name = config_manager.config.get(
+            "gemini_embeddings_model", "models/gemini-embedding-2-preview"
+        )
         self.embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-2-preview",
+            model=embeddings_model_name,
             google_api_key=self.api_key
         )
 

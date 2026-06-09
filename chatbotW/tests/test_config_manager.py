@@ -89,6 +89,50 @@ def test_cargar_re_aplica_default_si_falta(fresh_config):
 
 
 # ---------------------------------------------------------------------------
+# Configurable Gemini Model: defaults for gemini_model and gemini_embeddings_model
+# ---------------------------------------------------------------------------
+
+
+class TestGeminiModelConfigDefaults:
+    """Verifica que ConfigManager.agregue defaults para gemini_model y
+    gemini_embeddings_model cuando faltan en config_bot.json."""
+
+    def test_default_gemini_model_when_missing(self, fresh_config):
+        """Config sin gemini_model → setdefault asigna gemini-3.1-flash-lite."""
+        cfg_mod, target = fresh_config
+        target.write_text(json.dumps({"email": "x@y.com"}), encoding="utf-8")
+        cm = cfg_mod.ConfigManager()
+        assert cm.config["gemini_model"] == "gemini-3.1-flash-lite"
+
+    def test_default_gemini_embeddings_model_when_missing(self, fresh_config):
+        """Config sin gemini_embeddings_model → setdefault asigna models/gemini-embedding-2-preview."""
+        cfg_mod, target = fresh_config
+        target.write_text(json.dumps({"email": "x@y.com"}), encoding="utf-8")
+        cm = cfg_mod.ConfigManager()
+        assert cm.config["gemini_embeddings_model"] == "models/gemini-embedding-2-preview"
+
+    def test_custom_gemini_model_preserved(self, fresh_config):
+        """Config con gemini_model seteado → valor preservado."""
+        cfg_mod, target = fresh_config
+        target.write_text(json.dumps({
+            "email": "x@y.com",
+            "gemini_model": "gemini-2.5-pro",
+        }), encoding="utf-8")
+        cm = cfg_mod.ConfigManager()
+        assert cm.config["gemini_model"] == "gemini-2.5-pro"
+
+    def test_custom_gemini_embeddings_model_preserved(self, fresh_config):
+        """Config con gemini_embeddings_model seteado → valor preservado."""
+        cfg_mod, target = fresh_config
+        target.write_text(json.dumps({
+            "email": "x@y.com",
+            "gemini_embeddings_model": "models/gemini-embedding-001",
+        }), encoding="utf-8")
+        cm = cfg_mod.ConfigManager()
+        assert cm.config["gemini_embeddings_model"] == "models/gemini-embedding-001"
+
+
+# ---------------------------------------------------------------------------
 # Task 2.3 (PR 2): tests para `set_active_instance`
 # ---------------------------------------------------------------------------
 # Cobertura:
@@ -544,3 +588,66 @@ class TestConfigEndpointBotPhoneRemoved:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "success"
+
+
+# ---------------------------------------------------------------------------
+# Configurable Gemini Model: API endpoint validation tests
+# ---------------------------------------------------------------------------
+
+
+class TestGeminiModelConfigEndpoint:
+    """Verifica que POST /api/config acepte y valide gemini_model y gemini_embeddings_model."""
+
+    async def test_post_config_accepts_gemini_model_param(self, config_client, config_auth_token):
+        """POST con gemini_model válido → 200."""
+        import interface
+        from unittest.mock import patch
+        headers = {"Authorization": f"Bearer {config_auth_token}"}
+        with patch.object(interface.config_manager, "cargar"), \
+             patch.object(interface.config_manager, "config", {"email": "x@y.com"}), \
+             patch("json.dump"):
+            resp = await config_client.post(
+                "/api/config",
+                headers=headers,
+                data={"gemini_model": "gemini-2.5-pro"},
+            )
+        assert resp.status_code == 200
+
+    async def test_post_config_rejects_empty_gemini_model(self, config_client, config_auth_token):
+        """POST con gemini_model vacío (solo espacios) → 400."""
+        import interface
+        from unittest.mock import patch
+        headers = {"Authorization": f"Bearer {config_auth_token}"}
+        with patch.object(interface.config_manager, "config", {"email": "x@y.com"}):
+            resp = await config_client.post(
+                "/api/config",
+                headers=headers,
+                data={"gemini_model": "  "},
+            )
+        assert resp.status_code == 400
+
+    async def test_post_config_rejects_invalid_gemini_model_chars(self, config_client, config_auth_token):
+        """POST con gemini_model con caracteres inválidos → 400."""
+        import interface
+        from unittest.mock import patch
+        headers = {"Authorization": f"Bearer {config_auth_token}"}
+        with patch.object(interface.config_manager, "config", {"email": "x@y.com"}):
+            resp = await config_client.post(
+                "/api/config",
+                headers=headers,
+                data={"gemini_model": "@model!"},
+            )
+        assert resp.status_code == 400
+
+    async def test_post_config_rejects_empty_gemini_embeddings_model(self, config_client, config_auth_token):
+        """POST con gemini_embeddings_model vacío (solo espacios) → 400."""
+        import interface
+        from unittest.mock import patch
+        headers = {"Authorization": f"Bearer {config_auth_token}"}
+        with patch.object(interface.config_manager, "config", {"email": "x@y.com"}):
+            resp = await config_client.post(
+                "/api/config",
+                headers=headers,
+                data={"gemini_embeddings_model": "  "},
+            )
+        assert resp.status_code == 400
