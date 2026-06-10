@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 from typing import List, Any
 from jose import jwt, JWTError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time, date
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from fastapi.responses import JSONResponse
@@ -993,6 +993,216 @@ async def reportes_listar_tipos():
     """Lista los tipos de informe disponibles."""
     return {"tipos": listar_tipos()}
 
+
+# ────────────────────────────────────────────────────────────────────────
+
+# ─── Scheduled Report Endpoints ────────────────────────────────────────
+
+def _serialize_schedule(row: dict) -> dict:
+    """Convierte tipos de PostgreSQL a JSON-serializable.
+    time → "HH:MM", date/timestamptz → ISO string."""
+    result = {}
+    for k, v in row.items():
+        if isinstance(v, time):
+            result[k] = v.strftime("%H:%M")
+        elif isinstance(v, (datetime, date)):
+            result[k] = v.isoformat()
+        elif isinstance(v, date):
+            result[k] = v.isoformat()
+        else:
+            result[k] = v
+    return result
+
+@app.get("/api/reportes/schedules")
+async def listar_schedules():
+    """Lista todos los schedules ordenados por hora_envio."""
+    pool = telemetry._pool
+    if not pool:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail="Base de datos no disponible")
+
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM telemetry.report_schedules ORDER BY hora_envio ASC"
+            )
+        return [_serialize_schedule(dict(r)) for r in rows]
+    except Exception as e:
+        logger.error("Error listing schedules", detail=str(e))
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+
+
+class ScheduleCreateRequest(BaseModel):
+    tipo: str
+    parametros: dict[str, Any] = {}
+    hora_envio: str  # HH:MM format
+    destino: str
+    header_text: str | None = None
+    footer_text: str | None = None
+
+
+@app.post("/api/reportes/schedules", status_code=201)
+async def crear_schedule(req: ScheduleCreateRequest):
+    """Crea un nuevo schedule de informe programado."""
+    pool = telemetry._pool
+    if not pool:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail="Base de datos no disponible")
+
+    # Validate tipo against registered report types
+    tipos = listar_tipos()
+    valid_ids = {t["id"] for t in tipos}
+    if req.tipo not in valid_ids:
+        raise AppError(ErrorCode.API_INVALID_PAYLOAD, detail=f"Tipo de reporte no válido: '{req.tipo}'")
+
+    # Validate required parametros for this tipo
+    tipo_info = next(t for t in tipos if t["id"] == req.tipo)
+    for p in tipo_info.get("parametros", []):
+        if p.get("requerido", True) and p["key"] not in req.parametros:
+            raise AppError(
+                ErrorCode.API_INVALID_PAYLOAD,
+                detail=f"Parámetro requerido para '{req.tipo}': {p['key']}"
+            )
+
+    # Validate hora_envio format (HH:MM)
+    import re
+    if not re.match(r"^\d{2}:\d{2}$", req.hora_envio):
+        raise AppError(ErrorCode.API_INVALID_PAYLOAD, detail="Formato de hora inválido. Use HH:MM")
+
+    # Convert string "HH:MM" to datetime.time for asyncpg
+    horas, minutos = map(int, req.hora_envio.split(":"))
+    hora_obj = time(horas, minutos)
+
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """INSERT INTO telemetry.report_schedules (tipo, parametros, hora_envio, destino, header_text, footer_text)
+                   VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
+                req.tipo,
+                json.dumps(req.parametros) if isinstance(req.parametros, dict) else req.parametros,
+                hora_obj,
+                req.destino,
+                req.header_text,
+                req.footer_text,
+            )
+        return _serialize_schedule(dict(row))
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error("Error creating schedule", detail=str(e))
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+
+
+@app.put("/api/reportes/schedules/{schedule_id}")
+async def actualizar_schedule(schedule_id: int, req: dict):
+    """Actualiza un schedule existente."""
+    pool = telemetry._pool
+    if not pool:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail="Base de datos no disponible")
+
+    # Validate tipo if provided
+    if "tipo" in req:
+        tipos = listar_tipos()
+        valid_ids = {t["id"] for t in tipos}
+        if req["tipo"] not in valid_ids:
+            raise AppError(ErrorCode.API_INVALID_PAYLOAD, detail=f"Tipo de reporte no válido: '{req['tipo']}'")
+
+    # Validate hora_envio format if provided
+    if "hora_envio" in req:
+        if not re.match(r"^\d{2}:\d{2}$", str(req["hora_envio"])):
+            raise AppError(ErrorCode.API_INVALID_PAYLOAD, detail="Formato de hora inválido. Use HH:MM")
+        # Convert to time object for asyncpg
+        horas, minutos = map(int, req["hora_envio"].split(":"))
+        req["hora_envio"] = time(horas, minutos)
+
+    # Build dynamic UPDATE
+    allowed_fields = {"tipo", "parametros", "hora_envio", "destino", "header_text", "footer_text", "activo"}
+    updates = {k: v for k, v in req.items() if k in allowed_fields}
+    if not updates:
+        raise AppError(ErrorCode.API_INVALID_PAYLOAD, detail="No hay campos para actualizar")
+
+    # Convert parametros to JSON string if it's a dict
+    if "parametros" in updates and isinstance(updates["parametros"], dict):
+        updates["parametros"] = json.dumps(updates["parametros"])
+
+    set_clauses = []
+    values = []
+    idx = 1
+    for key, val in updates.items():
+        if key == "parametros":
+            set_clauses.append(f"{key} = ${idx}::jsonb")
+        else:
+            set_clauses.append(f"{key} = ${idx}")
+        values.append(val)
+        idx += 1
+
+    set_clauses.append("updated_at = NOW()")
+    values.append(schedule_id)
+
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"""UPDATE telemetry.report_schedules SET {', '.join(set_clauses)}
+                WHERE id = ${idx} RETURNING *""",
+                *values
+            )
+        if not row:
+            raise AppError(ErrorCode.API_NOT_FOUND, detail=f"Schedule {schedule_id} no encontrado")
+        return _serialize_schedule(dict(row))
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error("Error updating schedule", detail=str(e))
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+
+
+@app.delete("/api/reportes/schedules/{schedule_id}")
+async def eliminar_schedule(schedule_id: int):
+    """Elimina un schedule permanentemente."""
+    pool = telemetry._pool
+    if not pool:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail="Base de datos no disponible")
+
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "DELETE FROM telemetry.report_schedules WHERE id = $1 RETURNING id",
+                schedule_id,
+            )
+        if not row:
+            raise AppError(ErrorCode.API_NOT_FOUND, detail=f"Schedule {schedule_id} no encontrado")
+        return {"message": "Schedule eliminado"}
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error("Error deleting schedule", detail=str(e))
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+
+
+@app.post("/api/reportes/schedules/{schedule_id}/toggle")
+async def toggle_schedule(schedule_id: int):
+    """Activa o desactiva un schedule (toggle activo)."""
+    pool = telemetry._pool
+    if not pool:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail="Base de datos no disponible")
+
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """UPDATE telemetry.report_schedules
+                   SET activo = NOT activo, updated_at = NOW()
+                   WHERE id = $1 RETURNING *""",
+                schedule_id,
+            )
+        if not row:
+            raise AppError(ErrorCode.API_NOT_FOUND, detail=f"Schedule {schedule_id} no encontrado")
+        return _serialize_schedule(dict(row))
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error("Error toggling schedule", detail=str(e))
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+
+
+# ────────────────────────────────────────────────────────────────────────────
 
 @app.post("/api/reportes/generar")
 async def reportes_generar(req: GenerarReporteRequest):

@@ -27,6 +27,7 @@ class ErrorCode(str, Enum):
     EVO_INSTANCE_ALREADY_EXISTS = "E-COM-005"
     EVO_INSTANCE_ACTIVE = "E-COM-006"
     EVO_WEBHOOK_FAILED = "E-COM-007"
+    COM_SEND_DOCUMENT_FAILED = "E-COM-008"
 
     # RAG errors (E-RAG)
     RAG_NO_PDFS = "E-RAG-001"
@@ -72,6 +73,7 @@ _USER_MESSAGES = {
     ErrorCode.EVO_INSTANCE_ALREADY_EXISTS: "Ya existe una instancia con ese nombre.",
     ErrorCode.EVO_INSTANCE_ACTIVE: "No podés eliminar la instancia activa. Primero activá otra.",
     ErrorCode.EVO_WEBHOOK_FAILED: "No se pudo desactivar el webhook de la instancia anterior.",
+    ErrorCode.COM_SEND_DOCUMENT_FAILED: "No se pudo enviar el documento. Intente de nuevo más tarde.",
     ErrorCode.RAG_NO_PDFS: "El sistema no tiene manuales cargados para consultar.",
     ErrorCode.RAG_QUERY_FAILED: "Ocurrió un error al procesar su consulta.",
     ErrorCode.RAG_AUDIO_FAILED: "No se pudo procesar el audio.",
@@ -103,4 +105,5 @@ _HTTP_STATUSES = {
     ErrorCode.FAQ_WRITE_FAILED: 500,
     ErrorCode.FAQ_NOT_FOUND: 404,
     ErrorCode.TELEMETRY_DB_ERROR: 503,
+    ErrorCode.COM_SEND_DOCUMENT_FAILED: 502,
 }

@@ -39,6 +39,7 @@ from health import run_health_probes
 from instance_watcher import InstanceWatcher
 from paths import CONFIG_FILE, ENV_FILE
 import telemetry
+import report_scheduler
 
 rag = None
 wa_client = None
@@ -195,6 +196,9 @@ async def lifespan(app: FastAPI):
     # Inicializar pool de telemetría
     await telemetry.init_pool()
 
+    # Arrancamos el scheduler de informes programados
+    scheduler_task = await report_scheduler.start_scheduler(telemetry._pool, wa_client, _resolve_instance_name)
+
     # Arrancamos el loop de limpieza de sesiones expiradas
     task = asyncio.create_task(cleanup_loop())
 
@@ -231,6 +235,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown: cancelamos loops y watchers
+    await report_scheduler.stop_scheduler()
     api_key_task.cancel()
     try:
         await api_key_task

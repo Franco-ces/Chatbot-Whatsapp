@@ -282,3 +282,123 @@ class TestObtenerAudioBase64:
         with pytest.raises(TypeError) as exc_info:
             await client.obtener_audio_base64({"key": {"id": "msg1"}})
         assert "instance_name" in str(exc_info.value)
+
+
+# ─── enviar_documento Tests (Task 4.1) ────────────────────────────────
+
+class TestEnviarDocumento:
+
+    @pytest.mark.asyncio
+    async def test_successful_send_returns_json(self, mocker, client):
+        """enviar_documento returns JSON on 200."""
+        mock_resp = mocker.MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"key": {"id": "doc123"}}
+        mocker.patch.object(client._client, "request", return_value=mock_resp)
+
+        result = await client.enviar_documento("5491112345678", b"PDF_BYTES", "reporte.pdf", instance_name=DEFAULT_INSTANCE)
+
+        assert result == {"key": {"id": "doc123"}}
+
+    @pytest.mark.asyncio
+    async def test_201_tambien_exitoso(self, mocker, client):
+        """enviar_documento returns JSON on 201."""
+        mock_resp = mocker.MagicMock()
+        mock_resp.status_code = 201
+        mock_resp.json.return_value = {"key": {"id": "doc456"}}
+        mocker.patch.object(client._client, "request", return_value=mock_resp)
+
+        result = await client.enviar_documento("5491112345678", b"PDF_BYTES", "reporte.pdf", instance_name=DEFAULT_INSTANCE)
+
+        assert result == {"key": {"id": "doc456"}}
+
+    @pytest.mark.asyncio
+    async def test_sends_correct_url(self, mocker, client):
+        """URL must include sendMedia and instance_name."""
+        mock_resp = mocker.MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {}
+        mock_request = mocker.patch.object(client._client, "request", return_value=mock_resp)
+
+        await client.enviar_documento("5491112345678", b"PDF_BYTES", "reporte.pdf", instance_name=DEFAULT_INSTANCE)
+
+        expected_url = f"https://evolution.api/message/sendMedia/{DEFAULT_INSTANCE}"
+        call_args = mock_request.call_args
+        assert call_args[0][1] == expected_url
+
+    @pytest.mark.asyncio
+    async def test_sends_base64_payload(self, mocker, client):
+        """Payload must use Evolution API v2 format: mediatype (lowercase),
+        mimetype required, media as data URI."""
+        import base64
+        mock_resp = mocker.MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {}
+        mock_request = mocker.patch.object(client._client, "request", return_value=mock_resp)
+
+        pdf_bytes = b"%PDF-1.4 test content"
+        await client.enviar_documento("5491112345678", pdf_bytes, "reporte.pdf", instance_name=DEFAULT_INSTANCE)
+
+        json_payload = mock_request.call_args[1]["json"]
+        # Evolution API v2 usa lowercase "mediatype", no "mediaType"
+        assert json_payload["mediatype"] == "document"
+        # mimetype es obligatorio en Evolution API v2
+        assert json_payload["mimetype"] == "application/pdf"
+        assert json_payload["fileName"] == "reporte.pdf"
+        assert json_payload["number"] == "5491112345678"
+        # media debe ser data URI, no base64 crudo
+        expected_b64 = base64.b64encode(pdf_bytes).decode()
+        assert json_payload["media"] == expected_b64
+
+    @pytest.mark.asyncio
+    async def test_400_raises_communication_error(self, mocker, client):
+        """Evolution API 400 must raise CommunicationError with COM_SEND_DOCUMENT_FAILED."""
+        mock_resp = mocker.MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.text = "Bad Request"
+        # enviar_documento uses the post() method on _client, not request()
+        mocker.patch.object(client._client, "request", return_value=mock_resp)
+
+        with pytest.raises(CommunicationError) as exc_info:
+            await client.enviar_documento("5491112345678", b"PDF_BYTES", "reporte.pdf", instance_name=DEFAULT_INSTANCE)
+
+        assert exc_info.value.code == ErrorCode.COM_SEND_DOCUMENT_FAILED
+
+    @pytest.mark.asyncio
+    async def test_connection_error_raises_communication_error(self, mocker, client):
+        """Network error must raise CommunicationError with COM_CONNECTION_FAILED."""
+        import httpx
+        mocker.patch.object(
+            client._client,
+            "request",
+            side_effect=httpx.ConnectError("DNS failure"),
+        )
+
+        with pytest.raises(CommunicationError) as exc_info:
+            await client.enviar_documento("5491112345678", b"PDF_BYTES", "reporte.pdf", instance_name=DEFAULT_INSTANCE)
+
+        assert exc_info.value.code == ErrorCode.COM_CONNECTION_FAILED
+
+    @pytest.mark.asyncio
+    async def test_per_call_instance_name_routes_correctly(self, mocker, client):
+        """Two calls with different instance names -> two different URLs."""
+        mock_resp = mocker.MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {}
+        mock_request = mocker.patch.object(client._client, "request", return_value=mock_resp)
+
+        await client.enviar_documento("54911", b"PDF1", "r1.pdf", instance_name=DEFAULT_INSTANCE)
+        await client.enviar_documento("54911", b"PDF2", "r2.pdf", instance_name=ALT_INSTANCE)
+
+        assert mock_request.call_count == 2
+        first_url = mock_request.call_args_list[0][0][1]
+        second_url = mock_request.call_args_list[1][0][1]
+        assert first_url == f"https://evolution.api/message/sendMedia/{DEFAULT_INSTANCE}"
+        assert second_url == f"https://evolution.api/message/sendMedia/{ALT_INSTANCE}"
+
+    @pytest.mark.asyncio
+    async def test_requiere_instance_name_kwarg(self, mocker, client):
+        """enviar_documento must require instance_name as keyword-only arg."""
+        with pytest.raises(TypeError) as exc_info:
+            await client.enviar_documento("54911", b"PDF", "r.pdf")
+        assert "instance_name" in str(exc_info.value)

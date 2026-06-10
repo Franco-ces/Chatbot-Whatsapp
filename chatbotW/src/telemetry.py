@@ -55,6 +55,28 @@ CREATE INDEX IF NOT EXISTS idx_bot_messages_created_at ON telemetry.bot_messages
 CREATE INDEX IF NOT EXISTS idx_bot_messages_error_code ON telemetry.bot_messages (error_code) WHERE error_code IS NOT NULL;
 """
 
+_SCHEDULES_DDL = """
+CREATE TABLE IF NOT EXISTS telemetry.report_schedules (
+    id              SERIAL PRIMARY KEY,
+    tipo            TEXT NOT NULL,
+    parametros      JSONB NOT NULL DEFAULT '{}',
+    hora_envio      TIME NOT NULL,
+    destino         TEXT NOT NULL,
+    header_text     TEXT,
+    footer_text     TEXT,
+    activo          BOOLEAN NOT NULL DEFAULT true,
+    ultimo_envio    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
+_SCHEDULES_INDEX_DDL = """
+CREATE INDEX IF NOT EXISTS idx_report_schedules_activo ON telemetry.report_schedules (activo) WHERE activo = true;
+CREATE INDEX IF NOT EXISTS idx_schedules_active_time ON telemetry.report_schedules (activo, hora_envio);
+CREATE INDEX IF NOT EXISTS idx_schedules_tipo ON telemetry.report_schedules (tipo);
+"""
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -109,6 +131,8 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool | None:
             await conn.execute(_SCHEMA_DDL)
             await conn.execute(_TABLE_DDL)
             await conn.execute(_INDEX_DDL)
+            await conn.execute(_SCHEDULES_DDL)
+            await conn.execute(_SCHEDULES_INDEX_DDL)
 
         _pool = pool
         logger.info("Pool de telemetría inicializado y esquema verificado")

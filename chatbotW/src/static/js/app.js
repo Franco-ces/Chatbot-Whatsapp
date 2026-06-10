@@ -49,6 +49,29 @@ document.addEventListener('alpine:init', () => {
         telemetryLoading: false,
         telemetryError: '',
         charts: [],
+
+        // Schedules state
+        schedules: [],
+        scheduleForm: {
+            open: false,
+            editId: null,
+            tipo: '',
+            hora_envio: '',
+            destino: '',
+            header_text: '',
+            footer_text: '',
+            saving: false,
+            tipos: [],
+            params: {},
+            selectedTipoParams: [],
+            destinoHistory: [],
+            errors: { tipo: '', hora_envio: '', destino: '' },
+            get valid() {
+                return (this.tipo || '').trim().length > 0
+                    && (this.hora_envio || '').trim().length > 0
+                    && (this.destino || '').trim().length > 0;
+            },
+        },
         faqForm: {
             open: false,
             editId: null,
@@ -70,11 +93,25 @@ document.addEventListener('alpine:init', () => {
                 if (val === 'faqs') this.loadFaqs();
                 if (val === 'logs') { this.loadLogs(); this.searchQuery = ''; }
                 if (val === 'dashboard') this.loadTelemetry();
+                if (val === 'reports') this.loadSchedules();
                 if (val !== 'dashboard') this.destroyCharts();
+            });
+            this.$watch('scheduleForm.tipo', (val) => {
+                const tipo = this.scheduleForm.tipos.find(t => t.id === val);
+                this.scheduleForm.selectedTipoParams = tipo ? tipo.parametros || [] : [];
+                // Reset params when tipo changes
+                this.scheduleForm.params = {};
             });
             this.$nextTick(() => {
                 this.loadContactConfig();
             });
+            // Load destino history from localStorage
+            try {
+                const stored = localStorage.getItem('destinoHistory');
+                if (stored) this.scheduleForm.destinoHistory = JSON.parse(stored);
+            } catch (e) {
+                this.scheduleForm.destinoHistory = [];
+            }
         },
         
         switchTab(tab) {
@@ -614,6 +651,176 @@ document.addEventListener('alpine:init', () => {
                 },
                 options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' } } }
             }));
+        },
+
+        // --- SCHEDULES (Informes Programados) ---
+        async loadSchedules() {
+            try {
+                const [schedRes, tiposRes] = await Promise.all([
+                    apiFetch('/api/reportes/schedules'),
+                    apiFetch('/api/reportes/tipos')
+                ]);
+                if (schedRes.ok) this.schedules = await schedRes.json();
+                if (tiposRes.ok) {
+                    const tiposData = await tiposRes.json();
+                    this.scheduleForm.tipos = tiposData.tipos || [];
+                }
+            } catch (err) {
+                console.error('Error al cargar schedules', err);
+                window.showToast('Error al cargar informes programados', 'error');
+            }
+        },
+
+        getScheduleTipoName(tipoId) {
+            const tipo = this.scheduleForm.tipos.find(t => t.id === tipoId);
+            return tipo ? tipo.nombre : tipoId;
+        },
+
+        formatScheduleTime(hora) {
+            if (!hora) return '';
+            // hora_envio from DB comes as HH:MM:SS or HH:MM
+            return String(hora).substring(0, 5);
+        },
+
+        startCreateSchedule() {
+            const f = this.scheduleForm;
+            f.open = true;
+            f.editId = null;
+            f.tipo = '';
+            f.hora_envio = '08:00';
+            f.destino = '';
+            f.header_text = '';
+            f.footer_text = '';
+            f.params = {};
+            f.selectedTipoParams = [];
+            f.saving = false;
+            f.errors = { tipo: '', hora_envio: '', destino: '' };
+        },
+
+        startEditSchedule(sched) {
+            const f = this.scheduleForm;
+            f.open = true;
+            f.editId = sched.id;
+            f.tipo = sched.tipo;
+            // Format time from HH:MM:SS to HH:MM for the time input
+            f.hora_envio = this.formatScheduleTime(sched.hora_envio);
+            f.destino = sched.destino;
+            f.header_text = sched.header_text || '';
+            f.footer_text = sched.footer_text || '';
+            // Populate params from existing schedule data
+            f.params = typeof sched.parametros === 'string'
+                ? JSON.parse(sched.parametros || '{}')
+                : (sched.parametros || {});
+            // Set selectedTipoParams to match the tipo (watcher will also update on tipo change)
+            const tipo = f.tipos.find(t => t.id === sched.tipo);
+            f.selectedTipoParams = tipo ? tipo.parametros || [] : [];
+            f.saving = false;
+            f.errors = { tipo: '', hora_envio: '', destino: '' };
+        },
+
+        cancelScheduleForm() {
+            const f = this.scheduleForm;
+            f.open = false;
+            f.editId = null;
+            f.tipo = '';
+            f.hora_envio = '';
+            f.destino = '';
+            f.header_text = '';
+            f.footer_text = '';
+            f.params = {};
+            f.selectedTipoParams = [];
+            f.saving = false;
+            f.errors = { tipo: '', hora_envio: '', destino: '' };
+        },
+
+        async saveSchedule() {
+            const f = this.scheduleForm;
+            // Validate
+            f.errors = { tipo: '', hora_envio: '', destino: '' };
+            if (!f.tipo) f.errors.tipo = 'Seleccioná un tipo de reporte.';
+            if (!f.hora_envio) f.errors.hora_envio = 'Ingresá la hora de envío.';
+            if (!f.destino.trim()) f.errors.destino = 'Ingresá el número de destino.';
+            if (!f.valid) return;
+
+            f.saving = true;
+            const isEdit = !!f.editId;
+            const url = isEdit ? `/api/reportes/schedules/${f.editId}` : '/api/reportes/schedules';
+            const method = isEdit ? 'PUT' : 'POST';
+            const body = isEdit ? {
+                tipo: f.tipo,
+                parametros: f.params,
+                hora_envio: f.hora_envio,
+                destino: f.destino.trim(),
+                header_text: f.header_text || null,
+                footer_text: f.footer_text || null,
+            } : {
+                tipo: f.tipo,
+                parametros: f.params,
+                hora_envio: f.hora_envio,
+                destino: f.destino.trim(),
+                header_text: f.header_text || null,
+                footer_text: f.footer_text || null,
+            };
+
+            try {
+                const res = await apiFetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (res.ok || res.status === 201) {
+                    window.showToast(isEdit ? 'Informe actualizado' : 'Informe programado', 'success');
+                    // Save destino to history
+                    const dest = f.destino.trim();
+                    if (dest && !f.destinoHistory.includes(dest)) {
+                        f.destinoHistory.unshift(dest);
+                        if (f.destinoHistory.length > 10) f.destinoHistory = f.destinoHistory.slice(0, 10);
+                        try {
+                            localStorage.setItem('destinoHistory', JSON.stringify(f.destinoHistory));
+                        } catch (e) { /* ignore storage errors */ }
+                    }
+                    this.cancelScheduleForm();
+                    await this.loadSchedules();
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    const detail = (errData.error && errData.error.detail) || 'Error al guardar';
+                    window.showToast(detail, 'error');
+                }
+            } catch (err) {
+                window.showToast('Error de conexión al guardar', 'error');
+            } finally {
+                f.saving = false;
+            }
+        },
+
+        async toggleSchedule(sched) {
+            try {
+                const res = await apiFetch(`/api/reportes/schedules/${sched.id}/toggle`, { method: 'POST' });
+                if (res.ok) {
+                    window.showToast(sched.activo ? 'Programa desactivado' : 'Programa activado', 'success');
+                    await this.loadSchedules();
+                } else {
+                    window.showToast('Error al cambiar estado', 'error');
+                }
+            } catch (err) {
+                window.showToast('Error de conexión', 'error');
+            }
+        },
+
+        async confirmDeleteSchedule(sched) {
+            const tipoName = this.getScheduleTipoName(sched.tipo);
+            if (!confirm(`¿Eliminar el programa de "${tipoName}" para ${sched.destino}?`)) return;
+            try {
+                const res = await apiFetch(`/api/reportes/schedules/${sched.id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    window.showToast('Programa eliminado', 'success');
+                    await this.loadSchedules();
+                } else {
+                    window.showToast('Error al eliminar', 'error');
+                }
+            } catch (err) {
+                window.showToast('Error de conexión al eliminar', 'error');
+            }
         },
 
         destroyCharts() {

@@ -266,15 +266,17 @@ class ReporteHistorialPorNumero(BaseReport):
 
     async def generar(self, pool, params: dict) -> bytes:
         telefono = params["telefono"]
-        desde = params.get("desde") or None
-        hasta = params.get("hasta") or None
+        desde_raw = params.get("desde") or None
+        hasta_raw = params.get("hasta") or None
+        desde = date.fromisoformat(desde_raw) if isinstance(desde_raw, str) else desde_raw
+        hasta = date.fromisoformat(hasta_raw) if isinstance(hasta_raw, str) else hasta_raw
 
         async with pool.acquire() as conn:
             rows = await conn.fetch(self._sql, telefono, desde, hasta)
 
         data = [
             [str(i + 1), str(r["fecha_hora"]), str(r["contenido_preview"]),
-             str(r["estado"]), str(r["latencia_ms"]) if r["latencia_ms"] is not None else "-"]
+              str(r["estado"]), str(r["latencia_ms"]) if r["latencia_ms"] is not None else "-"]
             for i, r in enumerate(rows)
         ]
         totals_row = [f"Total: {len(rows)}", "", "", "", ""]
@@ -316,8 +318,10 @@ class ReporteMensajesPorDia(BaseReport):
     """
 
     async def generar(self, pool, params: dict) -> bytes:
-        desde = params["desde"]
-        hasta = params["hasta"]
+        desde_raw = params["desde"]
+        hasta_raw = params["hasta"]
+        desde = date.fromisoformat(desde_raw) if isinstance(desde_raw, str) else desde_raw
+        hasta = date.fromisoformat(hasta_raw) if isinstance(hasta_raw, str) else hasta_raw
 
         async with pool.acquire() as conn:
             rows = await conn.fetch(self._sql, desde, hasta)
@@ -380,8 +384,10 @@ class ReporteHistorialCompleto(BaseReport):
 
     async def generar(self, pool, params: dict) -> bytes:
         telefono = params["telefono"]
-        desde = params.get("desde") or None
-        hasta = params.get("hasta") or None
+        desde_raw = params.get("desde") or None
+        hasta_raw = params.get("hasta") or None
+        desde = date.fromisoformat(desde_raw) if isinstance(desde_raw, str) else desde_raw
+        hasta = date.fromisoformat(hasta_raw) if isinstance(hasta_raw, str) else hasta_raw
 
         async with pool.acquire() as conn:
             rows = await conn.fetch(self._sql, telefono, desde, hasta)

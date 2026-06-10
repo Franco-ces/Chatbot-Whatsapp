@@ -1,3 +1,4 @@
+import base64
 import time
 import httpx_idle_client
 from exceptions import CommunicationError
@@ -85,6 +86,46 @@ class WhatsAppClient:
             logger.error("Evolution API HTTP error", send_duration_ms=duration_ms, status_code=e.response.status_code)
             detail = f"Evolution API respondió con código {e.response.status_code}: {e.response.text}"
             raise CommunicationError(ErrorCode.COM_SEND_MESSAGE_FAILED, detail=detail, cause=e)
+        except httpx_idle_client.httpx.RequestError as e:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.error("Evolution API connection error", send_duration_ms=duration_ms, detail=str(e))
+            detail = f"Error de conexión con Evolution API: {e}"
+            raise CommunicationError(ErrorCode.COM_CONNECTION_FAILED, detail=detail, cause=e)
+
+    async def enviar_documento(self, numero: str, pdf_bytes: bytes, filename: str, *, instance_name: str) -> dict:
+        """Envía un documento PDF vía Evolution API sendMedia.
+
+        Codifica pdf_bytes en base64 como data URI y lo envía como
+        mediatype=document con mimetype=application/pdf.
+        Usa el patrón per-call instance_name igual que enviar_mensaje.
+        """
+        pdf_b64 = base64.b64encode(pdf_bytes).decode()
+        payload = {
+            "number": numero,
+            "mediatype": "document",
+            "mimetype": "application/pdf",
+            "media": pdf_b64,
+            "fileName": filename,
+        }
+        url = f"{self.api_url}/message/sendMedia/{instance_name}"
+
+        start = time.perf_counter()
+        try:
+            response = await self._client.request("POST", url, json=payload, headers=self.headers)
+            duration_ms = int((time.perf_counter() - start) * 1000)
+
+            if response.status_code not in (200, 201):
+                logger.debug("Evolution API response error", status_code=response.status_code, send_duration_ms=duration_ms)
+                detail = f"Evolution API rechazó el documento (código {response.status_code}): {response.text[:200]}"
+                raise CommunicationError(ErrorCode.COM_SEND_DOCUMENT_FAILED, detail=detail)
+
+            logger.info("Document sent successfully", send_duration_ms=duration_ms)
+            return response.json()
+        except httpx_idle_client.httpx.HTTPStatusError as e:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.error("Evolution API HTTP error", send_duration_ms=duration_ms, status_code=e.response.status_code)
+            detail = f"Evolution API respondió con código {e.response.status_code}: {e.response.text}"
+            raise CommunicationError(ErrorCode.COM_SEND_DOCUMENT_FAILED, detail=detail, cause=e)
         except httpx_idle_client.httpx.RequestError as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.error("Evolution API connection error", send_duration_ms=duration_ms, detail=str(e))
