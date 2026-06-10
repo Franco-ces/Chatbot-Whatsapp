@@ -24,7 +24,8 @@ from pydantic import BaseModel, Field
 from ConfigManager import ConfigManager
 from error_handler import register_error_handlers
 from error_codes import ErrorCode
-from exceptions import APIError, AppError
+from exceptions import APIError, AppError, CommunicationError
+from evolution_models import ConnectionState
 from faq_paths import FAQS_PATH
 from logging_config import get_logger
 from evo_client import build_evolution_admin
@@ -211,11 +212,37 @@ async def guardar_api_key(key: str = Form(...)):
     except Exception as e:
         raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
 
+
+@app.post("/api/evolution-apikey")
+async def guardar_evolution_api_key(key: str = Form(...)):
+    """Guarda la API key de Evolution en .env y en memoria.
+
+    No reinicia el contenedor — el operador debe hacerlo manualmente
+    con `docker compose up -d evolution-api`.
+    """
+    try:
+        os.environ["EVO_API_KEY"] = key
+        _write_env("EVO_API_KEY", key)
+    except OSError as e:
+        raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
+    return {
+        "status": "success",
+        "message": "API key guardada. Reiniciá el contenedor evolution-api para aplicar los cambios.",
+    }
+
+
 # --- NUEVOS ENDPOINTS PARA EL MANAGER DE CONFIGURACIÓN ---
 @app.get("/api/config")
 async def obtener_config():
     config_manager.cargar() # Nos aseguramos de tener la versión más reciente del disco
-    return config_manager.config
+    return {
+        **config_manager.config,
+        "google_api_key_set": bool(os.environ.get("GOOGLE_API_KEY", "")),
+        "evolution_api_key_set": bool(
+            os.environ.get("EVO_API_KEY", "")
+            or os.environ.get("EVOLUTION_API_KEY", "")
+        ),
+    }
 
 @app.post("/api/config")
 async def guardar_config(
@@ -728,6 +755,8 @@ async def create_evolution_instance(req: InstanceNameRequest):
     try:
         info = await evolution_admin.create_instance(req.name)
     except APIError as e:
+        if e.code == ErrorCode.API_UNAUTHORIZED:
+            raise
         if e.code == ErrorCode.API_INVALID_PAYLOAD:
             # La unica razon valida para que Evolution rechace un create
             # con 400 es "instance already exists" (Evolution v2 no usa 409).
@@ -872,13 +901,13 @@ async def get_active_evolution_instance():
     """
     config_manager.cargar()  # Relee del disco por si el watcher swapeo.
     config_active = config_manager.config.get("active_instance_name", "")
-    # Solo usar env var como fallback si config_bot.json no tiene
+    # LEGACY: env var fallback. Solo usar si config_bot.json no tiene
     # el campo (nunca fue seteado). Si esta seteado en "", significa
     # que alguien desactivó explicitamente — no debemos ignorar eso.
     env_active = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
     if config_active:
         return {"name": config_active}
-    # Si config_bot.json no tiene active_instance_name (o es None),
+    # LEGACY: Si config_bot.json no tiene active_instance_name (o es None),
     # usar env var como fallback solo si el campo no existe en config
     # (no si existe y es vacío).
     if "active_instance_name" not in config_manager.config:
@@ -912,11 +941,14 @@ async def deactivate_evolution_instance(name: str):
 async def delete_evolution_instance(name: str):
     """Elimina una instancia de Evolution. 204 si OK.
 
-    Safety check: si la instancia a borrar es la ACTIVA, rechaza con
-    409 `EVO_INSTANCE_ACTIVE`. Razon: borrar la activa dejaria al bot
+    Safety check: si la instancia a borrar es la ACTIVA, consulta
+    `get_state` primero. Solo rechaza con 409 `EVO_INSTANCE_ACTIVE`
+    si el estado es OPEN (conectada). Si la instancia activa está
+    CLOSE, CONNECTING o UNKNOWN, permite la eliminación igual.
+    Razon: borrar la activa mientras está conectada dejaria al bot
     sin outbound y la `WhatsAppClient` apuntaria a una instancia
     inexistente hasta el proximo swap. La unica forma limpia de
-    desactivar la activa es activando OTRA primero.
+    desactivar la activa conectada es activando OTRA primero.
 
     Que cuenta como "activa" para este check:
     1. `config_bot.json.active_instance_name` si esta seteada (caso:
@@ -925,8 +957,11 @@ async def delete_evolution_instance(name: str):
        defecto: el operador NUNCA swapeo, el bot usa la del .env).
 
     Raises:
-        APIError(EVO_INSTANCE_ACTIVE, 409): si la instancia es la activa.
+        APIError(EVO_INSTANCE_ACTIVE, 409): si la instancia activa
+            está conectada (state == OPEN).
         APIError(API_NOT_FOUND, 404): si Evolution no la tiene.
+        APIError(SYS_DEPENDENCY_MISSING, 503): si no se puede
+            contactar a Evolution API para verificar el estado.
         APIError(API_INVALID_PAYLOAD, 400): nombre invalido o
             que ya esta en uso (poco probable en DELETE, pero mapeado).
     """
@@ -934,20 +969,37 @@ async def delete_evolution_instance(name: str):
 
     # Safety check contra la activa. Relee el config (puede haber
     # cambiado desde el startup si hubo un swap reciente) y combina
-    # con el fallback de env var (la activa que el bot estaria usando
-    # si NUNCA se swapeo manualmente).
+    # con el LEGACY fallback de env var (la activa que el bot estaria
+    # usando si NUNCA se swapeo manualmente).
     config_manager.cargar()
     config_active = config_manager.config.get("active_instance_name", "")
+    # LEGACY: env var fallback para instancias nunca swapeadas.
     env_active = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
     active = config_active or env_active
     if name == active:
-        raise APIError(
-            ErrorCode.EVO_INSTANCE_ACTIVE,
-            detail=(
-                f"La instancia '{name}' es la activa. Activá otra antes "
-                "de eliminarla."
-            ),
-        )
+        try:
+            state = await evolution_admin.get_state(name)
+        except CommunicationError:
+            raise APIError(
+                ErrorCode.SYS_DEPENDENCY_MISSING,
+                detail=(
+                    f"No se pudo verificar el estado de '{name}' "
+                    "por un error de conexión con Evolution API."
+                ),
+            )
+        except APIError:
+            # API_NOT_FOUND (404), API_UNAUTHORIZED (401), etc. — propagar.
+            raise
+
+        if state == ConnectionState.OPEN:
+            raise APIError(
+                ErrorCode.EVO_INSTANCE_ACTIVE,
+                detail=(
+                    f"La instancia '{name}' es la activa. Activá otra antes "
+                    "de eliminarla."
+                ),
+            )
+        # Si no es OPEN (CLOSE/CONNECTING/UNKNOWN), se permite la eliminación.
 
     try:
         await evolution_admin.delete_instance(name)

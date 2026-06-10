@@ -52,7 +52,7 @@ class InstanceWatcher:
         watcher = InstanceWatcher(Path("config_bot.json"))
         await watcher.start()
         # ... dentro del webhook handler:
-        instance_name = watcher.get_active_name() or os.environ["EVOLUTION_INSTANCE_NAME"]
+        instance_name = watcher.get_active_name()
         # ... al apagar:
         await watcher.stop()
 

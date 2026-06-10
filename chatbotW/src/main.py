@@ -33,6 +33,7 @@ from payload_parser import EvolutionWebhook, extraer_datos_limpios
 from bot_service import procesar_mensaje_bot
 from error_handler import register_error_handlers
 from error_codes import ErrorCode
+from evo_client import _get_evo_api_key
 from exceptions import AppError
 from sesionLoggerManager import SessionManager
 from health import run_health_probes
@@ -46,6 +47,9 @@ wa_client = None
 instance_watcher = None
 session_manager = None
 logger = None
+
+# Flag para loguear el LEGACY fallback solo una vez (evitamos spam en cada webhook)
+_legacy_fallback_logged = False
 
 # ---- CONFIGURACIÓN DE RATE LIMITING ----
 MAX_MENSAJES = 5        # Máximo de mensajes permitidos
@@ -87,7 +91,7 @@ def _resolve_instance_name() -> str:
     1) `instance_watcher.get_active_name()` — el nombre actualizado
        por el watcher despues de un swap. Una vez que el admin
        activo una instancia, este valor es el que manda.
-    2) `os.environ["EVOLUTION_INSTANCE_NAME"]` — fallback pre-activacion
+    2) `os.environ["EVOLUTION_INSTANCE_NAME"]` — fallback LEGACY
        (config vacio, primer deploy). El env var queda hasta que
        alguien use la UI/CLI para activar formalmente.
 
@@ -98,11 +102,21 @@ def _resolve_instance_name() -> str:
     silencioso que mande el mensaje a una instancia que no
     esperabamos).
     """
+    global _legacy_fallback_logged
     if instance_watcher is not None:
         name = instance_watcher.get_active_name()
         if name:
             return name
-    return os.environ.get("EVOLUTION_INSTANCE_NAME", "")
+    # LEGACY: env var fallback. La UI de admin es el mecanismo recomendado.
+    name = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
+    if name and not _legacy_fallback_logged:
+        _legacy_fallback_logged = True
+        logger.warning(
+            "[LEGACY] Usando EVOLUTION_INSTANCE_NAME como fallback "
+            "para resolver la instancia activa. Activá una desde el "
+            "panel admin para eliminar esta advertencia."
+        )
+    return name
 
 
 async def cleanup_loop():
@@ -155,14 +169,28 @@ async def lifespan(app: FastAPI):
                     os.environ["GOOGLE_API_KEY"] = google_key
         except (OSError, ValueError):
             pass
-    evolution_key = os.getenv("EVOLUTION_API_KEY")
+    evolution_key = _get_evo_api_key()
     evolution_url = os.getenv("EVOLUTION_API_URL")
-    instance = os.getenv("EVOLUTION_INSTANCE_NAME")
+    # LEGACY: EVOLUTION_INSTANCE_NAME es opcional. La UI de admin es el
+    # mecanismo recomendado para gestionar instancias.
+    legacy_instance = os.getenv("EVOLUTION_INSTANCE_NAME")
 
     try:
-        if not evolution_key or not evolution_url or not instance:
+        if not evolution_key or not evolution_url:
             logger.error("Faltan variables de entorno requeridas", error_code=ErrorCode.SYS_DEPENDENCY_MISSING.value)
             sys.exit(1)
+
+        if legacy_instance:
+            logger.warning(
+                "[LEGACY] EVOLUTION_INSTANCE_NAME está configurada. "
+                "Se usará como fallback hasta que se active una instancia desde el panel admin."
+            )
+        else:
+            admin_port = os.getenv("ADMIN_PORT", "8000")
+            logger.info(
+                "No hay instancia activa. Crealá desde el panel de admin en "
+                "http://localhost:%s", admin_port,
+            )
 
         # Post-PR-3: wa_client es generico (no instance_name en ctor).
         # El nombre llega per-call via _resolve_instance_name().
@@ -190,8 +218,8 @@ async def lifespan(app: FastAPI):
     # en el siguiente webhook sin reiniciar.
     instance_watcher = InstanceWatcher(CONFIG_FILE)
     await instance_watcher.start()
-    initial_name = instance_watcher.get_active_name() or instance
-    logger.info("InstanceWatcher inicializado", active_instance_name=initial_name)
+    initial_name = instance_watcher.get_active_name() or legacy_instance or ""
+    logger.info("InstanceWatcher inicializado", active_instance_name=initial_name or "(ninguna)")
 
     # Inicializar pool de telemetría
     await telemetry.init_pool()
@@ -339,8 +367,8 @@ async def webhook(request: Request, payload: EvolutionWebhook):
         instance_name = payload.instance or _resolve_instance_name()
         if not instance_name:
             # Sin nombre activo, no podemos responder. Loggeamos
-            # claramente: en un deploy normal esto no deberia pasar
-            # (siempre hay el env var de fallback); si pasa es un
+            # claramente: si no hay instancia activa configurada
+            # (ni por env var LEGACY ni por admin UI), es un
             # bug de configuracion que el admin tiene que arreglar.
             logger.error(
                 "No hay instancia activa para outbound",

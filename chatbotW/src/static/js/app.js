@@ -10,6 +10,10 @@ document.addEventListener('alpine:init', () => {
 
     Alpine.data('adminPanel', () => ({
         activeTab: 'config',
+        activeInstanceName: '',
+        activeInstanceLoaded: false,
+        googleApiKeySet: false,
+        evolutionApiKeySet: false,
         pdfs: [],
         csvs: [],
         logs: [],
@@ -23,6 +27,9 @@ document.addEventListener('alpine:init', () => {
         apiKey: '',
         apiStatus: '',
         apiStatusClass: '',
+        evoApiKey: '',
+        evoApiStatus: '',
+        evoApiStatusClass: '',
         configEmail: '',
         configPhoneCode: '+54',
         configPhoneNum: '',
@@ -104,6 +111,7 @@ document.addEventListener('alpine:init', () => {
             });
             this.$nextTick(() => {
                 this.loadContactConfig();
+                this.loadActiveInstance();
             });
             // Load destino history from localStorage
             try {
@@ -139,6 +147,7 @@ document.addEventListener('alpine:init', () => {
                 const data = await res.json();
                 this.apiStatus = data.message;
                 this.apiStatusClass = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
+                if (data.status === "success") this.googleApiKeySet = true;
                 window.showToast(data.message, data.status === "success" ? 'success' : 'error');
             } catch (err) {
                 this.apiStatus = "✕ Error de conexión";
@@ -146,7 +155,46 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // --- EVOLUTION API KEY ---
+        async saveEvolutionKey() {
+            if (!this.evoApiKey) {
+                this.evoApiStatus = "⚠ Escribe una clave";
+                this.evoApiStatusClass = "mt-3 text-orange-500 font-medium h-5";
+                return;
+            }
+            const formData = new FormData();
+            formData.append("key", this.evoApiKey);
+            try {
+                const res = await apiFetch('/api/evolution-apikey', { method: 'POST', body: formData });
+                const data = await res.json();
+                this.evoApiStatus = data.message;
+                this.evoApiStatusClass = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
+                if (data.status === "success") this.evolutionApiKeySet = true;
+                window.showToast(data.message, data.status === "success" ? 'success' : 'error');
+            } catch (err) {
+                this.evoApiStatus = "✕ Error de conexión";
+                this.evoApiStatusClass = "mt-3 text-red-600 font-medium h-5";
+                window.showToast('Error de conexión al guardar API Key de Evolution', 'error');
+            }
+        },
+
         // --- CONFIG ---
+        async loadActiveInstance() {
+            try {
+                const res = await apiFetch('/api/evolution/active');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.activeInstanceName = data.name || '';
+                } else {
+                    this.activeInstanceName = '';
+                }
+            } catch (err) {
+                this.activeInstanceName = '';
+            } finally {
+                this.activeInstanceLoaded = true;
+            }
+        },
+
         async loadContactConfig() {
             try {
                 const res = await apiFetch('/api/config');
@@ -170,6 +218,8 @@ document.addEventListener('alpine:init', () => {
                 // Load Gemini model config
                 this.geminiModel = data.gemini_model || '';
                 this.geminiEmbeddingsModel = data.gemini_embeddings_model || '';
+                this.googleApiKeySet = data.google_api_key_set || false;
+                this.evolutionApiKeySet = data.evolution_api_key_set || false;
             } catch (err) {
                 console.error("Error al cargar config", err);
             }
