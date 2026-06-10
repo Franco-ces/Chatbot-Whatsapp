@@ -44,4 +44,5 @@ chatbotW/config_bot.json
 chatbotW/.pytest_cache/
 chatbotW/logs/
 *.bak
+.env.backup
 

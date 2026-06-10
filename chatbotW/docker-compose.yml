@@ -19,6 +19,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_HOST: evolution_postgres
+      EVO_API_KEY: ${EVO_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs
