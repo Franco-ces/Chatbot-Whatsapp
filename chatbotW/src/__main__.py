@@ -17,8 +17,10 @@ Por que un `__main__.py` y no un `if __name__ == "__main__"` en
 y `python -m src` desde ese directorio es la invocacion canonica: localiza
 el paquete `src` en sys.path (gracias al `__init__.py` vacio) y ejecuta
 su `__main__`. Asi `primera_instalacion.sh` puede correr
-`docker compose exec bot python -m src create "$EVOLUTION_INSTANCE_NAME"`
+`docker compose exec bot python -m src create "rag_bot"`
 sin asumir layout de archivos.
+Nota: `EVOLUTION_INSTANCE_NAME` es opcional. Se puede pasar el nombre
+directamente como argumento.
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ if _THIS_DIR not in sys.path:
 
 from error_codes import ErrorCode  # noqa: E402
 from exceptions import AppError, ConfigError  # noqa: E402
-from evo_client import build_evolution_admin  # noqa: E402
+from evo_client import _get_evo_api_key, build_evolution_admin  # noqa: E402
 from evolution_models import WebhookConfig  # noqa: E402
 
 if TYPE_CHECKING:
@@ -64,12 +66,18 @@ EXIT_CONFIG_ERROR = 3
 def _build_admin_from_env() -> EvolutionAdmin:
     """Construye un `EvolutionAdmin` con URL/key de las env vars.
 
+    Lee `EVO_API_KEY` (o `EVOLUTION_API_KEY` legacy como fallback).
     Falla con exit 1 si falta la key. La URL tiene un default razonable
     para que el comando `list` funcione en un dev local sin .env.
     """
-    api_key = os.environ.get("EVOLUTION_API_KEY", "")
+    api_key = _get_evo_api_key()
     if not api_key:
-        print("ERROR: EVOLUTION_API_KEY no está definida.", file=sys.stderr)
+        print(
+            "ERROR: API key de Evolution no configurada. "
+            "Configurá la API key desde el panel admin en /api/evolution-apikey "
+            "o en el archivo .env.",
+            file=sys.stderr,
+        )
         sys.exit(EXIT_HTTP_ERROR)
     return build_evolution_admin()
 

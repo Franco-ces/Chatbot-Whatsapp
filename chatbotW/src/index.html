@@ -99,6 +99,33 @@
                 </div>
             </nav>
 
+            <!-- ─── BANNER: Sin instancia activa ─── -->
+            <div x-show="activeInstanceLoaded && !activeInstanceName"
+                 class="max-w-5xl mx-auto pt-4 px-4">
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-center gap-2 shadow-sm">
+                    <i class="fas fa-triangle-exclamation text-amber-600"></i>
+                    <span>No hay instancia activa. <a href="#" @click.prevent="switchTab('instances')" class="font-semibold underline hover:text-amber-900">Crealá desde la sección Instancias.</a></span>
+                </div>
+            </div>
+
+            <!-- ─── BANNER: Google API Key no configurada ─── -->
+            <div x-show="activeInstanceLoaded && !googleApiKeySet"
+                 class="max-w-5xl mx-auto pt-4 px-4">
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-center gap-2 shadow-sm">
+                    <i class="fas fa-triangle-exclamation text-amber-600"></i>
+                    <span>Google API Key no configurada. <a href="#" @click.prevent="switchTab('config')" class="font-semibold underline hover:text-amber-900">Configurala en la sección Configuración.</a></span>
+                </div>
+            </div>
+
+            <!-- ─── BANNER: Evolution API Key no configurada ─── -->
+            <div x-show="activeInstanceLoaded && !evolutionApiKeySet"
+                 class="max-w-5xl mx-auto pt-4 px-4">
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-center gap-2 shadow-sm">
+                    <i class="fas fa-triangle-exclamation text-amber-600"></i>
+                    <span>Evolution API Key no configurada. <a href="#" @click.prevent="switchTab('config')" class="font-semibold underline hover:text-amber-900">Configurala en la sección Configuración.</a></span>
+                </div>
+            </div>
+
             <!-- TAB BAR -->
             <div class="max-w-5xl mx-auto py-6 px-4">
                 <div class="flex space-x-1 border-b border-gray-300 mb-6 overflow-x-auto items-end">
@@ -122,7 +149,17 @@
 
                     <hr class="my-8 border-gray-100">
 
-                    <h2 class="text-xl font-semibold mb-4 text-gray-800"><i class="fas fa-address-card text-blue-500 mr-2"></i> Configuración del Bot</h2>
+                    <h2 class="text-xl font-semibold mb-4 mt-8 text-gray-800"><i class="fas fa-key text-green-500 mr-2"></i> Configuraci&oacute;n de Evolution API Key</h2>
+                    <p class="text-sm text-gray-500 mb-4">Esta clave permite que el panel admin se comunique con Evolution API. Si la cambi&aacute;s, reinici&aacute; el contenedor de Evolution aplicando los cambios.</p>
+                    <div class="flex gap-4">
+                        <input type="text" x-model="evoApiKey" placeholder="Pega tu clave de Evolution aqu&iacute;..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                        <button @click="saveEvolutionKey()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
+                    </div>
+                    <p x-text="evoApiStatus" :class="evoApiStatusClass" class="mt-3 font-medium text-sm h-5"></p>
+
+                    <hr class="my-8 border-gray-100">
+
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800"><i class="fas fa-address-card text-blue-500 mr-2"></i> Variables de Contacto (Bot)</h2>
                     <p class="text-sm text-gray-500 mb-6">Estos datos definen el comportamiento y los datos inyectados dinámicamente en las respuestas de la IA.</p>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">

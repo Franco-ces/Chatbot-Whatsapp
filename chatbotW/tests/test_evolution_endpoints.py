@@ -365,7 +365,8 @@ class TestDeleteInstance:
         """Safety check: borrar la activa dejaria al bot sin outbound.
         El endpoint rechaza con 409 + `EVO_INSTANCE_ACTIVE` y NO toca
         Evolution (la llamada a `admin.delete_instance` no debe ocurrir)."""
-        fake = _patch_admin(mocker)
+        from evolution_models import ConnectionState
+        fake = _patch_admin(mocker, state_return=ConnectionState.OPEN)
         fake.delete_instance = AsyncMock(return_value=None)
         mocker.patch.object(interface.config_manager, "cargar", lambda: None)
         interface.config_manager.config["active_instance_name"] = "bot_2"
@@ -388,7 +389,8 @@ class TestDeleteInstance:
         tiene que caer al fallback `EVOLUTION_INSTANCE_NAME` de env.
         Si no, borrariamos la instancia que el bot esta usando y queda
         sin outbound."""
-        fake = _patch_admin(mocker)
+        from evolution_models import ConnectionState
+        fake = _patch_admin(mocker, state_return=ConnectionState.OPEN)
         fake.delete_instance = AsyncMock(return_value=None)
         mocker.patch.object(interface.config_manager, "cargar", lambda: None)
         interface.config_manager.config["active_instance_name"] = ""
@@ -437,6 +439,24 @@ class TestDeleteInstance:
         )
         assert resp.status_code == 404
         assert resp.json()["error"]["code"] == "E-API-002"
+
+    @pytest.mark.asyncio
+    async def test_delete_when_no_active_at_all_pasa_el_safety_check(
+        self, mocker, client, auth_token, monkeypatch
+    ):
+        """Cuando no hay instancia activa (config vacío + sin env var),
+        el safety check no debe bloquear ningún DELETE."""
+        fake = _patch_admin(mocker)
+        fake.delete_instance = AsyncMock(return_value=None)
+        mocker.patch.object(interface.config_manager, "cargar", lambda: None)
+        interface.config_manager.config["active_instance_name"] = ""
+        monkeypatch.delenv("EVOLUTION_INSTANCE_NAME", raising=False)
+        resp = await client.delete(
+            "/api/evolution/instances/bot_2", headers=_auth(auth_token)
+        )
+        # No es la activa (active == ""), pasa el safety check
+        assert resp.status_code == 204
+        fake.delete_instance.assert_awaited_once_with("bot_2")
 
 
 class TestGetActiveInstance:

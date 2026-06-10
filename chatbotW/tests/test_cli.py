@@ -48,8 +48,16 @@ def _make_instance(name, state):
 
 @pytest.fixture(autouse=True)
 def _api_key(monkeypatch):
-    """Todos los subcomandos (excepto set-active) leen EVOLUTION_API_KEY."""
-    monkeypatch.setenv("EVOLUTION_API_KEY", "test-key")
+    """Todos los subcomandos (excepto set-active) leen EVO_API_KEY."""
+    monkeypatch.setenv("EVO_API_KEY", "test-key")
+    monkeypatch.setenv("EVOLUTION_API_URL", "https://evo.test")
+
+
+@pytest.fixture
+def _legacy_api_key(monkeypatch):
+    """Fixture que borra EVO_API_KEY y setea solo EVOLUTION_API_KEY."""
+    monkeypatch.delenv("EVO_API_KEY", raising=False)
+    monkeypatch.setenv("EVOLUTION_API_KEY", "legacy-key")
     monkeypatch.setenv("EVOLUTION_API_URL", "https://evo.test")
 
 
@@ -124,6 +132,22 @@ class TestSetWebhook:
         assert name_arg == "bot_1"
         assert config_arg.url == "https://bot.example.com"
         assert config_arg.headers == {"X-Webhook-Secret": "s3cr3t"}
+
+
+class TestLegacyApiKey:
+    def test_legacy_fallback_succeeds(self, mocker, capfd, _legacy_api_key):
+        """GIVEN only EVOLUTION_API_KEY is set (legacy)
+        WHEN list command runs with mocked admin
+        THEN it must succeed (legacy fallback resolves the key)."""
+        from evolution_models import InstanceInfo
+        _patch_admin(mocker, list_return=[
+            InstanceInfo.model_validate({"name": "a", "connectionState": "open"})
+        ])
+        code = main_mod.main(["list"])
+        out, err = capfd.readouterr()
+        assert code == 0
+        data = json.loads(out.strip())
+        assert data[0]["name"] == "a"
 
 
 class TestSetActive:

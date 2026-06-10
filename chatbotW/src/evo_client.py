@@ -28,10 +28,30 @@ queda como un detalle de implementacion sin restricciones adicionales.
 
 from __future__ import annotations
 
+import logging
 import os
 
 from evolution_admin import EvolutionAdmin
 from evolution_http import EvolutionHTTP
+
+logger = logging.getLogger("evo_client")
+
+
+def _get_evo_api_key() -> str:
+    """Returns EVO_API_KEY (preferred) or EVOLUTION_API_KEY (legacy).
+
+    Logs a deprecation warning when using the legacy name.
+    Returns empty string if neither is set.
+    """
+    key = os.environ.get("EVO_API_KEY")
+    if key:
+        return key
+    key = os.environ.get("EVOLUTION_API_KEY", "")
+    if key:
+        logger.warning(
+            "[LEGACY] EVOLUTION_API_KEY detected. Use EVO_API_KEY instead."
+        )
+    return key
 
 
 def build_evolution_admin(
@@ -44,8 +64,8 @@ def build_evolution_admin(
         api_url: override explicito de la URL. Si es None, lee
             `os.environ["EVOLUTION_API_URL"]` (con fallback a
             `http://localhost:8080` para dev local).
-        api_key: override explicito de la API key. Si es None, lee
-            `os.environ["EVOLUTION_API_KEY"]` (string vacio si no esta).
+        api_key: override explicito de la API key. Si es None, llama
+            a `_get_evo_api_key()` (string vacio si no esta).
 
     Returns:
         Un `EvolutionAdmin` listo para usar. Si la key esta vacia, los
@@ -56,5 +76,5 @@ def build_evolution_admin(
     url = api_url if api_url is not None else os.environ.get(
         "EVOLUTION_API_URL", "http://localhost:8080"
     )
-    key = api_key if api_key is not None else os.environ.get("EVOLUTION_API_KEY", "")
+    key = api_key if api_key is not None else _get_evo_api_key()
     return EvolutionAdmin(EvolutionHTTP(url, key))

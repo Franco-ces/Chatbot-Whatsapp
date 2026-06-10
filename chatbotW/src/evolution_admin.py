@@ -303,6 +303,12 @@ class EvolutionAdmin:
                 detail=f"Instancia no encontrada ({op})",
                 cause=exc,
             ) from exc
+        if status == 401:
+            raise APIError(
+                ErrorCode.API_UNAUTHORIZED,
+                detail=f"API key de Evolution no configurada ({op})",
+                cause=exc,
+            ) from exc
         if status == 400:
             raise APIError(
                 ErrorCode.API_INVALID_PAYLOAD,

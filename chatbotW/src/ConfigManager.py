@@ -68,7 +68,8 @@ class ConfigManager:
             # 0.88 = default conservador; configurable por el operador.
             self.config.setdefault("faq_threshold", 0.88)
             # Nombre de la instancia de Evolution actualmente activa para outbound.
-            # Vacio = el bot usa os.environ["EVOLUTION_INSTANCE_NAME"] como fallback.
+            # Vacio = el bot usa el LEGACY fallback (EVOLUTION_INSTANCE_NAME env var)
+            # si está configurado. La UI de admin es el mecanismo recomendado.
             # Es el campo que el instance_watcher (PR 3) relee via mtime para
             # hacer hot-swap de la WhatsAppClient sin reiniciar el contenedor.
             self.config.setdefault("active_instance_name", "")

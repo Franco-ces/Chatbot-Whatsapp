@@ -324,6 +324,19 @@ class TestErrorMapping:
             await admin.create_instance("??")
         assert exc.value.code == ErrorCode.API_INVALID_PAYLOAD
 
+    async def test_401_raises_api_unauthorized(self, mocker, admin):
+        """GIVEN Evolution returns 401
+        WHEN _raise_as_api_error processes it
+        THEN it MUST raise APIError with API_UNAUTHORIZED."""
+        resp = mocker.MagicMock()
+        resp.status_code = 401
+        resp.text = "Unauthorized"
+        mocker.patch.object(admin._http._client, "request", return_value=resp)
+        with pytest.raises(APIError) as exc:
+            await admin.list_instances()
+        assert exc.value.code == ErrorCode.API_UNAUTHORIZED
+        assert exc.value.code.http_status == 401
+
     async def test_500_raises_api_server_error(self, mocker, admin):
         resp = mocker.MagicMock()
         resp.status_code = 500
