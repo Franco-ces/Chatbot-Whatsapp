@@ -63,6 +63,7 @@ class ConfigManager:
         finally:
             self.config.setdefault("email", "")
             self.config.setdefault("telefono", "")
+            self.config.setdefault("bot_tone", "profesional")
             # Umbral de similitud coseno para que una consulta matchee una FAQ.
             # 0.88 = default conservador; configurable por el operador.
             self.config.setdefault("faq_threshold", 0.88)
@@ -77,12 +78,14 @@ class ConfigManager:
             # Modelo de embeddings para FAISS index. Cambiar invalida el vectorstore.
             self.config.setdefault("gemini_embeddings_model", "models/gemini-embedding-2-preview")
 
-    def guardar(self, nuevo_email=None, nuevo_tel=None):
+    def guardar(self, nuevo_email=None, nuevo_tel=None, nuevo_tono=None):
         """Actualiza los valores en memoria y los persiste en el disco."""
         if nuevo_email:
             self.config["email"] = nuevo_email
         if nuevo_tel:
             self.config["telefono"] = nuevo_tel
+        if nuevo_tono:
+            self.config["bot_tone"] = nuevo_tono
 
         try:
             with open(self.path, "w", encoding="utf-8") as f:

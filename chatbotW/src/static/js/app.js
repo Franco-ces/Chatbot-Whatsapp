@@ -23,6 +23,7 @@ document.addEventListener('alpine:init', () => {
         apiKey: '',
         apiStatus: '',
         apiStatusClass: '',
+        configBotTone: '',
         configEmail: '',
         configPhoneCode: '+54',
         configPhoneNum: '',
@@ -152,6 +153,7 @@ document.addEventListener('alpine:init', () => {
                 const res = await apiFetch('/api/config');
                 const data = await res.json();
 
+                this.configBotTone = data.bot_tone || 'profesional';
                 this.configEmail = data.email || '';
                 const telCompleto = data.telefono || '';
                 let numeroSinCodigo = telCompleto;
@@ -181,6 +183,7 @@ document.addEventListener('alpine:init', () => {
 
             const telefonoFinal = `${this.configPhoneCode} ${this.configPhoneNum}`.trim();
             const formData = new FormData();
+            if(this.configBotTone) formData.append("bot_tone", this.configBotTone);
             if(this.configEmail) formData.append("email", this.configEmail);
             if(this.configPhoneNum) formData.append("telefono", telefonoFinal);
 
