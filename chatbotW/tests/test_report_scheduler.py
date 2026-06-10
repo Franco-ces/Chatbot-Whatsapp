@@ -24,10 +24,6 @@ if "asyncpg" not in sys.modules:
     _mock_asyncpg.create_pool = AsyncMock()
     sys.modules["asyncpg"] = _mock_asyncpg
 
-# Mock fpdf before any import that might need it (report_generator imports it)
-if "fpdf" not in sys.modules:
-    _mock_fpdf = MagicMock()
-    sys.modules["fpdf"] = _mock_fpdf
 
 
 def _make_pool_mock(fetch_result=None, fetchrow_result=None):
@@ -301,6 +297,186 @@ class TestDueScheduleQuery:
         assert "ultimo_envio" in rs_mod._DUE_SCHEDULES_SQL
         sql_lower = rs_mod._DUE_SCHEDULES_SQL.lower()
         assert "current_date" in sql_lower or "CURRENT_DATE" in rs_mod._DUE_SCHEDULES_SQL
+
+
+class TestCheckSchedules:
+    """Tests for the extracted _check_schedules function."""
+
+    @pytest.mark.asyncio
+    async def test_check_schedules_queries_due_schedules(self, mocker):
+        """_check_schedules must query due schedules using the SQL and current time."""
+        import report_scheduler as rs_mod
+
+        mock_pool, mock_conn = _make_pool_mock(fetch_result=[])
+        mock_wa = MagicMock()
+        resolver = lambda: "inst"
+
+        await rs_mod._check_schedules(mock_pool, mock_wa, resolver)
+
+        mock_conn.fetch.assert_called_once()
+        call_args = mock_conn.fetch.call_args
+        assert call_args[0][0] == rs_mod._DUE_SCHEDULES_SQL
+
+    @pytest.mark.asyncio
+    async def test_check_schedules_processes_each_due_schedule(self, mocker):
+        """_check_schedules must call _process_schedule for each due schedule."""
+        import report_scheduler as rs_mod
+
+        schedule = {
+            "id": 10, "tipo": "diario", "parametros": {},
+            "hora_envio": time(8, 0), "destino": "54911",
+            "header_text": None, "footer_text": None,
+        }
+        mock_pool, mock_conn = _make_pool_mock(fetch_result=[schedule])
+        mock_wa = MagicMock()
+        resolver = lambda: "inst"
+
+        mock_process = mocker.patch("report_scheduler._process_schedule", new_callable=AsyncMock)
+
+        await rs_mod._check_schedules(mock_pool, mock_wa, resolver)
+
+        mock_process.assert_called_once_with(dict(schedule), mock_pool, mock_wa, "inst")
+
+    @pytest.mark.asyncio
+    async def test_check_schedules_calls_callable_resolver(self, mocker):
+        """_check_schedules must call resolver if it is callable."""
+        import report_scheduler as rs_mod
+
+        schedule = {
+            "id": 11, "tipo": "diario", "parametros": {},
+            "hora_envio": time(8, 0), "destino": "54911",
+            "header_text": None, "footer_text": None,
+        }
+        mock_pool, mock_conn = _make_pool_mock(fetch_result=[schedule])
+        mock_wa = MagicMock()
+        resolver = MagicMock(return_value="resolved-inst")
+
+        mock_process = mocker.patch("report_scheduler._process_schedule", new_callable=AsyncMock)
+
+        await rs_mod._check_schedules(mock_pool, mock_wa, resolver)
+
+        resolver.assert_called_once()
+        mock_process.assert_called_once_with(dict(schedule), mock_pool, mock_wa, "resolved-inst")
+
+    @pytest.mark.asyncio
+    async def test_check_schedules_uses_resolver_string_directly(self, mocker):
+        """_check_schedules must use resolver value directly when not callable."""
+        import report_scheduler as rs_mod
+
+        schedule = {
+            "id": 12, "tipo": "diario", "parametros": {},
+            "hora_envio": time(8, 0), "destino": "54911",
+            "header_text": None, "footer_text": None,
+        }
+        mock_pool, mock_conn = _make_pool_mock(fetch_result=[schedule])
+        mock_wa = MagicMock()
+
+        mock_process = mocker.patch("report_scheduler._process_schedule", new_callable=AsyncMock)
+
+        await rs_mod._check_schedules(mock_pool, mock_wa, "static-instance")
+
+        mock_process.assert_called_once_with(dict(schedule), mock_pool, mock_wa, "static-instance")
+
+    @pytest.mark.asyncio
+    async def test_check_schedules_logs_due_count(self, mocker):
+        """When due schedules are found, log the count."""
+        import report_scheduler as rs_mod
+
+        schedule = {
+            "id": 13, "tipo": "diario", "parametros": {},
+            "hora_envio": time(8, 0), "destino": "54911",
+            "header_text": None, "footer_text": None,
+        }
+        mock_pool, mock_conn = _make_pool_mock(fetch_result=[schedule])
+        mock_wa = MagicMock()
+        resolver = lambda: "inst"
+
+        mock_logger = mocker.patch("report_scheduler.logger")
+        mocker.patch("report_scheduler._process_schedule", new_callable=AsyncMock)
+
+        await rs_mod._check_schedules(mock_pool, mock_wa, resolver)
+
+        mock_logger.info.assert_any_call("Due schedules found", count=1)
+
+    @pytest.mark.asyncio
+    async def test_check_schedules_logs_no_due(self, mocker):
+        """When no schedules are due, log that fact."""
+        import report_scheduler as rs_mod
+
+        mock_pool, mock_conn = _make_pool_mock(fetch_result=[])
+        mock_wa = MagicMock()
+        resolver = lambda: "inst"
+
+        mock_logger = mocker.patch("report_scheduler.logger")
+
+        await rs_mod._check_schedules(mock_pool, mock_wa, resolver)
+
+        mock_logger.info.assert_any_call("No due schedules at this time", current_time=mocker.ANY)
+
+
+class TestSchedulerLoopVisibility:
+    """Tests for visibility logging in _scheduler_loop."""
+
+    @pytest.mark.asyncio
+    async def test_loop_warns_on_pool_none(self, mocker):
+        """When pool is None, the loop must log a warning instead of silently skipping."""
+        import report_scheduler as rs_mod
+
+        mock_logger = mocker.patch("report_scheduler.logger")
+        mocker.patch("asyncio.sleep", side_effect=asyncio.CancelledError)
+
+        with pytest.raises(asyncio.CancelledError):
+            await rs_mod._scheduler_loop(None, MagicMock(), lambda: "inst")
+
+        mock_logger.warning.assert_any_call("Scheduler skipping: pool is None")
+
+    @pytest.mark.asyncio
+    async def test_loop_calls_check_schedules(self, mocker):
+        """The loop must call _check_schedules on each tick when pool is available."""
+        import report_scheduler as rs_mod
+
+        mock_pool, mock_conn = _make_pool_mock(fetch_result=[])
+        mock_wa = MagicMock()
+        resolver = lambda: "inst"
+
+        mock_check = mocker.patch("report_scheduler._check_schedules", new_callable=AsyncMock)
+        mocker.patch("asyncio.sleep", side_effect=asyncio.CancelledError)
+
+        with pytest.raises(asyncio.CancelledError):
+            await rs_mod._scheduler_loop(mock_pool, mock_wa, resolver)
+
+        mock_check.assert_called_once_with(mock_pool, mock_wa, resolver)
+
+
+class TestSchedulerLoopNoInitialDelay:
+    """Tests that the first check happens immediately, no 60s sleep first."""
+
+    @pytest.mark.asyncio
+    async def test_first_check_before_any_sleep(self, mocker):
+        """The loop must check schedules BEFORE the first asyncio.sleep."""
+        import report_scheduler as rs_mod
+
+        mock_pool, mock_conn = _make_pool_mock(fetch_result=[])
+        mock_wa = MagicMock()
+        resolver = lambda: "inst"
+
+        call_order = []
+
+        async def fake_check(pool, wa_client, instance_name_resolver):
+            call_order.append("check")
+
+        async def fake_sleep(seconds):
+            call_order.append("sleep")
+            raise asyncio.CancelledError()
+
+        mocker.patch("report_scheduler._check_schedules", side_effect=fake_check)
+        mocker.patch("asyncio.sleep", side_effect=fake_sleep)
+
+        with pytest.raises(asyncio.CancelledError):
+            await rs_mod._scheduler_loop(mock_pool, mock_wa, resolver)
+
+        assert call_order[0] == "check", f"Expected check before sleep, got order: {call_order}"
+        assert len(call_order) == 2  # check, then sleep
 
 
 class TestSchedulerLifecycle:

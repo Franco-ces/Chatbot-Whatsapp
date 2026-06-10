@@ -84,31 +84,45 @@ async def _process_schedule(schedule: dict, pool, wa_client, instance_name: str)
         )
 
 
+# ─── Schedule checking ──────────────────────────────────────────────────
+
+async def _check_schedules(pool, wa_client, instance_name_resolver) -> None:
+    """Query and process all due schedules for the current time."""
+    logger.info("Scheduler tick: checking due schedules", current_time=str(datetime.now().time()))
+
+    now = datetime.now()
+    current_time = now.time()
+
+    # Find due schedules
+    async with pool.acquire() as conn:
+        schedules = await conn.fetch(_DUE_SCHEDULES_SQL, current_time)
+
+    if schedules:
+        logger.info("Due schedules found", count=len(schedules))
+        for sched in schedules:
+            instance_name = instance_name_resolver() if callable(instance_name_resolver) else instance_name_resolver
+            await _process_schedule(dict(sched), pool, wa_client, instance_name)
+    else:
+        logger.info("No due schedules at this time", current_time=str(current_time))
+
+
 # ─── Scheduler loop ─────────────────────────────────────────────────────
 
 async def _scheduler_loop(pool, wa_client, instance_name_resolver) -> None:
     """Main scheduler loop: runs every 60 seconds, queries due schedules, and processes them."""
     while True:
         try:
-            await asyncio.sleep(60)
             if pool is None:
-                continue
+                logger.warning("Scheduler skipping: pool is None")
+            else:
+                await _check_schedules(pool, wa_client, instance_name_resolver)
 
-            now = datetime.now()
-            current_time = now.time()
-
-            # Find due schedules
-            async with pool.acquire() as conn:
-                schedules = await conn.fetch(_DUE_SCHEDULES_SQL, current_time)
-
-            for sched in schedules:
-                instance_name = instance_name_resolver() if callable(instance_name_resolver) else instance_name_resolver
-                await _process_schedule(dict(sched), pool, wa_client, instance_name)
-
+            await asyncio.sleep(60)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.error("Scheduler loop error", error=str(e))
+            await asyncio.sleep(60)  # Don't tight-loop on error
 
 
 # ─── Start / Stop ──────────────────────────────────────────────────────
