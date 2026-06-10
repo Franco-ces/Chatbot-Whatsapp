@@ -9,6 +9,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    
     
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -618,24 +621,30 @@
                                         <span x-text="param.label"></span>
                                         <span x-show="param.requerido" class="text-red-500">*</span>
                                     </label>
-                                    <input :type="param.tipo === 'date' ? 'date' : 'text'"
+                                    <input :id="'param-' + param.key" :type="param.tipo === 'date' ? 'date' : 'text'"
                                            x-model="scheduleForm.params[param.key]"
-                                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                           :class="scheduleForm.errors['param_'+param.key] ? 'w-full border border-red-400 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 outline-none transition-shadow' : 'w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow'">
+                                    <p x-show="scheduleForm.errors['param_'+param.key]" x-text="scheduleForm.errors['param_'+param.key]" class="text-xs text-red-600 mt-1 font-medium"></p>
                                 </div>
                             </template>
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">Hora de envío</label>
-                                <input type="time" x-model="scheduleForm.hora_envio" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <input type="text" x-model="scheduleForm.hora_envio" x-init="flatpickr($el, {enableTime: true, noCalendar: true, dateFormat: 'H:i', time_24hr: true, minuteIncrement: 1, defaultHour: 8, defaultMinute: 0})" placeholder="08:00" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
                                 <p x-show="scheduleForm.errors.hora_envio" x-text="scheduleForm.errors.hora_envio" class="text-xs text-red-600 mt-1 font-medium"></p>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">Destino (número de WhatsApp)</label>
-                                <input type="text" x-model="scheduleForm.destino" list="destino-list" placeholder="+5491112345678" @focus="$el.value='';$nextTick(()=>$el.value=scheduleForm.destino||'')" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
-                                <datalist id="destino-list">
-                                    <template x-for="num in scheduleForm.destinoHistory" :key="num">
-                                        <option :value="num"></option>
-                                    </template>
-                                </datalist>
+                                <input type="text" x-model="scheduleForm.destino" placeholder="+5491112345678" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <template x-if="scheduleForm.destinoHistory.length > 0">
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        <template x-for="num in scheduleForm.destinoHistory" :key="num">
+                                            <button type="button" @click="scheduleForm.destino = num" class="text-sm bg-gray-100 hover:bg-blue-100 hover:text-blue-700 text-gray-600 pl-3 pr-1.5 py-1 rounded-full border border-gray-200 transition-colors flex items-center gap-1">
+                                                <span x-text="num"></span>
+                                                <span @click.stop="scheduleForm.destinoHistory = scheduleForm.destinoHistory.filter(n => n !== num); localStorage.setItem('destinoHistory', JSON.stringify(scheduleForm.destinoHistory))" class="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full w-5 h-5 inline-flex items-center justify-center text-xs leading-none transition-colors">&times;</span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
                                 <p x-show="scheduleForm.errors.destino" x-text="scheduleForm.errors.destino" class="text-xs text-red-600 mt-1 font-medium"></p>
                             </div>
                             <div>

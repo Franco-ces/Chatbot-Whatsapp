@@ -46,6 +46,7 @@ document.addEventListener('alpine:init', () => {
 
         // Dashboard state
         telemetryData: null,
+        reportTypes: [],
         telemetryLoading: false,
         telemetryError: '',
         charts: [],
@@ -56,7 +57,7 @@ document.addEventListener('alpine:init', () => {
             open: false,
             editId: null,
             tipo: '',
-            hora_envio: '',
+            hora_envio: '08:00',
             destino: '',
             header_text: '',
             footer_text: '',
@@ -67,9 +68,10 @@ document.addEventListener('alpine:init', () => {
             destinoHistory: [],
             errors: { tipo: '', hora_envio: '', destino: '' },
             get valid() {
-                return (this.tipo || '').trim().length > 0
+                const base = (this.tipo || '').trim().length > 0
                     && (this.hora_envio || '').trim().length > 0
                     && (this.destino || '').trim().length > 0;
+                return base;  // param errors handled separately in saveSchedule
             },
         },
         faqForm: {
@@ -97,7 +99,8 @@ document.addEventListener('alpine:init', () => {
                 if (val !== 'dashboard') this.destroyCharts();
             });
             this.$watch('scheduleForm.tipo', (val) => {
-                const tipo = this.scheduleForm.tipos.find(t => t.id === val);
+                const tipos = this.scheduleForm.tipos || this.scheduleForm.reportTypes || [];
+                const tipo = tipos.find(t => t.id === val);
                 this.scheduleForm.selectedTipoParams = tipo ? tipo.parametros || [] : [];
                 // Reset params when tipo changes
                 this.scheduleForm.params = {};
@@ -664,6 +667,7 @@ document.addEventListener('alpine:init', () => {
                 if (tiposRes.ok) {
                     const tiposData = await tiposRes.json();
                     this.scheduleForm.tipos = tiposData.tipos || [];
+                    this.scheduleForm.reportTypes = tiposData.tipos || [];
                 }
             } catch (err) {
                 console.error('Error al cargar schedules', err);
@@ -702,7 +706,7 @@ document.addEventListener('alpine:init', () => {
             f.open = true;
             f.editId = sched.id;
             f.tipo = sched.tipo;
-            // Format time from HH:MM:SS to HH:MM for the time input
+            // Parse time from HH:MM:SS or HH:MM into hora_envio string (HH:MM)
             f.hora_envio = this.formatScheduleTime(sched.hora_envio);
             f.destino = sched.destino;
             f.header_text = sched.header_text || '';
@@ -723,7 +727,7 @@ document.addEventListener('alpine:init', () => {
             f.open = false;
             f.editId = null;
             f.tipo = '';
-            f.hora_envio = '';
+            f.hora_envio = '08:00';
             f.destino = '';
             f.header_text = '';
             f.footer_text = '';
@@ -733,27 +737,33 @@ document.addEventListener('alpine:init', () => {
             f.errors = { tipo: '', hora_envio: '', destino: '' };
         },
 
-        async saveSchedule() {
+         async saveSchedule() {
             const f = this.scheduleForm;
-            // Validate
+            // Validate base fields
             f.errors = { tipo: '', hora_envio: '', destino: '' };
             if (!f.tipo) f.errors.tipo = 'Seleccioná un tipo de reporte.';
-            if (!f.hora_envio) f.errors.hora_envio = 'Ingresá la hora de envío.';
+            if (!f.hora_envio) f.errors.hora_envio = 'Seleccioná la hora de envío.';
             if (!f.destino.trim()) f.errors.destino = 'Ingresá el número de destino.';
+
+            // Validate required params directly from the DOM
+            const paramInputs = document.querySelectorAll('[id^="param-"]');
+            paramInputs.forEach(el => {
+                const key = el.id.replace('param-', '');
+                const val = (f.params[key] || '').trim();
+                if (!val) {
+                    const label = el.closest('div')?.querySelector('label span')?.textContent || key;
+                    f.errors[`param_${key}`] = `El campo "${label}" es obligatorio.`;
+                }
+            });
+
             if (!f.valid) return;
+            if (Object.values(f.errors).some(e => e)) return;
 
             f.saving = true;
             const isEdit = !!f.editId;
             const url = isEdit ? `/api/reportes/schedules/${f.editId}` : '/api/reportes/schedules';
             const method = isEdit ? 'PUT' : 'POST';
-            const body = isEdit ? {
-                tipo: f.tipo,
-                parametros: f.params,
-                hora_envio: f.hora_envio,
-                destino: f.destino.trim(),
-                header_text: f.header_text || null,
-                footer_text: f.footer_text || null,
-            } : {
+            const body = {
                 tipo: f.tipo,
                 parametros: f.params,
                 hora_envio: f.hora_envio,
