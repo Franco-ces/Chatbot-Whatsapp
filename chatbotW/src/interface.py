@@ -130,8 +130,9 @@ def verify_password(password: str) -> bool:
     return hashlib.sha256(password.encode()).hexdigest() == ADMIN_PASSWORD_HASH
 
 EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/api/auth/refresh",
-                  "/", "/api/reload-rag",
-                  "/api/reportes/tipos", "/api/reportes/generar"}
+                   "/api/auth/change-password",
+                   "/", "/api/reload-rag",
+                   "/api/reportes/tipos", "/api/reportes/generar"}
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -574,6 +575,40 @@ async def refresh_token(request: Request):
         return {"token": new_token}
     except JWTError:
         raise APIError(ErrorCode.API_UNAUTHORIZED, detail="Token inválido o expirado")
+
+
+@app.post("/api/auth/change-password")
+async def change_password(request: Request, current_password: str = Form(...), new_password: str = Form(...)):
+    if not verify_password(current_password):
+        raise APIError(ErrorCode.API_UNAUTHORIZED, detail="Contraseña actual incorrecta")
+    if len(new_password) < 4:
+        raise APIError(ErrorCode.API_INVALID_PAYLOAD, detail="La nueva contraseña debe tener al menos 4 caracteres")
+
+    new_hash = hashlib.sha256(new_password.encode()).hexdigest()
+    os.environ["ADMIN_PASSWORD_HASH"] = new_hash
+    global ADMIN_PASSWORD_HASH
+    ADMIN_PASSWORD_HASH = new_hash
+
+    # Persistir a .env
+    try:
+        _write_env("ADMIN_PASSWORD_HASH", new_hash)
+    except OSError:
+        pass
+
+    # Invalidar tokens existentes rotando SECRET_KEY
+    new_secret = secrets.token_urlsafe(32)
+    os.environ["SECRET_KEY"] = new_secret
+    global SECRET_KEY
+    SECRET_KEY = new_secret
+    try:
+        _write_env("SECRET_KEY", new_secret)
+    except OSError:
+        pass
+
+    # Emitir nuevo token
+    exp = datetime.utcnow() + timedelta(hours=2)
+    token = jwt.encode({"sub": "admin", "exp": exp}, SECRET_KEY, algorithm="HS256")
+    return {"token": token, "message": "Contraseña actualizada"}
 # ────────────────────────────────────────────────────────────────────────
 
 # ─── FAQ CRUD Endpoints ────────────────────────────────────────────────
@@ -1079,6 +1114,42 @@ async def get_telemetry_summary(days: int = 7):
         raise
     except Exception as e:
         logger.error("Telemetry summary failed", detail=str(e))
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+
+
+@app.get("/api/telemetry/quick-stats")
+async def get_quick_stats():
+    """Devuelve estadísticas rápidas del bot: últimas interacciones, PDFs indexados, uptime."""
+    pool = telemetry._pool
+    if not pool:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail="Base de datos no disponible")
+
+    try:
+        async with pool.acquire() as conn:
+            # Últimos 5 mensajes
+            recent = await conn.fetch("""
+                SELECT remitente, push_name, texto, created_at
+                FROM telemetry.bot_messages
+                ORDER BY created_at DESC LIMIT 5
+            """)
+            # Conteo de PDFs
+            pdf_count = len(list(PDF_FOLDER.glob("*.pdf")))
+            csv_count = len(list(CSV_FOLDER.glob("*.csv")))
+            faq_count = len(_read_faqs())
+
+        return {
+            "recent_messages": [
+                {"remitente": r["remitente"], "push_name": r["push_name"],
+                 "texto": (r["texto"] or "")[:80], "created_at": str(r["created_at"])}
+                for r in recent
+            ],
+            "pdfs_indexados": pdf_count,
+            "csvs_cargados": csv_count,
+            "faqs_activas": faq_count,
+        }
+    except AppError:
+        raise
+    except Exception as e:
         raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
 # ────────────────────────────────────────────────────────────────────────
 

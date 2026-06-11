@@ -240,8 +240,8 @@ class TestDashboardAlpineMethods:
 
     def test_load_telemetry_uses_api_fetch(self, app_js):
         """loadTelemetry debe usar apiFetch para hacer la petición."""
-        # Buscar apiFetch dentro de loadTelemetry
-        idx = app_js.find("loadTelemetry")
+        # Buscar apiFetch dentro de loadTelemetry — buscamos la definición del método
+        idx = app_js.find("async loadTelemetry")
         assert idx >= 0, "Método loadTelemetry debe existir"
         method_slice = app_js[idx:idx + 1500]
         assert "apiFetch" in method_slice, (

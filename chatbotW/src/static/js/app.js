@@ -96,8 +96,28 @@ document.addEventListener('alpine:init', () => {
             },
         },
 
+        // Dark mode state
+        darkMode: localStorage.getItem('darkMode') === 'true',
+
+        // Quick stats state
+        quickStats: null,
+
+        // Password change state
+        changePasswordCurrent: '',
+        changePasswordNew: '',
+        changePasswordConfirm: '',
+        changePasswordStatus: '',
+        changePasswordStatusClass: '',
+        changePasswordLoading: false,
+
         init() {
+            // Restaurar tab activo desde sessionStorage
+            const savedTab = sessionStorage.getItem('activeTab');
+            if (savedTab && ['config', 'docs', 'faqs', 'instances', 'dashboard', 'logs', 'reports'].includes(savedTab)) {
+                this.activeTab = savedTab;
+            }
             this.$watch('activeTab', (val) => {
+                sessionStorage.setItem('activeTab', val);
                 if (val === 'config') this.loadContactConfig();
                 if (val === 'docs') { this.loadPdfs(); this.loadCsvs(); }
                 if (val === 'faqs') this.loadFaqs();
@@ -115,6 +135,7 @@ document.addEventListener('alpine:init', () => {
             this.$nextTick(() => {
                 this.loadContactConfig();
                 this.loadActiveInstance();
+                this.loadQuickStats();
             });
             // Load destino history from localStorage
             try {
@@ -134,6 +155,7 @@ document.addEventListener('alpine:init', () => {
                 editor.cancel(true);
             }
             this.activeTab = tab;
+            sessionStorage.setItem('activeTab', tab);
         },
 
         // --- API KEY ---
@@ -633,7 +655,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async confirmDeleteFaq(faq) {
-            if (!confirm(`¿Eliminar la pregunta "${faq.pregunta}"?`)) return;
+            if (!confirm(`¿Eliminar la pregunta "${faq.pregunta}"? Esta acción no se puede deshacer.`)) return;
             try {
                 const res = await apiFetch(`/api/faqs/${faq.id}`, { method: 'DELETE' });
                 if (res.status === 204 || res.ok) {
@@ -664,6 +686,7 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 this.telemetryLoading = false;
             }
+            this.loadQuickStats();
         },
 
         initCharts() {
@@ -870,7 +893,7 @@ document.addEventListener('alpine:init', () => {
 
         async confirmDeleteSchedule(sched) {
             const tipoName = this.getScheduleTipoName(sched.tipo);
-            if (!confirm(`¿Eliminar el programa de "${tipoName}" para ${sched.destino}?`)) return;
+            if (!confirm(`¿Eliminar el programa de "${tipoName}" para ${sched.destino}? Esta acción no se puede deshacer.`)) return;
             try {
                 const res = await apiFetch(`/api/reportes/schedules/${sched.id}`, { method: 'DELETE' });
                 if (res.ok) {
@@ -881,6 +904,81 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (err) {
                 window.showToast('Error de conexión al eliminar', 'error');
+            }
+        },
+
+        // --- DARK MODE ---
+        toggleDarkMode() {
+            this.darkMode = !this.darkMode;
+            document.documentElement.classList.toggle('dark', this.darkMode);
+            localStorage.setItem('darkMode', this.darkMode);
+        },
+
+        // --- PASSWORD CHANGE ---
+        async changePassword() {
+            this.changePasswordStatusClass = '';
+            this.changePasswordStatus = '';
+
+            if (!this.changePasswordCurrent || !this.changePasswordNew || !this.changePasswordConfirm) {
+                this.changePasswordStatus = 'Completá todos los campos';
+                this.changePasswordStatusClass = 'mt-3 text-orange-500 text-sm font-medium';
+                return;
+            }
+            if (this.changePasswordNew.length < 4) {
+                this.changePasswordStatus = 'La nueva contraseña debe tener al menos 4 caracteres';
+                this.changePasswordStatusClass = 'mt-3 text-red-600 text-sm font-medium';
+                return;
+            }
+            if (this.changePasswordNew !== this.changePasswordConfirm) {
+                this.changePasswordStatus = 'Las contraseñas nuevas no coinciden';
+                this.changePasswordStatusClass = 'mt-3 text-red-600 text-sm font-medium';
+                return;
+            }
+
+            this.changePasswordLoading = true;
+            const formData = new FormData();
+            formData.append('current_password', this.changePasswordCurrent);
+            formData.append('new_password', this.changePasswordNew);
+
+            try {
+                const res = await apiFetch('/api/auth/change-password', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (res.ok) {
+                    this.changePasswordStatus = data.message;
+                    this.changePasswordStatusClass = 'mt-3 text-green-600 text-sm font-medium';
+                    // Limpiar campos
+                    this.changePasswordCurrent = '';
+                    this.changePasswordNew = '';
+                    this.changePasswordConfirm = '';
+                    // Actualizar token
+                    localStorage.setItem('token', data.token);
+                    Alpine.store('auth').token = data.token;
+                    window.showToast(data.message, 'success');
+                } else {
+                    const detail = (data.error && data.error.detail) || data.detail || 'Error al cambiar contraseña';
+                    this.changePasswordStatus = detail;
+                    this.changePasswordStatusClass = 'mt-3 text-red-600 text-sm font-medium';
+                    window.showToast(detail, 'error');
+                }
+            } catch (err) {
+                this.changePasswordStatus = 'Error de conexión';
+                this.changePasswordStatusClass = 'mt-3 text-red-600 text-sm font-medium';
+                window.showToast('Error de conexión al cambiar contraseña', 'error');
+            } finally {
+                this.changePasswordLoading = false;
+            }
+        },
+
+        // --- QUICK STATS ---
+        async loadQuickStats() {
+            try {
+                const res = await apiFetch('/api/telemetry/quick-stats');
+                if (res.ok) {
+                    this.quickStats = await res.json();
+                }
+            } catch (err) {
+                // Silencioso: no queremos un toast cada vez que entra a dashboard
+                this.quickStats = null;
             }
         },
 

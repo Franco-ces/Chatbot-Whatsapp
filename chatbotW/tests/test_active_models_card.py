@@ -68,7 +68,7 @@ class TestActiveModelsSeparator:
     def test_separator_before_card(self, html_content):
         """Debe existir un <hr> antes de la tarjeta de modelos activos."""
         # Buscar hr seguido de la tarjeta
-        hr_pos = html_content.find('<hr class="my-4 border-gray-100">')
+        hr_pos = html_content.find('<hr class="my-4 border-gray-100 dark:border-gray-700">')
         card_pos = html_content.find("Modelos activos")
         assert hr_pos >= 0, "Debe existir el <hr> separador"
         assert card_pos >= 0, "Debe existir el título 'Modelos activos'"

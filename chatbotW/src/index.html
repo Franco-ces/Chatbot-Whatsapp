@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeuraDocs - Panel Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/styles.css">
@@ -23,8 +28,15 @@
     <!-- Scripts -->
     <script type="module" src="/static/js/app.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        // Prevent FOUC for dark mode
+        if (localStorage.getItem('darkMode') === 'true' ||
+            (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
 </head>
-<body class="bg-gray-100 text-gray-800 min-h-screen" x-data x-cloak>
+<body class="bg-gray-100 text-gray-800 dark:text-gray-100 min-h-screen dark:bg-gray-900" x-data x-cloak>
 
     <!-- TOAST CONTAINER -->
     <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2">
@@ -42,27 +54,27 @@
 
     <!-- LOGIN VIEW (loader mientras verify() corre; login si no hay token) -->
     <template x-if="!$store.auth.verified">
-        <div class="min-h-screen flex items-center justify-center bg-gray-100">
-            <div class="text-gray-500 font-medium"><i class="fas fa-spinner fa-spin mr-2"></i> Verificando sesión…</div>
+        <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+            <div class="text-gray-500 dark:text-gray-400 font-medium"><i class="fas fa-spinner fa-spin mr-2"></i> Verificando sesión…</div>
         </div>
     </template>
     <template x-if="$store.auth.verified && !$store.auth.token">
-        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-800 to-blue-600">
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-800 to-blue-600 dark:from-gray-900 dark:to-gray-800">
             <div x-data="loginForm"
-                 class="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 w-full max-w-sm border border-white/20"
+                 class="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 w-full max-w-sm border border-white/20 dark:bg-gray-800/90 dark:border-gray-700"
                  :class="{ 'animate-shake': loginShake }"
                  @animationend="loginShake = false">
                 <div class="text-center mb-8">
                     <img src="/static/images/logo.jpeg" alt="NeuraDocs" class="h-16 w-auto mx-auto mb-4">
-                    <h1 class="text-2xl font-bold text-gray-800">NeuraDocs</h1>
-                    <p class="text-gray-500 text-sm mt-1">Panel Admin</p>
+                    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">NeuraDocs</h1>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Panel Admin</p>
                 </div>
                 <form @submit.prevent="doLogin">
                     <div class="mb-6 relative">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña</label>
                         <div class="relative">
-                            <input :type="showPassword ? 'text' : 'password'" x-model="password" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-2.5 pr-10 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
-                            <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors" tabindex="-1">
+                            <input :type="showPassword ? 'text' : 'password'" x-model="password" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-2.5 pr-10 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-400 transition-colors dark:hover:text-gray-300" tabindex="-1">
                                 <i class="fas" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
                             </button>
                         </div>
@@ -78,7 +90,7 @@
     <template x-if="$store.auth.verified && $store.auth.token">
         <div x-data="adminPanel">
             <!-- NAVBAR -->
-            <nav class="bg-gradient-to-r from-blue-800 to-blue-600 text-white shadow-lg sticky top-0 z-40">
+            <nav class="bg-gradient-to-r from-blue-800 to-blue-600 text-white shadow-lg sticky top-0 z-40 dark:from-gray-900 dark:to-gray-800">
                 <div class="max-w-7xl mx-auto px-4 py-5 flex items-center justify-between">
                     <div class="flex items-center gap-3">
                         <img src="/static/images/logo.jpeg" alt="NeuraDocs" class="h-10 w-auto">
@@ -99,6 +111,9 @@
                         <button @click="$store.auth.logout()" class="bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-sm transition-colors shadow-sm">
                             Cerrar sesión
                         </button>
+                        <button @click="toggleDarkMode()" class="text-white/80 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors" title="Modo oscuro">
+                            <i class="fas" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+                        </button>
                     </div>
                 </div>
             </nav>
@@ -106,75 +121,75 @@
             <!-- ─── BANNER: Sin instancia activa ─── -->
             <div x-show="activeInstanceLoaded && !activeInstanceName"
                  class="max-w-5xl mx-auto pt-4 px-4">
-                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-center gap-2 shadow-sm">
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 dark:text-amber-200/50 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2 shadow-sm">
                     <i class="fas fa-triangle-exclamation text-amber-600"></i>
-                    <span>No hay instancia activa. <a href="#" @click.prevent="switchTab('instances')" class="font-semibold underline hover:text-amber-900">Crealá desde la sección Instancias.</a></span>
+                    <span>No hay instancia activa. <a href="#" @click.prevent="switchTab('instances')" class="font-semibold underline hover:text-amber-900 dark:hover:text-amber-300">Crealá desde la sección Instancias.</a></span>
                 </div>
             </div>
 
             <!-- ─── BANNER: Google API Key no configurada ─── -->
             <div x-show="activeInstanceLoaded && !googleApiKeySet"
                  class="max-w-5xl mx-auto pt-4 px-4">
-                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-center gap-2 shadow-sm">
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 dark:text-amber-200/50 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2 shadow-sm">
                     <i class="fas fa-triangle-exclamation text-amber-600"></i>
-                    <span>Google API Key no configurada. <a href="#" @click.prevent="switchTab('config')" class="font-semibold underline hover:text-amber-900">Configurala en la sección Configuración.</a></span>
+                    <span>Google API Key no configurada. <a href="#" @click.prevent="switchTab('config')" class="font-semibold underline hover:text-amber-900 dark:hover:text-amber-300">Configurala en la sección Configuración.</a></span>
                 </div>
             </div>
 
             <!-- ─── BANNER: Evolution API Key no configurada ─── -->
             <div x-show="activeInstanceLoaded && !evolutionApiKeySet"
                  class="max-w-5xl mx-auto pt-4 px-4">
-                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-center gap-2 shadow-sm">
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 dark:text-amber-200/50 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2 shadow-sm">
                     <i class="fas fa-triangle-exclamation text-amber-600"></i>
-                    <span>Evolution API Key no configurada. <a href="#" @click.prevent="switchTab('config')" class="font-semibold underline hover:text-amber-900">Configurala en la sección Configuración.</a></span>
+                    <span>Evolution API Key no configurada. <a href="#" @click.prevent="switchTab('config')" class="font-semibold underline hover:text-amber-900 dark:hover:text-amber-300">Configurala en la sección Configuración.</a></span>
                 </div>
             </div>
 
             <!-- TAB BAR -->
             <div class="max-w-5xl mx-auto py-6 px-4">
-                <div class="flex space-x-1 border-b border-gray-300 mb-6 overflow-x-auto items-end">
-                    <button @click="switchTab('config')" :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-key mr-1.5"></i> Configuración</button>
-                    <button @click="switchTab('docs')" :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-folder-open mr-1.5"></i> Documentos</button>
-                    <button @click="switchTab('faqs')" :class="activeTab === 'faqs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-circle-question mr-1.5"></i> FAQs</button>
-                    <button @click="switchTab('instances')" :class="activeTab === 'instances' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-satellite-dish mr-1.5"></i> Instancias</button>
-                    <button @click="switchTab('dashboard')" :class="activeTab === 'dashboard' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-chart-pie mr-1.5"></i> Dashboard</button>
-                    <button @click="switchTab('logs')" :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-scroll mr-1.5"></i> Logs</button>
-                    <button @click="switchTab('reports')" :class="activeTab === 'reports' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-clock mr-1.5"></i> Informes</button>
+                <div class="flex space-x-1 border-b border-gray-300 dark:border-gray-700 mb-6 overflow-x-auto items-end">
+                    <button @click="switchTab('config')" :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-key mr-1.5"></i> Configuración</button>
+                    <button @click="switchTab('docs')" :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-folder-open mr-1.5"></i> Documentos</button>
+                    <button @click="switchTab('faqs')" :class="activeTab === 'faqs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-circle-question mr-1.5"></i> FAQs</button>
+                    <button @click="switchTab('instances')" :class="activeTab === 'instances' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-satellite-dish mr-1.5"></i> Instancias</button>
+                    <button @click="switchTab('dashboard')" :class="activeTab === 'dashboard' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-chart-pie mr-1.5"></i> Dashboard</button>
+                    <button @click="switchTab('logs')" :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-scroll mr-1.5"></i> Logs</button>
+                    <button @click="switchTab('reports')" :class="activeTab === 'reports' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-clock mr-1.5"></i> Informes</button>
                 </div>
 
                 <!-- ─── TAB: Configuración ─── -->
-                <div x-show="activeTab === 'config'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h2 class="text-xl font-semibold mb-4 text-gray-800"><i class="fas fa-key text-blue-500 mr-2"></i> Configuración de Google API Key</h2>
+                <div x-show="activeTab === 'config'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100"><i class="fas fa-key text-blue-500 mr-2"></i> Configuración de Google API Key</h2>
                     <div class="flex gap-4">
-                        <input type="text" x-model="apiKey" placeholder="Pega tu clave aquí..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
-                        <button @click="saveApiKey()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
+                        <input type="text" x-model="apiKey" placeholder="Pega tu clave aquí..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <button @click="saveApiKey()" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
                     </div>
                     <p x-text="apiStatus" :class="apiStatusClass" class="mt-3 font-medium text-sm h-5"></p>
 
-                    <hr class="my-8 border-gray-100">
+                    <hr class="my-8 border-gray-100 dark:border-gray-700">
 
-                    <h2 class="text-xl font-semibold mb-4 mt-8 text-gray-800"><i class="fas fa-key text-blue-500 mr-2"></i> Configuraci&oacute;n de Evolution API Key</h2>
-                    <p class="text-sm text-gray-500 mb-4">Esta clave permite que el panel admin se comunique con Evolution API. Si la cambi&aacute;s, reinici&aacute; el contenedor de Evolution aplicando los cambios.</p>
+                    <h2 class="text-xl font-semibold mb-4 mt-8 text-gray-800 dark:text-gray-100"><i class="fas fa-key text-blue-500 mr-2"></i> Configuraci&oacute;n de Evolution API Key</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Esta clave permite que el panel admin se comunique con Evolution API. Si la cambi&aacute;s, reinici&aacute; el contenedor de Evolution aplicando los cambios.</p>
                     <div class="flex gap-4">
-                        <input type="text" x-model="evoApiKey" placeholder="Pega tu clave de Evolution aqu&iacute;..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
-                        <button @click="saveEvolutionKey()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
+                        <input type="text" x-model="evoApiKey" placeholder="Pega tu clave de Evolution aqu&iacute;..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <button @click="saveEvolutionKey()" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
                     </div>
                     <p x-text="evoApiStatus" :class="evoApiStatusClass" class="mt-3 font-medium text-sm h-5"></p>
 
-                    <hr class="my-8 border-gray-100">
+                    <hr class="my-8 border-gray-100 dark:border-gray-700">
 
-                    <h2 class="text-xl font-semibold mb-4 text-gray-800"><i class="fas fa-address-card text-blue-500 mr-2"></i> Variables de Contacto (Bot)</h2>
-                    <p class="text-sm text-gray-500 mb-6">Estos datos definen el comportamiento y los datos inyectados dinámicamente en las respuestas de la IA.</p>
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100"><i class="fas fa-address-card text-blue-500 mr-2"></i> Variables de Contacto (Bot)</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Estos datos definen el comportamiento y los datos inyectados dinámicamente en las respuestas de la IA.</p>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Correo de Soporte</label>
-                            <input type="email" x-model="configEmail" placeholder="soporte@tuempresa.com" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Correo de Soporte</label>
+                            <input type="email" x-model="configEmail" placeholder="soporte@tuempresa.com" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                         </div>
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Teléfono de Contacto</label>
-                            <div class="flex shadow-sm rounded-lg overflow-hidden border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
-                                <select x-model="configPhoneCode" class="px-2 py-2 bg-gray-50 border-r border-gray-300 cursor-pointer max-w-[180px] outline-none">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Teléfono de Contacto</label>
+                            <div class="flex shadow-sm rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                                <select x-model="configPhoneCode" class="px-2 py-2 bg-gray-50 dark:bg-gray-700/50 border-r border-gray-300 dark:border-gray-600 cursor-pointer max-w-[180px] outline-none">
                                     <option value="+54">(ARG) +54</option>
                                     <option value="+56">(CHL) +56</option>
                                     <option value="+57">(COL) +57</option>
@@ -188,18 +203,18 @@
                                     <option value="+1">(USA) +1</option>
                                     <option value="+34">(ESP) +34</option>
                                 </select>
-                                <input type="text" x-model="configPhoneNum" placeholder="11 1234-5678" class="flex-1 px-4 py-2 outline-none">
+                                <input type="text" x-model="configPhoneNum" placeholder="11 1234-5678" class="flex-1 px-4 py-2 outline-none dark:bg-gray-700 dark:text-white">
                             </div>
                         </div>
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Tono del Bot</label>
-                            <select x-model="configBotTone" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white cursor-pointer">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Tono del Bot</label>
+                            <select x-model="configBotTone" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white cursor-pointer">
                                 <option value="profesional">Profesional (Serio y preciso)</option>
                                 <option value="amigable">Amigable (Informal y empático)</option>
                                 <option value="directo">Directo (Técnico y sin rodeos)</option>
                                 <option value="comercial">Comercial (Persuasivo y vendedor)</option>
                             </select>
-                            <p class="text-xs text-gray-500 mt-1">Define la personalidad con la que responderá la IA.</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Define la personalidad con la que responderá la IA.</p>
                         </div>
                     </div>
                     <div class="flex gap-3 mt-6">
@@ -207,20 +222,20 @@
                     </div>
                     <p x-text="configStatus" :class="configStatusClass" class="mt-3 font-medium text-sm h-5"></p>
 
-                    <hr class="my-8 border-gray-100">
+                    <hr class="my-8 border-gray-100 dark:border-gray-700">
 
-                    <h2 class="text-xl font-semibold mb-4 text-gray-800"><i class="fas fa-robot text-blue-500 mr-2"></i> Modelos de Gemini</h2>
-                    <p class="text-sm text-gray-500 mb-6">Configurá los modelos de IA que usa el bot. Los valores por defecto funcionan bien para la mayoría de los casos.</p>
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100"><i class="fas fa-robot text-blue-500 mr-2"></i> Modelos de Gemini</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Configurá los modelos de IA que usa el bot. Los valores por defecto funcionan bien para la mayoría de los casos.</p>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Modelo de generación</label>
-                            <input type="text" id="geminiModelInput" x-model="geminiModel" placeholder="gemini-3.1-flash-lite" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Modelo de generación</label>
+                            <input type="text" id="geminiModelInput" x-model="geminiModel" placeholder="gemini-3.1-flash-lite" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                             <p class="text-xs text-yellow-600 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i> Los rate limits, costos y calidad de respuesta pueden variar según el modelo.</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Modelo de embeddings</label>
-                            <input type="text" id="geminiEmbeddingsInput" x-model="geminiEmbeddingsModel" placeholder="gemini-embedding-2-preview" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Modelo de embeddings</label>
+                            <input type="text" id="geminiEmbeddingsInput" x-model="geminiEmbeddingsModel" placeholder="gemini-embedding-2-preview" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                             <p class="text-xs text-red-600 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i> <strong>CRÍTICO:</strong> Cambiar este modelo invalida el vectorstore. Deberás reindexar todos los documentos.</p>
                         </div>
                     </div>
@@ -229,50 +244,81 @@
                     </div>
                     <p x-text="geminiConfigStatus" :class="geminiConfigStatusClass" class="mt-3 font-medium text-sm h-5"></p>
 
-                    <hr class="my-4 border-gray-100">
+                    <hr class="my-4 border-gray-100 dark:border-gray-700">
 
-                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                      <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
                         <i class="fas fa-microchip text-blue-500"></i> Modelos activos
                       </h3>
                       <div class="space-y-2 text-sm">
                         <div class="flex items-center gap-2">
                           <span class="text-blue-500"><i class="fas fa-circle-check"></i></span>
-                          <span class="text-gray-600">Generación:</span>
-                          <span class="font-mono font-medium text-gray-800" x-text="activeGeminiModel || '—'"></span>
+                          <span class="text-gray-600 dark:text-gray-400">Generación:</span>
+                          <span class="font-mono font-medium text-gray-800 dark:text-gray-100" x-text="activeGeminiModel || '—'"></span>
                         </div>
                         <div class="flex items-center gap-2">
                           <span class="text-blue-500"><i class="fas fa-circle-check"></i></span>
-                          <span class="text-gray-600">Embeddings:</span>
-                          <span class="font-mono font-medium text-gray-800" x-text="activeGeminiEmbeddingsModel || '—'"></span>
+                          <span class="text-gray-600 dark:text-gray-400">Embeddings:</span>
+                          <span class="font-mono font-medium text-gray-800 dark:text-gray-100" x-text="activeGeminiEmbeddingsModel || '—'"></span>
                         </div>
                       </div>
                     </div>
+
+                    <hr class="my-8 border-gray-100 dark:border-gray-700">
+
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100"><i class="fas fa-lock text-blue-500 mr-2"></i> Cambiar Contraseña</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Actualizá la contraseña del panel admin. Se te pedirá que vuelvas a iniciar sesión.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Contraseña actual</label>
+                            <input type="password" x-model="changePasswordCurrent" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nueva contraseña</label>
+                            <input type="password" x-model="changePasswordNew" placeholder="Mínimo 4 caracteres" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Confirmar nueva</label>
+                            <input type="password" x-model="changePasswordConfirm" placeholder="Repetí la contraseña" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <button @click="changePassword()" :disabled="changePasswordLoading" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2">
+                            <span x-show="!changePasswordLoading"><i class="fas fa-key mr-1"></i> Cambiar contraseña</span>
+                            <span x-show="changePasswordLoading"><i class="fas fa-spinner fa-spin mr-1"></i> Cambiando...</span>
+                        </button>
+                    </div>
+                    <p x-show="changePasswordStatus" x-text="changePasswordStatus" :class="changePasswordStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                 </div>
 
                 <!-- ─── TAB: Documentos ─── -->
-                <div x-show="activeTab === 'docs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div x-show="activeTab === 'docs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div>
-                            <h2 class="text-xl font-semibold mb-4 text-gray-800 flex items-center min-h-[40px]"><i class="fas fa-arrow-up-from-bracket text-blue-500 mr-2"></i> Subir Nuevos (PDF)</h2>
-                            <input type="file" multiple accept=".pdf" @change="uploadPdfs" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 rounded-lg p-2 transition-colors">
+                            <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100 flex items-center min-h-[40px]"><i class="fas fa-arrow-up-from-bracket text-blue-500 mr-2"></i> Subir Nuevos (PDF)</h2>
+                            <input type="file" multiple accept=".pdf" @change="uploadPdfs" class="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 dark:border-gray-600 rounded-lg p-2 transition-colors">
                             <p x-text="pdfUploadStatus" :class="pdfUploadStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
                         <div>
-                            <h2 class="text-xl font-semibold mb-4 flex justify-between items-center min-h-[40px] text-gray-800">
+                            <h2 class="text-xl font-semibold mb-4 flex justify-between items-center min-h-[40px] text-gray-800 dark:text-gray-100">
                                 <span><i class="fas fa-folder-open text-blue-500 mr-2"></i> Archivos en Servidor</span>
-                                <button @click="loadPdfs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
+                                <button @click="loadPdfs()" class="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
                             </h2>
-                            <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 bg-gray-50 overflow-hidden shadow-inner max-h-[300px] overflow-y-auto custom-scrollbar">
+                            <ul class="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700 bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-inner max-h-[300px] overflow-y-auto custom-scrollbar">
                                 <template x-if="pdfs.length === 0">
-                                    <li class="p-4 text-gray-500 italic text-center text-sm"><i class="fas fa-folder mr-1"></i> Carpeta vacía</li>
+                                    <li class="p-8 text-center">
+                                        <i class="fas fa-folder-open text-gray-300 dark:text-gray-600 text-5xl mb-3 block"></i>
+                                        <p class="text-gray-500 dark:text-gray-400 font-medium mb-1">No hay documentos cargados</p>
+                                        <p class="text-gray-400 dark:text-gray-500 dark:text-gray-400 text-sm">Subí PDFs desde el panel de la izquierda para empezar</p>
+                                    </li>
                                 </template>
                                 <template x-for="pdf in pdfs" :key="pdf">
-                                    <li class="p-3 flex justify-between items-center hover:bg-white transition-colors group border-b border-gray-100 last:border-b-0">
-                                        <span class="font-medium text-gray-700 mr-2 flex items-center gap-2 min-w-0"><i class="fas fa-file-pdf text-red-500"></i> <span x-text="pdf" class="text-sm truncate"></span></span>
+                                    <li class="p-3 flex justify-between items-center hover:bg-white dark:hover:bg-gray-800 transition-colors group border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300 mr-2 flex items-center gap-2 min-w-0"><i class="fas fa-file-pdf text-red-500"></i> <span x-text="pdf" class="text-sm truncate"></span></span>
                                         <div class="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button @click="downloadFile('/api/pdfs/' + pdf, pdf)" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors leading-none" title="Descargar"><i class="fas fa-arrow-down"></i></button>
-                                            <button @click="deletePdf(pdf)" class="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors leading-none" title="Eliminar"><i class="fas fa-xmark"></i></button>
+                                            <button @click="downloadFile('/api/pdfs/' + pdf, pdf)" class="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-1.5 rounded-md transition-colors leading-none" title="Descargar"><i class="fas fa-arrow-down"></i></button>
+                                            <button @click="deletePdf(pdf)" class="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 rounded-md transition-colors leading-none" title="Eliminar"><i class="fas fa-xmark"></i></button>
                                         </div>
                                     </li>
                                 </template>
@@ -280,26 +326,30 @@
                         </div>
                     </div>
 
-                    <hr class="my-8 border-gray-100">
+                    <hr class="my-8 border-gray-100 dark:border-gray-700">
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div>
-                            <h3 class="text-lg font-semibold mb-3 text-gray-700 flex items-center min-h-[36px]"><i class="fas fa-arrow-up-from-bracket text-green-600 mr-2"></i> Subir CSV</h3>
-                            <input type="file" accept=".csv" @change="uploadCsvs" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-4 cursor-pointer border border-gray-200 rounded-lg p-2 transition-colors">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-700 dark:text-gray-300 flex items-center min-h-[36px]"><i class="fas fa-arrow-up-from-bracket text-green-600 mr-2"></i> Subir CSV</h3>
+                            <input type="file" accept=".csv" @change="uploadCsvs" class="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-4 cursor-pointer border border-gray-200 dark:border-gray-600 rounded-lg p-2 transition-colors">
                             <p x-text="csvUploadStatus" :class="csvUploadStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
                         <div>
-                            <h3 class="text-lg font-semibold mb-3 flex justify-between items-center min-h-[36px] text-gray-700">
+                            <h3 class="text-lg font-semibold mb-3 flex justify-between items-center min-h-[36px] text-gray-700 dark:text-gray-300">
                                 <span><i class="fas fa-file-csv text-green-600 mr-2"></i> Archivos CSV</span>
-                                <button @click="loadCsvs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
+                                <button @click="loadCsvs()" class="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
                             </h3>
-                            <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 bg-gray-50 overflow-hidden shadow-inner max-h-[300px] overflow-y-auto custom-scrollbar">
+                            <ul class="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700 bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-inner max-h-[300px] overflow-y-auto custom-scrollbar">
                                 <template x-if="csvs.length === 0">
-                                    <li class="p-4 text-gray-500 italic text-center text-sm"><i class="fas fa-folder mr-1"></i> Carpeta vacía</li>
+                                    <li class="p-8 text-center">
+                                        <i class="fas fa-file-csv text-gray-300 dark:text-gray-600 text-5xl mb-3 block"></i>
+                                        <p class="text-gray-500 dark:text-gray-400 font-medium mb-1">No hay archivos CSV</p>
+                                        <p class="text-gray-400 dark:text-gray-500 text-sm">Subí CSVs desde el panel de la izquierda</p>
+                                    </li>
                                 </template>
                                 <template x-for="csv in csvs" :key="csv">
-                                    <li class="p-3 flex justify-between items-center hover:bg-white transition-colors group border-b border-gray-100 last:border-b-0">
-                                        <span class="font-medium text-gray-700 mr-2 flex items-center gap-2 min-w-0"><i class="fas fa-file-csv text-green-600"></i> <span x-text="csv" class="text-sm truncate max-w-[200px]"></span></span>
+                                    <li class="p-3 flex justify-between items-center hover:bg-white dark:hover:bg-gray-800 transition-colors group border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300 mr-2 flex items-center gap-2 min-w-0"><i class="fas fa-file-csv text-green-600"></i> <span x-text="csv" class="text-sm truncate max-w-[200px]"></span></span>
                                         <div class="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button @click="$store.csvEditor.edit(csv)" class="text-yellow-600 hover:bg-yellow-50 p-1.5 rounded-md transition-colors leading-none" title="Editar"><i class="fas fa-pen"></i></button>
                                             <button @click="downloadFile('/api/csvs/' + csv, csv)" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors leading-none" title="Descargar"><i class="fas fa-arrow-down"></i></button>
@@ -312,33 +362,33 @@
                     </div>
 
                     <!-- CSV Editor -->
-                    <div x-show="$store.csvEditor.show" x-transition class="mt-8 border border-gray-200 rounded-xl p-6 bg-white shadow-sm">
-                        <h3 class="text-lg font-semibold mb-4 text-gray-800" x-text="`Editing: ${$store.csvEditor.filename}`"></h3>
+                    <div x-show="$store.csvEditor.show" x-transition class="mt-8 border border-gray-200 rounded-xl p-6 bg-white shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100" x-text="`Editing: ${$store.csvEditor.filename}`"></h3>
 
-                        <div x-show="$store.csvEditor.loading" class="text-center py-8 text-gray-500">Cargando datos...</div>
+                        <div x-show="$store.csvEditor.loading" class="text-center py-8 text-gray-500 dark:text-gray-400">Cargando datos...</div>
 
                         <div x-show="!$store.csvEditor.loading">
                             <div class="overflow-auto max-h-[500px] mb-6 rounded-lg border border-gray-200 custom-scrollbar">
                                 <table class="w-full border-collapse">
                                     <thead>
-                                        <tr class="bg-gray-50 border-b border-gray-200">
-                                            <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-10">#</th>
+                                        <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                                            <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-10">#</th>
                                             <template x-for="(header, idx) in $store.csvEditor.headers" :key="idx">
-                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-l border-gray-200" x-text="header"></th>
+                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-l border-gray-200" x-text="header"></th>
                                             </template>
-                                            <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider border-l border-gray-200 w-12"><i class="fas fa-trash"></i></th>
+                                            <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-l border-gray-200 w-12"><i class="fas fa-trash"></i></th>
                                         </tr>
                                     </thead>
-                                    <tbody class="bg-white divide-y divide-gray-100">
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
                                         <template x-for="(row, rowIdx) in $store.csvEditor.rows" :key="rowIdx">
-                                            <tr class="hover:bg-gray-50 transition-colors">
+                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/60 dark:bg-gray-700/50 transition-colors">
                                                 <td class="px-3 py-2 text-center text-xs text-gray-400 font-medium" x-text="rowIdx + 1"></td>
                                                 <template x-for="(cell, colIdx) in row" :key="colIdx">
-                                                    <td class="p-1 border-l border-gray-100">
-                                                        <input type="text" x-model="$store.csvEditor.rows[rowIdx][colIdx]" @input="$store.csvEditor.markDirty()" class="w-full border-0 bg-transparent px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white rounded-md outline-none transition-shadow text-gray-700">
+                                                    <td class="p-1 border-l border-gray-100 dark:border-gray-700">
+                                                        <input type="text" x-model="$store.csvEditor.rows[rowIdx][colIdx]" @input="$store.csvEditor.markDirty()" class="w-full border-0 bg-transparent px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white rounded-md outline-none transition-shadow text-gray-700 dark:text-gray-300">
                                                     </td>
                                                 </template>
-                                                <td class="px-2 py-2 text-center border-l border-gray-100">
+                                                <td class="px-2 py-2 text-center border-l border-gray-100 dark:border-gray-700">
                                                     <button @click="$store.csvEditor.removeRow(rowIdx)" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Eliminar fila"><i class="fas fa-xmark"></i></button>
                                                 </td>
                                             </tr>
@@ -355,7 +405,7 @@
                                 <button @click="$store.csvEditor.addRow()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm">
                                     <i class="fas fa-plus mr-1"></i> Fila
                                 </button>
-                                <button @click="$store.csvEditor.cancel()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">
+                                <button @click="$store.csvEditor.cancel()" class="bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">
                                     <i class="fas fa-xmark mr-1"></i> Cancelar
                                 </button>
                                 <span x-show="$store.csvEditor.status" x-text="$store.csvEditor.status" class="ml-auto text-sm font-medium" :class="$store.csvEditor.statusClass"></span>
@@ -365,24 +415,24 @@
                 </div>
 
                 <!-- ─── TAB: Logs ─── -->
-                <div x-show="activeTab === 'logs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div x-show="activeTab === 'logs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-[500px] md:h-[600px]">
-                        <div class="md:col-span-1 border-r border-gray-100 pr-6 flex flex-col h-full">
-                            <h2 class="text-lg font-semibold mb-4 flex justify-between items-center text-gray-800">
+                        <div class="md:col-span-1 border-r border-gray-100 dark:border-gray-700 pr-6 flex flex-col h-full">
+                            <h2 class="text-lg font-semibold mb-4 flex justify-between items-center text-gray-800 dark:text-gray-100">
                                 <span><i class="fas fa-list-ul text-blue-500 mr-1.5"></i> Registros</span>
-                                <button @click="loadLogs()" class="text-xs bg-gray-100 hover:bg-gray-200 py-1.5 px-2.5 rounded-lg transition-colors border border-gray-200"><i class="fas fa-rotate-right"></i></button>
+                                <button @click="loadLogs()" class="text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-2.5 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right"></i></button>
                             </h2>
                             <div class="relative mb-4">
-                                <input type="text" x-model="searchQuery" @input.debounce.300ms="performSearch" placeholder="Buscar por nombre..." class="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <input type="text" x-model="searchQuery" @input.debounce.300ms="performSearch" placeholder="Buscar por nombre..." class="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                 <span class="absolute left-3 top-2 text-gray-400"><i class="fas fa-search"></i></span>
                             </div>
                             <ul class="space-y-2 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                                 <template x-if="displayLogs.length === 0">
-                                    <li class="text-gray-400 italic text-sm text-center mt-4">Sin resultados</li>
+                                    <li class="text-gray-400 dark:text-gray-500 italic text-sm text-center mt-4">No se encontraron conversaciones con ese nombre</li>
                                 </template>
                                 <template x-for="log in displayLogs" :key="log.filename">
                                     <li>
-                                        <button @click="readLog(log.filename)" class="w-full text-left px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:shadow-sm transition-all text-sm text-gray-700 truncate group">
+                                        <button @click="readLog(log.filename)" class="w-full text-left px-4 py-2.5 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:shadow-sm transition-all text-sm text-gray-700 dark:text-gray-300 truncate group">
                                             <span class="group-hover:translate-x-1 inline-block transition-transform duration-200"><i class="fas fa-folder text-blue-400 mr-1.5"></i> <span x-text="log.filename"></span></span>
                                         </button>
                                     </li>
@@ -390,13 +440,13 @@
                             </ul>
                         </div>
                         <div class="md:col-span-2 flex flex-col h-full pl-2 min-h-0">
-                            <h2 x-text="currentLogTitle" class="text-lg font-semibold mb-4 text-gray-800"></h2>
+                            <h2 x-text="currentLogTitle" class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100"></h2>
 
-                            <div class="w-full flex-1 min-h-0 bg-wpp p-4 rounded-xl overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-200 custom-scrollbar relative">
-                                <div x-show="loadingLog" class="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
-                                    <div class="text-gray-500 font-medium">Cargando...</div>
+                            <div class="w-full flex-1 min-h-0 bg-wpp dark:bg-gray-800 p-4 rounded-xl overflow-y-auto flex flex-col gap-3 shadow-inner border border-gray-200 dark:border-gray-700 custom-scrollbar relative">
+                                <div x-show="loadingLog" class="absolute inset-0 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
+                                    <div class="text-gray-500 dark:text-gray-400 font-medium">Cargando...</div>
                                 </div>
-                                <div x-show="!loadingLog && !currentLogContent" class="text-center text-gray-500 text-sm mt-auto mb-auto">
+                                <div x-show="!loadingLog && !currentLogContent" class="text-center text-gray-500 dark:text-gray-400 text-sm mt-auto mb-auto">
                                     Selecciona un log a la izquierda para visualizar la conversación.
                                 </div>
                                 <div x-html="currentLogContent" class="flex flex-col gap-3 w-full pb-4"></div>
@@ -406,32 +456,32 @@
                 </div>
 
                 <!-- ─── TAB: FAQs ─── -->
-                <div x-show="activeTab === 'faqs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div x-show="activeTab === 'faqs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold text-gray-800"><i class="fas fa-circle-question text-blue-500 mr-2"></i> Respuestas Frecuentes</h2>
+                        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100"><i class="fas fa-circle-question text-blue-500 mr-2"></i> Respuestas Frecuentes</h2>
                         <div class="flex gap-2">
-                            <button @click="loadFaqs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
+                            <button @click="loadFaqs()" class="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
                             <button @click="startCreateFaq()" class="text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 px-3 rounded-lg transition-colors shadow-sm"><i class="fas fa-plus mr-1"></i> Agregar fila</button>
                         </div>
                     </div>
-                    <p class="text-sm text-gray-500 mb-4">Estas respuestas se devuelven directo al usuario sin pasar por la IA (match por similitud). Editá o eliminá las filas según necesites.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Estas respuestas se devuelven directo al usuario sin pasar por la IA (match por similitud). Editá o eliminá las filas según necesites.</p>
 
                     <!-- Form de creación / edición -->
-                    <div x-show="faqForm.open" x-transition class="mb-6 border border-gray-200 rounded-xl p-5 bg-gray-50 shadow-sm">
-                        <h3 class="text-lg font-semibold mb-4 text-gray-800">
+                    <div x-show="faqForm.open" x-transition class="mb-6 border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-gray-50 dark:bg-gray-700/50 shadow-sm">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">
                             <template x-if="faqForm.editId"><span><i class="fas fa-pen"></i> Editar FAQ</span></template>
                             <template x-if="!faqForm.editId"><span><i class="fas fa-plus"></i> Nueva FAQ</span></template>
                         </h3>
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Pregunta <span class="text-gray-400 font-normal">(máx 500)</span></label>
-                                <textarea x-model="faqForm.pregunta" maxlength="500" rows="2" placeholder="Ej: ¿Cuál es el horario de atención?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y"></textarea>
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Pregunta <span class="text-gray-400 font-normal">(máx 500)</span></label>
+                                <textarea x-model="faqForm.pregunta" maxlength="500" rows="2" placeholder="Ej: ¿Cuál es el horario de atención?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y dark:bg-gray-700 dark:border-gray-600 dark:text-white"></textarea>
                                 <p class="text-xs text-right mt-1" :class="faqForm.pregunta.length > 500 ? 'text-red-600' : 'text-gray-400'" x-text="`${faqForm.pregunta.length} / 500`"></p>
                                 <p x-show="faqForm.errors.pregunta" x-text="faqForm.errors.pregunta" class="text-xs text-red-600 mt-1 font-medium"></p>
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Respuesta <span class="text-gray-400 font-normal">(máx 500)</span></label>
-                                <textarea x-model="faqForm.respuesta" maxlength="500" rows="3" placeholder="Ej: Lun a Vie de 9 a 18hs." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y"></textarea>
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Respuesta <span class="text-gray-400 font-normal">(máx 500)</span></label>
+                                <textarea x-model="faqForm.respuesta" maxlength="500" rows="3" placeholder="Ej: Lun a Vie de 9 a 18hs." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-y dark:bg-gray-700 dark:border-gray-600 dark:text-white"></textarea>
                                 <p class="text-xs text-right mt-1" :class="faqForm.respuesta.length > 500 ? 'text-red-600' : 'text-gray-400'" x-text="`${faqForm.respuesta.length} / 500`"></p>
                                 <p x-show="faqForm.errors.respuesta" x-text="faqForm.errors.respuesta" class="text-xs text-red-600 mt-1 font-medium"></p>
                             </div>
@@ -441,30 +491,37 @@
                                 <span x-show="!faqForm.saving"><i class="fas fa-floppy-disk mr-1"></i> Guardar</span>
                                 <span x-show="faqForm.saving"><i class="fas fa-spinner fa-spin mr-1"></i> Guardando...</span>
                             </button>
-                            <button @click="cancelFaqForm()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm"><i class="fas fa-xmark mr-1"></i> Cancelar</button>
+                            <button @click="cancelFaqForm()" class="bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold py-2 px-6 rounded-lg transition-colors shadow-sm"><i class="fas fa-xmark mr-1"></i> Cancelar</button>
                         </div>
                     </div>
 
                     <!-- Tabla de FAQs -->
-                    <div class="overflow-auto max-h-[500px] custom-scrollbar rounded-lg border border-gray-200">
+                    <div class="overflow-auto max-h-[500px] custom-scrollbar rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="w-full border-collapse">
                             <thead>
-                                <tr class="bg-gray-50 border-b border-gray-200">
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/3">Pregunta</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/2">Respuesta</th>
-                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
+                                <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/3">Pregunta</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/2">Respuesta</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody class="bg-white divide-y divide-gray-100">
+                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
                                 <template x-if="faqs.length === 0">
                                     <tr>
-                                        <td colspan="3" class="p-8 text-center text-gray-500 italic text-sm"><i class="fas fa-inbox mr-1"></i> Aún no hay FAQs. Hacé clic en "Agregar fila" para crear la primera.</td>
+                                        <td colspan="3" class="p-10 text-center">
+                                            <i class="fas fa-circle-question text-gray-300 dark:text-gray-600 text-5xl mb-3 block"></i>
+                                            <p class="text-gray-500 dark:text-gray-400 font-medium mb-2">Aún no hay FAQs</p>
+                                            <p class="text-gray-400 dark:text-gray-500 text-sm mb-4">Agregá preguntas frecuentes para que el bot responda directo sin IA</p>
+                                            <button @click="startCreateFaq()" class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors shadow-sm">
+                                                <i class="fas fa-plus"></i> Crear primera FAQ
+                                            </button>
+                                        </td>
                                     </tr>
                                 </template>
                                 <template x-for="faq in faqs" :key="faq.id">
-                                    <tr class="hover:bg-gray-50 transition-colors">
-                                        <td class="px-4 py-3 text-sm text-gray-800 align-top"><div class="whitespace-pre-wrap break-words" x-text="faq.pregunta"></div></td>
-                                        <td class="px-4 py-3 text-sm text-gray-700 align-top"><div class="whitespace-pre-wrap break-words" x-text="faq.respuesta"></div></td>
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/60 dark:bg-gray-700/50 transition-colors">
+                                        <td class="px-4 py-3 text-sm text-gray-800 dark:text-gray-100 align-top"><div class="whitespace-pre-wrap break-words" x-text="faq.pregunta"></div></td>
+                                        <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 align-top"><div class="whitespace-pre-wrap break-words" x-text="faq.respuesta"></div></td>
                                         <td class="px-4 py-3 text-center align-top">
                                             <div class="flex gap-1 justify-center">
                                                 <button @click="startEditFaq(faq)" class="text-yellow-600 hover:bg-yellow-50 p-1.5 rounded-md transition-colors" title="Editar"><i class="fas fa-pen"></i></button>
@@ -479,20 +536,20 @@
                 </div>
 
                 <!-- ─── TAB: Instancias (Evolution) ─── -->
-                <div x-show="activeTab === 'instances'" x-data="instancesPanel" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div x-show="activeTab === 'instances'" x-data="instancesPanel" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold text-gray-800"><i class="fas fa-satellite-dish text-blue-500 mr-2"></i> Instancias de WhatsApp (Evolution)</h2>
-                        <button @click="loadInstances()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
+                        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100"><i class="fas fa-satellite-dish text-blue-500 mr-2"></i> Instancias de WhatsApp (Evolution)</h2>
+                        <button @click="loadInstances()" class="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
                     </div>
-                    <p class="text-sm text-gray-500 mb-4">Administrá las instancias de Evolution API. La activa es la que recibe los mensajes entrantes (el bot hace hot-swap sin reiniciar).</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Administrá las instancias de Evolution API. La activa es la que recibe los mensajes entrantes (el bot hace hot-swap sin reiniciar).</p>
 
                     <!-- Crear instancia -->
-                    <div class="mb-6 border border-gray-200 rounded-xl p-5 bg-gray-50 shadow-sm">
-                        <h3 class="text-lg font-semibold mb-3 text-gray-800"><i class="fas fa-plus text-blue-500 mr-2"></i> Crear nueva instancia</h3>
+                    <div class="mb-6 border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-gray-50 dark:bg-gray-700/50 shadow-sm">
+                        <h3 class="text-lg font-semibold mb-3 text-gray-800 dark:text-gray-100"><i class="fas fa-plus text-blue-500 mr-2"></i> Crear nueva instancia</h3>
                         <form @submit.prevent="createInstance()" class="flex flex-col sm:flex-row gap-3 sm:items-center">
                             <div class="flex-1">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1" for="new-instance-name">Nombre</label>
-                                <input id="new-instance-name" type="text" x-model="createForm.name" placeholder="ej. bot_2" pattern="[A-Za-z0-9_-]+" maxlength="64" aria-describedby="new-instance-name-help" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" required>
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1" for="new-instance-name">Nombre</label>
+                                <input id="new-instance-name" type="text" x-model="createForm.name" placeholder="ej. bot_2" pattern="[A-Za-z0-9_-]+" maxlength="64" aria-describedby="new-instance-name-help" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
                             </div>
                             <button type="submit" :disabled="createForm.saving" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 shadow-sm">
                                 <span x-show="!createForm.saving">Crear</span>
@@ -505,32 +562,36 @@
                     </div>
 
                     <!-- Lista de instancias -->
-                    <div class="overflow-auto max-h-[800px] custom-scrollbar rounded-lg border border-gray-200">
+                    <div class="overflow-auto max-h-[800px] custom-scrollbar rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="w-full border-collapse">
                             <thead>
-                                <tr class="bg-gray-50 border-b border-gray-200">
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Owner</th>
-                                    <th class="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Link</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
-                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
+                                <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nombre</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Owner</th>
+                                    <th class="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Link</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody class="bg-white divide-y divide-gray-100">
+                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
                                 <template x-if="loading">
-                                    <tr><td colspan="5" class="p-6 text-center text-gray-500 text-sm"><i class="fas fa-spinner fa-spin mr-1"></i> Cargando instancias...</td></tr>
+                                    <tr><td colspan="5" class="p-6 text-center text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-1"></i> Cargando instancias...</td></tr>
                                 </template>
                                 <template x-if="!loading && instances.length === 0">
-                                    <tr><td colspan="5" class="p-8 text-center text-gray-500 italic text-sm"><i class="fas fa-inbox mr-1"></i> No hay instancias registradas. Creá la primera con el formulario de arriba.</td></tr>
+                                    <tr><td colspan="5" class="p-10 text-center">
+                                        <i class="fas fa-satellite-dish text-gray-300 dark:text-gray-600 text-5xl mb-3 block"></i>
+                                        <p class="text-gray-500 dark:text-gray-400 font-medium mb-2">No hay instancias registradas</p>
+                                        <p class="text-gray-400 dark:text-gray-500 text-sm">Creá tu primera instancia con el formulario de arriba</p>
+                                    </td></tr>
                                 </template>
                                 <template x-for="inst in instances" :key="inst.name">
-                                    <tr class="hover:bg-gray-50 transition-colors">
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="inst.name"></td>
-                                        <td class="px-4 py-3 text-xs text-gray-600 font-mono" x-text="inst.ownerJid || '—'"></td>
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/60 dark:bg-gray-700/50 transition-colors">
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-800 dark:text-gray-100" x-text="inst.name"></td>
+                                        <td class="px-4 py-3 text-xs text-gray-600 dark:text-gray-400 font-mono" x-text="inst.ownerJid || '—'"></td>
                                         <td class="hidden md:table-cell px-4 py-3 text-left">
                                             <button @click="copyWaLink(inst)"
                                                     :disabled="!inst.ownerJid"
-                                                    class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                                                     title="Copiar link de WhatsApp">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
@@ -542,7 +603,7 @@
                                                   :class="{
                                                       'bg-green-100 text-green-800': inst.connectionState === 'open',
                                                       'bg-yellow-100 text-yellow-800': inst.connectionState === 'connecting',
-                                                      'bg-gray-100 text-gray-700': inst.connectionState === 'close',
+                                                      'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': inst.connectionState === 'close',
                                                       'bg-red-100 text-red-700': inst.connectionState === 'unknown'
                                                   }"
                                                   x-text="inst.connectionState"></span>
@@ -553,7 +614,7 @@
                                                 <button data-kebab-menu
                                                         @click="toggleMenu(inst.name)"
                                                         x-show="!isMenuOpen(inst.name)"
-                                                        class="p-1.5 rounded hover:bg-gray-700 text-gray-600 hover:text-white transition-all duration-200 ease-out">
+                                                        class="p-1.5 rounded hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-white transition-all duration-200 ease-out">
                                                     <i class="fas fa-ellipsis-v"></i>
                                                 </button>
                                                 <div data-kebab-menu
@@ -568,22 +629,22 @@
                                                      x-transition:leave-start="opacity-100 scale-100"
                                                      x-transition:leave-end="opacity-0 scale-95"
                                                      @keydown.escape.window="closeAllMenus()"
-                                                     class="absolute left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-lg shadow-lg bg-gradient-to-br from-gray-200 to-gray-300 border border-gray-300/60">
+                                                     class="absolute left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-lg shadow-lg bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 border border-gray-300/60 dark:border-gray-600">
                                                     <button @click="closeAllMenus(); openQrModal(inst)"
                                                             :disabled="inst.connectionState === 'open'"
-                                                            class="p-1.5 rounded hover:bg-white/50 text-gray-700 hover:text-gray-900 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                            class="p-1.5 rounded hover:bg-white/50 text-gray-700 dark:text-gray-300 hover:text-gray-900 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
                                                             title="Ver QR">
                                                         <i class="fas fa-link"></i>
                                                     </button>
                                                     <button @click="closeAllMenus(); openSwapModal(inst)"
                                                             :disabled="inst.connectionState !== 'open' || isActive(inst)"
-                                                            class="p-1.5 rounded hover:bg-white/50 text-gray-700 hover:text-gray-900 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                            class="p-1.5 rounded hover:bg-white/50 text-gray-700 dark:text-gray-300 hover:text-gray-900 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
                                                             title="Activar">
                                                         <i class="fas fa-power-off"></i>
                                                     </button>
                                                     <button @click="closeAllMenus(); deactivateInstance(inst)"
                                                             :disabled="!isActive(inst)"
-                                                            class="p-1.5 rounded hover:bg-white/50 text-gray-700 hover:text-gray-900 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                            class="p-1.5 rounded hover:bg-white/50 text-gray-700 dark:text-gray-300 hover:text-gray-900 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
                                                             title="Desactivar">
                                                         <i class="fas fa-ban"></i>
                                                     </button>
@@ -603,11 +664,11 @@
                     </div>
 
                     <!-- ─── Modal: QR ─── -->
-                    <dialog x-ref="qrDialog" @keydown="onModalKeydown" @keydown.tab="trapTabKey($event)" class="rounded-2xl shadow-2xl p-0 max-w-md w-full backdrop:bg-black/50">
+                    <dialog x-ref="qrDialog" @keydown="onModalKeydown" @keydown.tab="trapTabKey($event)" class="rounded-2xl shadow-2xl p-0 max-w-md w-full backdrop:bg-black/50 dark:bg-gray-800 dark:text-gray-100">
                         <div class="p-6">
-                            <h3 class="text-lg font-semibold text-gray-800 mb-2"><i class="fas fa-qrcode text-blue-500 mr-2"></i> Escanear QR</h3>
-                            <p class="text-sm text-gray-500 mb-4">Abrí WhatsApp en tu teléfono → Dispositivos vinculados → Vincular dispositivo.</p>
-                            <div class="bg-gray-50 rounded-xl p-4 flex items-center justify-center min-h-[260px] border border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2"><i class="fas fa-qrcode text-blue-500 mr-2"></i> Escanear QR</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Abrí WhatsApp en tu teléfono → Dispositivos vinculados → Vincular dispositivo.</p>
+                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 flex items-center justify-center min-h-[260px] border border-gray-200 dark:border-gray-700">
                                 <template x-if="selected && _qrPayload && _qrPayload.qr">
                                     <img :src="_qrPayload.qr" :alt="'QR de ' + (selected && selected.name)" class="max-w-full max-h-72">
                                 </template>
@@ -615,10 +676,10 @@
                                     <div class="text-center text-gray-400 text-sm">Sin QR disponible</div>
                                 </template>
                             </div>
-                            <p class="text-xs text-gray-500 mt-3">El QR se refresca automáticamente. Cerrá esta ventana una vez vinculado.</p>
-                            <p class="text-xs text-gray-500 mt-1">Estado actual: <span class="font-mono font-semibold" x-text="selected && selected.connectionState"></span></p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">El QR se refresca automáticamente. Cerrá esta ventana una vez vinculado.</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Estado actual: <span class="font-mono font-semibold" x-text="selected && selected.connectionState"></span></p>
                             <div class="flex justify-end gap-2 mt-5">
-                                <button @click="closeQrModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-5 rounded-lg transition-colors shadow-sm">Cerrar</button>
+                                <button @click="closeQrModal()" class="bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold py-2 px-5 rounded-lg transition-colors shadow-sm">Cerrar</button>
                             </div>
                         </div>
                     </dialog>
@@ -629,13 +690,13 @@
                          @keydown.escape="closeSwapModal()" @keydown.tab="trapTabKey($event)"
                          class="fixed inset-0 z-50 flex items-center justify-center p-4">
                         <div class="absolute inset-0 bg-black/50" aria-hidden="true"></div>
-                        <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-                            <h3 id="swap-title" class="text-lg font-semibold text-gray-800 mb-2"><i class="fas fa-bolt text-yellow-500 mr-2"></i> Activar instancia</h3>
-                            <p class="text-sm text-gray-500 mb-4">Vas a activar la instancia <span class="font-mono font-semibold" x-text="swapTarget && swapTarget.name"></span>. El bot empezará a usarla para los mensajes salientes (hot-swap, sin reiniciar).</p>
+                        <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 dark:bg-gray-800 dark:text-gray-100">
+                            <h3 id="swap-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2"><i class="fas fa-bolt text-yellow-500 mr-2"></i> Activar instancia</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Vas a activar la instancia <span class="font-mono font-semibold" x-text="swapTarget && swapTarget.name"></span>. El bot empezará a usarla para los mensajes salientes (hot-swap, sin reiniciar).</p>
 
-                            <label class="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg cursor-pointer mb-4">
+                            <label class="flex items-start gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg cursor-pointer mb-4">
                                 <input type="checkbox" x-model="acknowledge" id="ack-swap" class="mt-1 h-4 w-4 text-blue-600 focus:ring-2 focus:ring-blue-500 border-gray-300 rounded">
-                                <span class="text-sm text-gray-800 select-none">Entiendo que los usuarios que estén chateando ahora perderán el contexto de la conversación en vivo (su historial en disco se mantiene).</span>
+                                <span class="text-sm text-gray-800 dark:text-gray-100 select-none">Entiendo que los usuarios que estén chateando ahora perderán el contexto de la conversación en vivo (su historial en disco se mantiene).</span>
                             </label>
 
                             <p x-show="swapTarget && swapTarget.connectionState !== 'open'" class="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-2 mb-3">
@@ -645,7 +706,7 @@
                             <p x-show="swapError" x-text="swapError" class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2 mb-3 font-medium"></p>
 
                             <div class="flex justify-end gap-2 mt-5">
-                                <button @click="closeSwapModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-5 rounded-lg transition-colors shadow-sm">Cancelar</button>
+                                <button @click="closeSwapModal()" class="bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold py-2 px-5 rounded-lg transition-colors shadow-sm">Cancelar</button>
                                 <button @click="confirmSwap()" :disabled="!canActivate" :aria-disabled="!canActivate" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-5 rounded-lg transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
                                     Activar
                                 </button>
@@ -655,26 +716,26 @@
                 </div>
 
                 <!-- ─── TAB: Informes Programados ─── -->
-                <div x-show="activeTab === 'reports'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div x-show="activeTab === 'reports'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold text-gray-800"><i class="fas fa-clock text-blue-500 mr-2"></i> Informes Programados</h2>
+                        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100"><i class="fas fa-clock text-blue-500 mr-2"></i> Informes Programados</h2>
                         <div class="flex gap-2">
-                            <button @click="loadSchedules()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
+                            <button @click="loadSchedules()" class="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
                             <button @click="startCreateSchedule()" class="text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 px-3 rounded-lg transition-colors shadow-sm"><i class="fas fa-plus mr-1"></i> Crear programa</button>
                         </div>
                     </div>
-                    <p class="text-sm text-gray-500 mb-4">Programá el envío automático de informes por WhatsApp a la hora que elijas.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Programá el envío automático de informes por WhatsApp a la hora que elijas.</p>
 
                     <!-- Schedule Form -->
-                    <div x-show="scheduleForm.open" x-transition class="mb-6 border border-gray-200 rounded-xl p-5 bg-gray-50 shadow-sm">
-                        <h3 class="text-lg font-semibold mb-4 text-gray-800">
+                    <div x-show="scheduleForm.open" x-transition class="mb-6 border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-gray-50 dark:bg-gray-700/50 shadow-sm">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">
                             <template x-if="scheduleForm.editId"><span><i class="fas fa-pen"></i> Editar programa</span></template>
                             <template x-if="!scheduleForm.editId"><span><i class="fas fa-plus"></i> Nuevo programa</span></template>
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Tipo de reporte</label>
-                                <select x-model="scheduleForm.tipo" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Tipo de reporte</label>
+                                <select x-model="scheduleForm.tipo" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                     <option value="" disabled>Seleccioná un tipo</option>
                                     <template x-for="t in scheduleForm.tipos" :key="t.id">
                                         <option :value="t.id" x-text="t.nombre"></option>
@@ -685,23 +746,23 @@
                             <!-- Dynamic parameter fields based on selected tipo -->
                             <template x-for="param in scheduleForm.selectedTipoParams" :key="param.key">
                                 <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                         <span x-text="param.label"></span>
                                         <span x-show="param.requerido" class="text-red-500">*</span>
                                     </label>
                                     <input :type="param.tipo === 'date' ? 'date' : 'text'"
                                            x-model="scheduleForm.params[param.key]"
-                                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                 </div>
                             </template>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Hora de envío</label>
-                                <input type="time" x-model="scheduleForm.hora_envio" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Hora de envío</label>
+                                <input type="time" x-model="scheduleForm.hora_envio" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                 <p x-show="scheduleForm.errors.hora_envio" x-text="scheduleForm.errors.hora_envio" class="text-xs text-red-600 mt-1 font-medium"></p>
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Destino (número de WhatsApp)</label>
-                                <input type="text" x-model="scheduleForm.destino" list="destino-list" placeholder="+5491112345678" @focus="$el.value='';$nextTick(()=>$el.value=scheduleForm.destino||'')" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Destino (número de WhatsApp)</label>
+                                <input type="text" x-model="scheduleForm.destino" list="destino-list" placeholder="+5491112345678" @focus="$el.value='';$nextTick(()=>$el.value=scheduleForm.destino||'')" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                 <datalist id="destino-list">
                                     <template x-for="num in scheduleForm.destinoHistory" :key="num">
                                         <option :value="num"></option>
@@ -710,12 +771,12 @@
                                 <p x-show="scheduleForm.errors.destino" x-text="scheduleForm.errors.destino" class="text-xs text-red-600 mt-1 font-medium"></p>
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Encabezado (opcional)</label>
-                                <input type="text" x-model="scheduleForm.header_text" placeholder="Título personalizado del reporte" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Encabezado (opcional)</label>
+                                <input type="text" x-model="scheduleForm.header_text" placeholder="Título personalizado del reporte" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                             </div>
                             <div class="md:col-span-2">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Pie de página (opcional)</label>
-                                <input type="text" x-model="scheduleForm.footer_text" placeholder="Texto al pie del reporte" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow">
+                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Pie de página (opcional)</label>
+                                <input type="text" x-model="scheduleForm.footer_text" placeholder="Texto al pie del reporte" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                             </div>
                         </div>
                         <div class="flex gap-3 mt-4">
@@ -723,44 +784,44 @@
                                 <span x-show="!scheduleForm.saving"><i class="fas fa-floppy-disk mr-1"></i> Guardar</span>
                                 <span x-show="scheduleForm.saving"><i class="fas fa-spinner fa-spin mr-1"></i> Guardando...</span>
                             </button>
-                            <button @click="cancelScheduleForm()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm"><i class="fas fa-xmark mr-1"></i> Cancelar</button>
+                            <button @click="cancelScheduleForm()" class="bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold py-2 px-6 rounded-lg transition-colors shadow-sm"><i class="fas fa-xmark mr-1"></i> Cancelar</button>
                         </div>
                     </div>
 
                     <!-- Schedule Table -->
-                    <div class="overflow-auto max-h-[500px] custom-scrollbar rounded-lg border border-gray-200">
+                    <div class="overflow-auto max-h-[500px] custom-scrollbar rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="w-full border-collapse">
                             <thead>
-                                <tr class="bg-gray-50 border-b border-gray-200">
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tipo</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Hora</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Destino</th>
-                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Último envío</th>
-                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
+                                <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipo</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Hora</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Destino</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Último envío</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody class="bg-white divide-y divide-gray-100">
+                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
                                 <template x-if="schedules.length === 0 && !scheduleForm.open">
                                     <tr>
-                                        <td colspan="6" class="p-8 text-center text-gray-500 italic text-sm"><i class="fas fa-inbox mr-1"></i> No hay informes programados. Hacé clic en "Crear programa" para agregar uno.</td>
+                                        <td colspan="6" class="p-8 text-center text-gray-500 dark:text-gray-400 italic text-sm"><i class="fas fa-inbox mr-1"></i> No hay informes programados. Hacé clic en "Crear programa" para agregar uno.</td>
                                     </tr>
                                 </template>
                                 <template x-for="sched in schedules" :key="sched.id">
-                                    <tr class="hover:bg-gray-50 transition-colors">
-                                        <td class="px-4 py-3 text-sm text-gray-800 font-medium" x-text="getScheduleTipoName(sched.tipo)"></td>
-                                        <td class="px-4 py-3 text-sm text-gray-700 font-mono" x-text="formatScheduleTime(sched.hora_envio)"></td>
-                                        <td class="px-4 py-3 text-sm text-gray-700" x-text="sched.destino"></td>
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/60 dark:bg-gray-700/50 transition-colors">
+                                        <td class="px-4 py-3 text-sm text-gray-800 dark:text-gray-100 font-medium" x-text="getScheduleTipoName(sched.tipo)"></td>
+                                        <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 font-mono" x-text="formatScheduleTime(sched.hora_envio)"></td>
+                                        <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="sched.destino"></td>
                                         <td class="px-4 py-3 text-center">
-                                            <button @click="toggleSchedule(sched)" :class="sched.activo ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors" :title="sched.activo ? 'Activo — clic para desactivar' : 'Inactivo — clic para activar'">
+                                            <button @click="toggleSchedule(sched)" :class="sched.activo ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/60 dark:hover:bg-gray-600'" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors" :title="sched.activo ? 'Activo — clic para desactivar' : 'Inactivo — clic para activar'">
                                                 <span :class="sched.activo ? 'translate-x-6' : 'translate-x-1'" class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
                                             </button>
                                         </td>
-                                        <td class="px-4 py-3 text-sm text-gray-500" x-text="sched.ultimo_envio ? new Date(sched.ultimo_envio).toLocaleString('es-AR') : 'Nunca'"></td>
+                                        <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400" x-text="sched.ultimo_envio ? new Date(sched.ultimo_envio).toLocaleString('es-AR') : 'Nunca'"></td>
                                         <td class="px-4 py-3 text-center">
                                             <div class="flex gap-1 justify-center">
-                                                <button @click="startEditSchedule(sched)" class="text-yellow-600 hover:bg-yellow-50 p-1.5 rounded-md transition-colors" title="Editar"><i class="fas fa-pen"></i></button>
-                                                <button @click="confirmDeleteSchedule(sched)" class="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Eliminar"><i class="fas fa-trash"></i></button>
+                                                <button @click="startEditSchedule(sched)" class="text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 p-1.5 rounded-md transition-colors" title="Editar"><i class="fas fa-pen"></i></button>
+                                                <button @click="confirmDeleteSchedule(sched)" class="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 rounded-md transition-colors" title="Eliminar"><i class="fas fa-trash"></i></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -771,14 +832,52 @@
                 </div>
 
                 <!-- ─── TAB: Dashboard ─── -->
-                <div x-show="activeTab === 'dashboard'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div x-show="activeTab === 'dashboard'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold text-gray-800"><i class="fas fa-chart-pie text-blue-500 mr-2"></i> Dashboard</h2>
-                        <button @click="loadTelemetry()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 px-3 rounded-lg transition-colors border border-gray-200"><i class="fas fa-rotate-right mr-1"></i> Actualizar</button>
+                        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100"><i class="fas fa-chart-pie text-blue-500 mr-2"></i> Dashboard</h2>
+                        <button @click="loadTelemetry()" class="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right mr-1"></i> Actualizar</button>
+                    </div>
+
+                    <!-- Vistazo rápido -->
+                    <div x-show="quickStats" class="mb-6">
+                        <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Vistazo rápido</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-xl p-4 text-center">
+                                <i class="fas fa-file-pdf text-red-500 text-2xl mb-2 block"></i>
+                                <p class="text-xs text-red-600 dark:text-red-300 uppercase font-semibold tracking-wide">PDFs Indexados</p>
+                                <p class="text-2xl font-bold text-red-800 dark:text-red-300 mt-1" x-text="quickStats.pdfs_indexados"></p>
+                            </div>
+                            <div class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-xl p-4 text-center">
+                                <i class="fas fa-file-csv text-green-500 text-2xl mb-2 block"></i>
+                                <p class="text-xs text-green-600 dark:text-green-300 uppercase font-semibold tracking-wide">CSVs Cargados</p>
+                                <p class="text-2xl font-bold text-green-800 dark:text-green-300 mt-1" x-text="quickStats.csvs_cargados"></p>
+                            </div>
+                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl p-4 text-center">
+                                <i class="fas fa-circle-question text-blue-500 text-2xl mb-2 block"></i>
+                                <p class="text-xs text-blue-600 dark:text-blue-300 uppercase font-semibold tracking-wide">FAQs Activas</p>
+                                <p class="text-2xl font-bold text-blue-800 dark:text-blue-300 mt-1" x-text="quickStats.faqs_activas"></p>
+                            </div>
+                            <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 rounded-xl p-4 text-center">
+                                <p class="text-xs text-purple-600 dark:text-purple-300 uppercase font-semibold tracking-wide mb-1">Últimos mensajes</p>
+                                <div class="text-left space-y-1 max-h-[120px] overflow-y-auto text-xs custom-scrollbar">
+                                    <template x-if="quickStats.recent_messages && quickStats.recent_messages.length > 0">
+                                        <template x-for="msg in quickStats.recent_messages" :key="msg.created_at">
+                                            <div class="bg-white/50 dark:bg-purple-800/20 rounded px-2 py-1 truncate" :title="msg.texto">
+                                                <span class="font-semibold text-purple-800 dark:text-purple-300" x-text="msg.push_name || msg.remitente"></span>
+                                                <span class="text-purple-600/70 dark:text-purple-400/70 ml-1" x-text="msg.texto"></span>
+                                            </div>
+                                        </template>
+                                    </template>
+                                    <template x-if="!quickStats.recent_messages || quickStats.recent_messages.length === 0">
+                                        <p class="text-center text-purple-400 dark:text-purple-500">Sin mensajes recientes</p>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Loading -->
-                    <div x-show="telemetryLoading" class="text-center py-12 text-gray-500">
+                    <div x-show="telemetryLoading" class="text-center py-12 text-gray-500 dark:text-gray-400">
                         <i class="fas fa-spinner fa-spin mr-2"></i> Cargando datos...
                     </div>
 
@@ -795,30 +894,30 @@
                         <div>
                             <!-- 4 metric cards -->
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-center">
-                                    <p class="text-xs text-blue-600 uppercase font-semibold tracking-wide">Mensajes</p>
-                                    <p class="text-2xl font-bold text-blue-800 mt-1" x-text="telemetryData.total_messages"></p>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl p-4 text-center">
+                                    <p class="text-xs text-blue-600 dark:text-blue-300 uppercase font-semibold tracking-wide">Mensajes</p>
+                                    <p class="text-2xl font-bold text-blue-800 dark:text-blue-300 mt-1" x-text="telemetryData.total_messages"></p>
                                 </div>
-                                <div class="bg-red-50 border border-red-100 rounded-xl p-4 text-center">
-                                    <p class="text-xs text-red-600 uppercase font-semibold tracking-wide">Errores</p>
-                                    <p class="text-2xl font-bold text-red-800 mt-1" x-text="telemetryData.total_errors"></p>
+                                <div class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-xl p-4 text-center">
+                                    <p class="text-xs text-red-600 dark:text-red-300 uppercase font-semibold tracking-wide">Errores</p>
+                                    <p class="text-2xl font-bold text-red-800 dark:text-red-300 mt-1" x-text="telemetryData.total_errors"></p>
                                 </div>
-                                <div class="bg-green-50 border border-green-100 rounded-xl p-4 text-center">
-                                    <p class="text-xs text-green-600 uppercase font-semibold tracking-wide">Tiempo Prom.</p>
-                                    <p class="text-2xl font-bold text-green-800 mt-1" x-text="telemetryData.avg_total_duration_ms + 'ms'"></p>
+                                <div class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-xl p-4 text-center">
+                                    <p class="text-xs text-green-600 dark:text-green-300 uppercase font-semibold tracking-wide">Tiempo Prom.</p>
+                                    <p class="text-2xl font-bold text-green-800 dark:text-green-300 mt-1" x-text="telemetryData.avg_total_duration_ms + 'ms'"></p>
                                 </div>
-                                <div class="bg-purple-50 border border-purple-100 rounded-xl p-4 text-center">
-                                    <p class="text-xs text-purple-600 uppercase font-semibold tracking-wide">Tasa Error</p>
-                                    <p class="text-2xl font-bold text-purple-800 mt-1" x-text="telemetryData.error_rate + '%'"></p>
+                                <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 rounded-xl p-4 text-center">
+                                    <p class="text-xs text-purple-600 dark:text-purple-300 uppercase font-semibold tracking-wide">Tasa Error</p>
+                                    <p class="text-2xl font-bold text-purple-800 dark:text-purple-300 mt-1" x-text="telemetryData.error_rate + '%'"></p>
                                 </div>
                             </div>
 
                             <!-- Charts 2x2 grid -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><canvas x-ref="chartMessages" class="h-64 w-full"></canvas></div>
-                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><canvas x-ref="chartErrors" class="h-64 w-full"></canvas></div>
-                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><canvas x-ref="chartDurations" class="h-64 w-full"></canvas></div>
-                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><canvas x-ref="chartSources" class="h-64 w-full"></canvas></div>
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartMessages" class="h-64 w-full"></canvas></div>
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartErrors" class="h-64 w-full"></canvas></div>
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartDurations" class="h-64 w-full"></canvas></div>
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartSources" class="h-64 w-full"></canvas></div>
                             </div>
                         </div>
                     </template>
