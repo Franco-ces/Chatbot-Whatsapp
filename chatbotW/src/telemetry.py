@@ -10,6 +10,29 @@ y se cierra al apagar. `record_interaction` es fire-and-forget: nunca
 propaga errores al caller. `get_summary` sí propaga errores como
 AppError(TELEMETRY_DB_ERROR).
 """
+
+# ─── Auditoría ────────────────────────────────────────────────────────
+# El sistema de auditoría registra todas las acciones administrativas
+# en la tabla `telemetry.admin_audit`. Esto incluye:
+#   - Cambios de configuración (API keys, datos de contacto, modelos)
+#   - CRUD de documentos (PDFs, CSVs, FAQs)
+#   - Gestión de instancias de Evolution API (crear, activar, eliminar)
+#   - Autenticación (logins exitosos/fallidos, cambio de contraseña)
+#
+# Cada registro contiene:
+#   - action: Tipo de acción (ej. 'pdf.delete', 'instance.create')
+#   - target: Elemento afectado (nombre de archivo, instancia, etc.)
+#   - detail: Información adicional contextual
+#   - created_at: Timestamp automático
+#
+# La auditoría es "fire-and-forget": si el pool de PostgreSQL no está
+# disponible, las acciones del admin NO se bloquean — simplemente no
+# se registra el evento. Esto evita que un fallo de DB impida operar
+# el panel.
+#
+# Consultar desde la API: GET /api/audit?limit=50
+# Consultar desde PostgreSQL: SELECT * FROM telemetry.admin_audit ORDER BY created_at DESC;
+
 import asyncio
 import os
 
@@ -77,6 +100,22 @@ CREATE INDEX IF NOT EXISTS idx_schedules_active_time ON telemetry.report_schedul
 CREATE INDEX IF NOT EXISTS idx_schedules_tipo ON telemetry.report_schedules (tipo);
 """
 
+_AUDIT_DDL = """
+CREATE TABLE IF NOT EXISTS telemetry.admin_audit (
+    id              BIGSERIAL PRIMARY KEY,
+    action          TEXT NOT NULL,
+    actor           TEXT NOT NULL DEFAULT 'admin',
+    target          TEXT,
+    detail          TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
+_AUDIT_INDEX_DDL = """
+CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON telemetry.admin_audit (action);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created_at ON telemetry.admin_audit (created_at DESC);
+"""
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -133,6 +172,8 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool | None:
             await conn.execute(_INDEX_DDL)
             await conn.execute(_SCHEDULES_DDL)
             await conn.execute(_SCHEDULES_INDEX_DDL)
+            await conn.execute(_AUDIT_DDL)
+            await conn.execute(_AUDIT_INDEX_DDL)
 
         _pool = pool
         logger.info("Pool de telemetría inicializado y esquema verificado")
@@ -298,3 +339,30 @@ async def get_summary(pool: asyncpg.Pool | None, days: int = 7) -> dict:
     except Exception as e:
         logger.error("Fallo al consultar resumen de telemetría", detail=str(e))
         raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+
+
+# ─── Audit ────────────────────────────────────────────────────────────
+
+async def record_audit(action: str, target: str = None, detail: str = None) -> None:
+    """Registra una acción administrativa en el log de auditoría.
+
+    Fire-and-forget: nunca propaga errores al caller. Si el pool no
+    está disponible, simplemente no registra (no es crítico).
+
+    Args:
+        action: Tipo de acción (ej. 'pdf.delete', 'config.save', 'instance.create').
+        target: Qué fue afectado (nombre de archivo, instancia, etc.).
+        detail: Información adicional (ej. nombre del campo cambiado).
+    """
+    pool = _pool
+    if not pool:
+        return
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO telemetry.admin_audit (action, target, detail) "
+                "VALUES ($1, $2, $3)",
+                action, target, detail,
+            )
+    except Exception:
+        pass  # Nunca fallar por auditoría

@@ -85,7 +85,7 @@ export function initAuth(Alpine) {
             const res = await apiFetch('/api/auth/login', { method: 'POST', body: fd });
             if (!res.ok) {
                 const err = await res.json();
-                throw new Error(err.detail || 'Contraseña incorrecta');
+                throw new Error(err.error?.detail || err.detail || 'Contraseña incorrecta');
             }
             const data = await res.json();
             this.token = data.token;

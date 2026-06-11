@@ -22,8 +22,8 @@ def extraer_datos_limpios(payload: EvolutionWebhook):
     """
     Parsea el objeto validado por Pydantic y devuelve los datos necesarios.
     """
-    # 1. Ignorar si no es un mensaje nuevo o si es enviado por el bot
-    if payload.event != "messages.upsert" or payload.data.key.fromMe:
+    # 1. Ignorar si no es un mensaje nuevo, si es enviado por el bot, o si viene de un grupo
+    if payload.event != "messages.upsert" or payload.data.key.fromMe or payload.data.key.remoteJid.endswith("@g.us"):
         return None
 
     # Obtenemos el diccionario completo e intacto

@@ -79,3 +79,76 @@ El sistema implementa un framework de manejo de excepciones jerárquico basado e
 
 * **Aislamiento de Fallos**: Los errores en la API de embeddings o en la lectura de archivos no detienen la ejecución del bot; en su lugar, el sistema degrada la funcionalidad (ej. si falla el match de FAQ, pasa directamente al RAG).
 * **Validación de Datos**: Se utilizan modelos de Pydantic para la validación de los payloads entrantes desde los webhooks de WhatsApp, previniendo errores de ejecución por datos mal formados.
+
+---
+
+## 6. Auditoría de Acciones Administrativas
+
+### 6.1 Propósito
+
+El sistema registra automáticamente todas las acciones realizadas desde el panel de administración en la tabla `telemetry.admin_audit` de PostgreSQL. Esto permite:
+
+- Trazabilidad: saber quién hizo qué y cuándo.
+- Debugging: identificar la causa de cambios no deseados.
+- Seguridad: detectar accesos no autorizados o comportamientos anómalos.
+
+### 6.2 Acciones Registradas
+
+| Categoría | Acciones |
+|---|---|
+| **Autenticación** | Login exitoso, login fallido (con IP), cambio de contraseña |
+| **Configuración** | Guardado de API Key de Google, API Key de Evolution, datos de contacto |
+| **Documentos PDF** | Subida y eliminación de archivos |
+| **Archivos CSV** | Subida, eliminación y edición de archivos |
+| **FAQs** | Creación, actualización y eliminación de preguntas frecuentes |
+| **Instancias** | Creación, activación, desactivación y eliminación de instancias de Evolution API |
+
+### 6.3 Estructura de la Tabla
+
+```sql
+CREATE TABLE telemetry.admin_audit (
+    id              BIGSERIAL PRIMARY KEY,
+    action          TEXT NOT NULL,       -- ej: 'pdf.delete', 'instance.create'
+    actor           TEXT DEFAULT 'admin', -- siempre 'admin' (único usuario)
+    target          TEXT,                -- elemento afectado (archivo, instancia, FAQ id)
+    detail          TEXT,                -- información contextual adicional
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 6.4 Cómo Acceder a los Registros
+
+**Desde la API** (requiere autenticación):
+```bash
+# Últimos 50 registros
+curl -H "Authorization: Bearer <TOKEN>" http://localhost:8000/api/audit?limit=50
+
+# Últimos 10 registros
+curl -H "Authorization: Bearer <TOKEN>" http://localhost:8000/api/audit?limit=10
+```
+
+**Desde PostgreSQL directamente**:
+```bash
+# Entrar al contenedor de PostgreSQL
+docker compose exec evolution_postgres psql -U evo -d evolution
+
+# Consultar últimos 20 registros
+SELECT action, target, detail, created_at
+FROM telemetry.admin_audit
+ORDER BY created_at DESC
+LIMIT 20;
+
+# Filtrar por tipo de acción
+SELECT * FROM telemetry.admin_audit
+WHERE action = 'pdf.delete'
+ORDER BY created_at DESC;
+
+# Filtrar por fecha
+SELECT * FROM telemetry.admin_audit
+WHERE created_at > NOW() - INTERVAL '24 hours'
+ORDER BY created_at DESC;
+```
+
+### 6.5 Diseño Fire-and-Forget
+
+La auditoría sigue el mismo patrón que `record_interaction` (telemetría del bot): si la base de datos no está disponible, **las acciones del administrador no se bloquean**. El sistema simplemente omite el registro de auditoría y continúa. Esto garantiza que un fallo de PostgreSQL no impida operar el panel de administración.

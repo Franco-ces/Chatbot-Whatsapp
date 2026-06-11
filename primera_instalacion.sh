@@ -192,6 +192,40 @@ check_env() {
         ok "Archivo .env encontrado"
     fi
 }
+prompt_admin_password() {
+    header "Configurando contraseña del panel admin"
+    
+    local env_file=".env"
+    if grep -q "^ADMIN_PASSWORD_HASH=" "$env_file" 2>/dev/null; then
+        info "ADMIN_PASSWORD_HASH ya está configurada en .env"
+        return 0
+    fi
+    
+    local password password2
+    while true; do
+        printf '%s' "Ingresá la contraseña del panel admin (mínimo 4 caracteres): "
+        read -s password
+        echo ""
+        if [ ${#password} -lt 4 ]; then
+            warn "La contraseña debe tener al menos 4 caracteres."
+            continue
+        fi
+        printf '%s' "Confirmá la contraseña: "
+        read -s password2
+        echo ""
+        if [ "$password" != "$password2" ]; then
+            warn "Las contraseñas no coinciden."
+            continue
+        fi
+        break
+    done
+    
+    local hash
+    hash=$(printf '%s' "$password" | sha256sum | cut -d' ' -f1)
+    echo "ADMIN_PASSWORD_HASH=$hash" >> "$env_file"
+    ok "Contraseña del panel admin configurada."
+}
+
 start_services() {
     header "Levantando contenedores"
     info "Ejecutando: $DC up -d --build"
@@ -302,6 +336,7 @@ main() {
     check_architecture
     detect_ports
     check_env
+    prompt_admin_password
     start_services
     wait_for_healthy
     print_summary

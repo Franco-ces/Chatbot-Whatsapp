@@ -24,7 +24,9 @@ _DUE_SCHEDULES_SQL = """
     SELECT * FROM telemetry.report_schedules
     WHERE activo = true
       AND hora_envio <= $1
-      AND (ultimo_envio IS NULL OR ultimo_envio::date < CURRENT_DATE)
+      AND (ultimo_envio IS NULL
+           OR ultimo_envio::date < CURRENT_DATE
+           OR updated_at > ultimo_envio)
     ORDER BY hora_envio ASC
 """
 
@@ -38,7 +40,7 @@ _UPDATE_ENVIO_SQL = """
 
 # ─── Process single schedule ────────────────────────────────────────────
 
-async def _process_schedule(schedule: dict, pool, wa_client, instance_name: str) -> None:
+async def _process_schedule(schedule: dict, pool, wa_client, instance_name: str):
     """Process a single due schedule: generate PDF, send it, update ultimo_envio.
 
     Errors are isolated: this function never raises. If any step fails,
@@ -46,7 +48,7 @@ async def _process_schedule(schedule: dict, pool, wa_client, instance_name: str)
     """
     try:
         if not instance_name:
-            logger.error("No active instance for scheduler", schedule_id=schedule["id"])
+            logger.error("No hay instancia activa para el scheduler", schedule_id=schedule["id"])
             return
 
         # Generate PDF
@@ -70,7 +72,7 @@ async def _process_schedule(schedule: dict, pool, wa_client, instance_name: str)
             await conn.execute(_UPDATE_ENVIO_SQL, schedule["id"])
 
         logger.info(
-            "Scheduled report sent",
+            "Informe programado enviado",
             schedule_id=schedule["id"],
             tipo=schedule["tipo"],
             destino=schedule["destino"],
@@ -78,7 +80,7 @@ async def _process_schedule(schedule: dict, pool, wa_client, instance_name: str)
 
     except Exception as e:
         logger.error(
-            "Failed to process schedule",
+            "Fallo al procesar schedule",
             schedule_id=schedule.get("id"),
             error=str(e),
         )
@@ -86,7 +88,7 @@ async def _process_schedule(schedule: dict, pool, wa_client, instance_name: str)
 
 # ─── Scheduler loop ─────────────────────────────────────────────────────
 
-async def _scheduler_loop(pool, wa_client, instance_name_resolver) -> None:
+async def _scheduler_loop(pool, wa_client, instance_name_resolver):
     """Main scheduler loop: runs every 60 seconds, queries due schedules, and processes them."""
     while True:
         try:
@@ -108,12 +110,12 @@ async def _scheduler_loop(pool, wa_client, instance_name_resolver) -> None:
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logger.error("Scheduler loop error", error=str(e))
+            logger.error("Error en el loop del scheduler", error=str(e))
 
 
 # ─── Start / Stop ──────────────────────────────────────────────────────
 
-async def start_scheduler(pool, wa_client, instance_name_resolver) -> asyncio.Task:
+async def start_scheduler(pool, wa_client, instance_name_resolver):
     """Start the scheduler background loop.
 
     Returns the asyncio.Task so callers can cancel it on shutdown.
@@ -122,11 +124,11 @@ async def start_scheduler(pool, wa_client, instance_name_resolver) -> asyncio.Ta
     _scheduler_task = asyncio.create_task(
         _scheduler_loop(pool, wa_client, instance_name_resolver)
     )
-    logger.info("Report scheduler started")
+    logger.info("Scheduler de informes iniciado")
     return _scheduler_task
 
 
-async def stop_scheduler() -> None:
+async def stop_scheduler():
     """Stop the scheduler background loop gracefully."""
     global _scheduler_task
     if _scheduler_task:
@@ -136,4 +138,4 @@ async def stop_scheduler() -> None:
         except asyncio.CancelledError:
             pass
         _scheduler_task = None
-        logger.info("Report scheduler stopped")
+        logger.info("Scheduler de informes detenido")

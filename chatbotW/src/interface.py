@@ -33,6 +33,7 @@ from faq_paths import FAQS_PATH
 from logging_config import get_logger
 from evo_client import build_evolution_admin
 import telemetry
+from telemetry import record_audit
 from prompts import TONOS_DISPONIBLES
 
 logger = get_logger("interface")
@@ -132,7 +133,8 @@ def verify_password(password: str) -> bool:
 EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/api/auth/refresh",
                    "/api/auth/change-password",
                    "/", "/api/reload-rag",
-                   "/api/reportes/tipos", "/api/reportes/generar"}
+                   "/api/reportes/tipos", "/api/reportes/generar",
+                   "/api/health"}
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -219,6 +221,7 @@ async def guardar_api_key(key: str = Form(...)):
                     f.write(key)
         except (OSError, ValueError):
             pass
+        await record_audit("config.apikey.save", detail="Google API Key actualizada")
         return {"status": "success", "message": "API Key guardada y actualizada en vivo"}
     except Exception as e:
         raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
@@ -236,6 +239,7 @@ async def guardar_evolution_api_key(key: str = Form(...)):
         _write_env("EVO_API_KEY", key)
     except OSError as e:
         raise APIError(ErrorCode.CFG_WRITE_FAILED, detail=str(e))
+    await record_audit("config.evo_apikey.save", detail="Evolution API Key actualizada")
     return {
         "status": "success",
         "message": "API key guardada. Reiniciá el contenedor evolution-api para aplicar los cambios.",
@@ -302,6 +306,7 @@ async def guardar_config(
                 )
 
         config_manager.guardar(nuevo_email=email, nuevo_tel=telefono, nuevo_tono=bot_tone)
+        await record_audit("config.save", detail="Configuración de contacto actualizada")
         return {"status": "success", "message": "Datos de configuración actualizados"}
     except APIError:
         raise
@@ -325,6 +330,8 @@ async def subir_pdfs(files: List[UploadFile] = File(...)):
         file_location = PDF_FOLDER / file.filename
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)
+    filenames = [f.filename for f in files]
+    await record_audit("pdf.upload", detail=", ".join(filenames))
     return {"status": "success", "message": "Archivos subidos correctamente"}
 
 @app.delete("/api/pdfs/{filename}")
@@ -332,6 +339,7 @@ async def eliminar_pdf(filename: str):
     ruta = PDF_FOLDER / filename
     if ruta.exists():
         os.remove(ruta)
+        await record_audit("pdf.delete", target=filename)
         return {"status": "success"}
     raise APIError(ErrorCode.API_NOT_FOUND, detail="Archivo no encontrado")
 
@@ -390,7 +398,9 @@ async def subir_csvs(files: List[UploadFile] = File(...)):
         # Si fue exitoso y había backup, borrar el backup
         if backup_path and backup_path.exists():
             os.remove(backup_path)
-            
+
+    csv_names = [f.filename for f in files]
+    await record_audit("csv.upload", detail=", ".join(csv_names))
     return {"status": "success", "message": "Archivos subidos y validados correctamente"}
 
 @app.delete("/api/csvs/{filename}")
@@ -398,6 +408,7 @@ async def eliminar_csv(filename: str):
     ruta = CSV_FOLDER / filename
     if ruta.exists():
         os.remove(ruta)
+        await record_audit("csv.delete", target=filename)
         return {"status": "success"}
     raise APIError(ErrorCode.API_NOT_FOUND, detail="Archivo no encontrado")
 
@@ -455,6 +466,7 @@ async def escribir_csv_data(filename: str, data: dict):
             writer = csv.writer(f)
             writer.writerow(headers)
             writer.writerows(rows)
+        await record_audit("csv.edit", target=filename)
         return {"status": "success", "message": "CSV actualizado correctamente"}
     except Exception as e:
         # Restore backup on write failure
@@ -528,10 +540,12 @@ async def login(request: Request, password: str = Form(...)):
     # Limpiar intentos viejos
     _login_attempts[client_ip] = [t for t in _login_attempts[client_ip] if now - t < LOGIN_WINDOW]
     if len(_login_attempts[client_ip]) >= MAX_LOGIN_ATTEMPTS:
+        await record_audit("auth.login_failed", detail=f"IP: {client_ip}")
         raise APIError(ErrorCode.API_RATE_LIMITED, detail="Demasiados intentos. Esperá 1 minuto.")
 
     if not verify_password(password):
         _login_attempts[client_ip].append(now)
+        await record_audit("auth.login_failed", detail=f"IP: {client_ip}")
         raise APIError(ErrorCode.API_UNAUTHORIZED, detail="Contraseña incorrecta")
 
     exp = datetime.utcnow() + timedelta(hours=2)
@@ -540,6 +554,7 @@ async def login(request: Request, password: str = Form(...)):
         SECRET_KEY,
         algorithm="HS256",
     )
+    await record_audit("auth.login", detail="Login exitoso")
     return {"token": token}
 
 
@@ -608,6 +623,7 @@ async def change_password(request: Request, current_password: str = Form(...), n
     # Emitir nuevo token
     exp = datetime.utcnow() + timedelta(hours=2)
     token = jwt.encode({"sub": "admin", "exp": exp}, SECRET_KEY, algorithm="HS256")
+    await record_audit("auth.password_change", detail="Contraseña actualizada")
     return {"token": token, "message": "Contraseña actualizada"}
 # ────────────────────────────────────────────────────────────────────────
 
@@ -685,6 +701,7 @@ async def crear_faq(data: dict):
     }
     rows.append(new_row)
     _write_faqs(rows)
+    await record_audit("faq.create", target=new_row["id"], detail=new_row["pregunta"][:80])
     return JSONResponse(status_code=201, content=new_row)
 
 
@@ -701,6 +718,7 @@ async def actualizar_faq(faq_id: str, data: dict):
                 "respuesta": respuesta,
             }
             _write_faqs(rows)
+            await record_audit("faq.update", target=faq_id, detail=pregunta[:80])
             return rows[i]
     raise APIError(
         ErrorCode.FAQ_NOT_FOUND,
@@ -719,6 +737,7 @@ async def eliminar_faq(faq_id: str):
             detail=f"No existe una FAQ con id '{faq_id}'.",
         )
     _write_faqs(new_rows)
+    await record_audit("faq.delete", target=faq_id)
     return Response(status_code=204)
 # ────────────────────────────────────────────────────────────────────────
 
@@ -907,6 +926,7 @@ async def create_evolution_instance(req: InstanceNameRequest):
     response = info.model_dump(by_alias=True, exclude_none=True)
     if warnings:
         response["warning"] = " | ".join(warnings)
+    await record_audit("instance.create", target=req.name)
     return response
 
 
@@ -970,6 +990,7 @@ async def activate_evolution_instance(req: InstanceNameRequest):
         webhook_url=bot_url,
         webhook_secret=webhook_secret,
     )
+    await record_audit("instance.activate", target=req.name)
     return {"status": "accepted", "active": req.name}
 
 
@@ -1020,6 +1041,7 @@ async def deactivate_evolution_instance(name: str):
         admin=evolution_admin,
         config=config_manager,
     )
+    await record_audit("instance.deactivate", target=name)
     return {"status": "accepted", "deactivated": name}
 
 
@@ -1093,6 +1115,7 @@ async def delete_evolution_instance(name: str):
         # Ya viene mapeado (404, 400, 5xx). Solo lo re-emitimos.
         raise
 
+    await record_audit("instance.delete", target=name)
     return Response(status_code=204)
 # ────────────────────────────────────────────────────────────────────────
 
@@ -1149,6 +1172,91 @@ async def get_quick_stats():
         }
     except AppError:
         raise
+    except Exception as e:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
+# ────────────────────────────────────────────────────────────────────────
+
+# ─── Health Endpoint ────────────────────────────────────────────────────
+@app.get("/api/health")
+async def health_check():
+    """Health check ligero para el dashboard del admin.
+    
+    Verifica conectividad con Evolution API y PostgreSQL.
+    No requiere WhatsApp client ni RAG (a diferencia del health del bot).
+    """
+    components = {}
+    
+    # Evolution API
+    evo_url = os.environ.get("EVOLUTION_API_URL", "http://localhost:8080")
+    evo_key = os.environ.get("EVO_API_KEY", os.environ.get("EVOLUTION_API_KEY", ""))
+    try:
+        from health import check_evolution_api
+        evo_result = await check_evolution_api(evo_url, evo_key, "")
+        components["evolution_api"] = evo_result
+    except Exception as e:
+        components["evolution_api"] = {"status": "unhealthy", "duration_ms": 0, "detail": str(e)[:200]}
+    
+    # PostgreSQL via telemetry pool
+    try:
+        pool = telemetry._pool
+        if pool:
+            import time as _t
+            start = _t.perf_counter()
+            async with pool.acquire() as conn:
+                await conn.fetchval("SELECT 1")
+            duration_ms = int((_t.perf_counter() - start) * 1000)
+            components["postgresql"] = {"status": "ok", "duration_ms": duration_ms}
+        else:
+            components["postgresql"] = {"status": "unhealthy", "duration_ms": 0, "detail": "Pool no inicializado"}
+    except Exception as e:
+        components["postgresql"] = {"status": "unhealthy", "duration_ms": 0, "detail": str(e)[:200]}
+    
+    # Aggregate
+    statuses = [v["status"] for v in components.values()]
+    if all(s == "ok" for s in statuses):
+        overall = "ok"
+    elif any(s == "ok" for s in statuses):
+        overall = "degraded"
+    else:
+        overall = "unhealthy"
+    
+    return {"status": overall, "components": components}
+# ────────────────────────────────────────────────────────────────────────
+
+# ─── Audit Log Endpoint ─────────────────────────────────────────────────
+@app.get("/api/audit")
+async def list_audit_logs(limit: int = 50):
+    """Lista los registros de auditoría más recientes (solo admin).
+    
+    Args:
+        limit: Número máximo de registros (default 50, max 200).
+    
+    Returns:
+        Lista de entradas de auditoría ordenadas por fecha descendente.
+    """
+    limit = min(limit, 200)
+    pool = telemetry._pool
+    if not pool:
+        raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail="Base de datos no disponible")
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, action, actor, target, detail, created_at "
+                "FROM telemetry.admin_audit "
+                "ORDER BY created_at DESC LIMIT $1",
+                limit,
+            )
+        return [
+            {
+                "id": r["id"],
+                "action": r["action"],
+                "actor": r["actor"],
+                "target": r["target"],
+                "detail": r["detail"],
+                "created_at": str(r["created_at"]),
+            }
+            for r in rows
+        ]
     except Exception as e:
         raise AppError(ErrorCode.TELEMETRY_DB_ERROR, detail=str(e))
 # ────────────────────────────────────────────────────────────────────────

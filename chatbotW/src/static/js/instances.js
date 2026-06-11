@@ -317,6 +317,7 @@ export function initInstancesPanel(Alpine) {
                     // el usuario espera, y refrescamos SOLO la lista (no
                     // pisamos activeName con el stale del server).
                     this.activeName = '';
+                    window.dispatchEvent(new CustomEvent('active-instance-changed'));
                     await this.refreshInstancesList();
                     this._syncBotPhone();
                 } else {
@@ -449,6 +450,7 @@ export function initInstancesPanel(Alpine) {
                 });
                 if (res.ok) {
                     window.showToast(`Instancia '${name}' activada`, 'success');
+                    window.dispatchEvent(new CustomEvent('active-instance-changed'));
                     await this.loadInstances();
                 } else {
                     const err = await res.json().catch(() => ({}));
@@ -516,6 +518,7 @@ export function initInstancesPanel(Alpine) {
                     // a lo que el usuario espera y refrescamos SOLO la
                     // lista (no pisamos activeName con el stale del server).
                     this.activeName = name;
+                    window.dispatchEvent(new CustomEvent('active-instance-changed'));
                     await this.refreshInstancesList();
                     this._syncBotPhone();
                 } else {

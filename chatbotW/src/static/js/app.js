@@ -101,6 +101,8 @@ document.addEventListener('alpine:init', () => {
 
         // Quick stats state
         quickStats: null,
+        healthData: null,
+        healthLoading: false,
 
         // Password change state
         changePasswordCurrent: '',
@@ -122,7 +124,7 @@ document.addEventListener('alpine:init', () => {
                 if (val === 'docs') { this.loadPdfs(); this.loadCsvs(); }
                 if (val === 'faqs') this.loadFaqs();
                 if (val === 'logs') { this.loadLogs(); this.searchQuery = ''; }
-                if (val === 'dashboard') this.loadTelemetry();
+                if (val === 'dashboard') { this.loadTelemetry(); this.loadHealth(); }
                 if (val === 'reports') this.loadSchedules();
                 if (val !== 'dashboard') this.destroyCharts();
             });
@@ -136,6 +138,8 @@ document.addEventListener('alpine:init', () => {
                 this.loadContactConfig();
                 this.loadActiveInstance();
                 this.loadQuickStats();
+                this.loadHealth();
+                this.loadSchedules();
             });
             // Load destino history from localStorage
             try {
@@ -144,6 +148,10 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 this.scheduleForm.destinoHistory = [];
             }
+            // Escuchar cambios de instancia activa desde el panel de instancias
+            window.addEventListener('active-instance-changed', () => {
+                this.loadActiveInstance();
+            });
         },
         
         switchTab(tab) {
@@ -215,6 +223,7 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (err) {
                 this.activeInstanceName = '';
+                window.showToast('Error al verificar instancia activa', 'error');
             } finally {
                 this.activeInstanceLoaded = true;
             }
@@ -250,6 +259,7 @@ document.addEventListener('alpine:init', () => {
                 this.evolutionApiKeySet = data.evolution_api_key_set || false;
             } catch (err) {
                 console.error("Error al cargar config", err);
+                window.showToast('Error al cargar configuración', 'error');
             }
         },
 
@@ -311,6 +321,7 @@ document.addEventListener('alpine:init', () => {
                 this.pdfs = data.pdfs || [];
             } catch (err) {
                 console.error(err);
+                window.showToast('Error al cargar documentos', 'error');
             }
         },
 
@@ -380,6 +391,7 @@ document.addEventListener('alpine:init', () => {
                 this.csvs = data.csvs || [];
             } catch (err) {
                 console.error(err);
+                window.showToast('Error al cargar CSVs', 'error');
             }
         },
 
@@ -439,6 +451,7 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (err) {
                 console.error(err);
+                window.showToast('Error al cargar logs', 'error');
             }
         },
 
@@ -452,6 +465,7 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (err) {
                 console.error(err);
+                window.showToast('Error al buscar logs', 'error');
             }
         },
 
@@ -469,6 +483,7 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (err) {
                 this.currentLogContent = '<div class="text-center text-red-500 mt-4">Error de conexión.</div>';
+                window.showToast('Error al leer conversación', 'error');
             } finally {
                 this.loadingLog = false;
             }
@@ -679,10 +694,23 @@ document.addEventListener('alpine:init', () => {
                 const res = await apiFetch('/api/telemetry/summary?days=7');
                 const json = await res.json();
                 if (json.status !== 'success') throw new Error(json.message);
-                this.telemetryData = json.data;
+                // Map backend field names to frontend-expected names
+                const d = json.data;
+                this.telemetryData = {
+                    ...d,
+                    total_errors: d.error_count || 0,
+                    error_rate: d.total_messages > 0 ? ((d.error_count / d.total_messages) * 100).toFixed(1) : 0,
+                    avg_rag_duration_ms: d.avg_rag_ms || 0,
+                    avg_send_duration_ms: d.avg_send_ms || 0,
+                    avg_total_duration_ms: (d.avg_rag_ms || 0) + (d.avg_send_ms || 0),
+                    total_faq_hits: d.faq_hits || 0,
+                    total_cache_hits: d.cache_hits || 0,
+                    messages_by_day: (d.daily || []).map(day => ({ date: day.date, count: day.total_messages })),
+                };
                 this.$nextTick(() => this.initCharts());
             } catch (e) {
                 this.telemetryError = 'Error al cargar el dashboard';
+                window.showToast('Error al cargar dashboard', 'error');
             } finally {
                 this.telemetryLoading = false;
             }
@@ -979,6 +1007,19 @@ document.addEventListener('alpine:init', () => {
             } catch (err) {
                 // Silencioso: no queremos un toast cada vez que entra a dashboard
                 this.quickStats = null;
+            }
+        },
+
+        async loadHealth() {
+            this.healthLoading = true;
+            try {
+                const res = await apiFetch('/api/health');
+                if (res.ok) this.healthData = await res.json();
+            } catch (e) {
+                this.healthData = null;
+                window.showToast('Error al verificar estado del sistema', 'error');
+            } finally {
+                this.healthLoading = false;
             }
         },
 
