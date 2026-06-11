@@ -30,6 +30,7 @@ from faq_paths import FAQS_PATH
 from logging_config import get_logger
 from evo_client import build_evolution_admin
 import telemetry
+from prompts import TONOS_DISPONIBLES
 
 logger = get_logger("interface")
 
@@ -250,6 +251,7 @@ async def guardar_config(
     telefono: str = Form(None),
     gemini_model: str = Form(None),
     gemini_embeddings_model: str = Form(None),
+    bot_tone: str = Form(None),
 ):
     try:
         # Validar gemini_model si se provee
@@ -282,8 +284,15 @@ async def guardar_config(
                 )
             config_manager.config["gemini_embeddings_model"] = gemini_embeddings_model
 
-        config_manager.guardar(nuevo_email=email, nuevo_tel=telefono)
-        return {"status": "success", "message": "Datos de contacto actualizados"}
+        if bot_tone is not None:
+            if bot_tone not in TONOS_DISPONIBLES:
+                raise APIError(
+                    ErrorCode.API_INVALID_PAYLOAD,
+                    detail=f"bot_tone debe ser uno de: {', '.join(TONOS_DISPONIBLES.keys())}",
+                )
+
+        config_manager.guardar(nuevo_email=email, nuevo_tel=telefono, nuevo_tono=bot_tone)
+        return {"status": "success", "message": "Datos de configuración actualizados"}
     except APIError:
         raise
     except Exception as e:

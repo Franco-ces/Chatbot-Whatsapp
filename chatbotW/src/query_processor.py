@@ -7,7 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 # Recursos locales
 from audio_handler import AudioProcessor
 from ConfigManager import ConfigManager
-from prompts import PROMPT_ASISTENTE_VIRTUAL
+from prompts import PROMPT_ASISTENTE_VIRTUAL, TONOS_DISPONIBLES
 from guardrails import evaluar_guardrail_entrada, evaluar_guardrail_salida, detectar_solicitud_humano, _MSJ_HANDOFF
 from context_builder import construir_contexto
 from logging_config import get_logger
@@ -163,7 +163,11 @@ class QueryProcessor:
         model_name = self.config_manager.config.get("gemini_model", "gemini-3.1-flash-lite")
 
         # Preparamos las instrucciones de sistema pasándole el contexto unificado
+        tono_clave = self.config_manager.config.get("bot_tone", "profesional")
+        instruccion_tono = TONOS_DISPONIBLES.get(tono_clave, TONOS_DISPONIBLES["profesional"])
+
         instrucciones_sistema = self.prompt_template.format(
+            bot_tone=instruccion_tono,
             history=historial_texto if historial_texto else "Sin historial previo.",
             context=contexto_total,
             input=texto_para_buscar if texto_para_buscar else "Responde a la duda del audio.",
