@@ -105,11 +105,11 @@ class TestGeminiModelConfigDefaults:
         assert cm.config["gemini_model"] == "gemini-3.1-flash-lite"
 
     def test_default_gemini_embeddings_model_when_missing(self, fresh_config):
-        """Config sin gemini_embeddings_model → setdefault asigna models/gemini-embedding-2-preview."""
+        """Config sin gemini_embeddings_model → setdefault asigna gemini-embedding-2-preview (sin models/)."""
         cfg_mod, target = fresh_config
         target.write_text(json.dumps({"email": "x@y.com"}), encoding="utf-8")
         cm = cfg_mod.ConfigManager()
-        assert cm.config["gemini_embeddings_model"] == "models/gemini-embedding-2-preview"
+        assert cm.config["gemini_embeddings_model"] == "gemini-embedding-2-preview"
 
     def test_custom_gemini_model_preserved(self, fresh_config):
         """Config con gemini_model seteado → valor preservado."""

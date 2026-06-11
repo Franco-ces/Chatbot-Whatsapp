@@ -74,7 +74,7 @@ class TestDocumentManagerEmbeddingsModel:
             )
 
     def test_default_embeddings_model_when_config_missing(self):
-        """Config sin gemini_embeddings_model → default models/gemini-embedding-2-preview."""
+        """Config sin gemini_embeddings_model → default gemini-embedding-2-preview (API recibe con models/)."""
         from document_manager import DocumentManager
 
         mock_cm = MagicMock()

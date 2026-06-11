@@ -39,6 +39,8 @@ document.addEventListener('alpine:init', () => {
         // Gemini model config state
         geminiModel: '',
         geminiEmbeddingsModel: '',
+        activeGeminiModel: '',
+        activeGeminiEmbeddingsModel: '',
         geminiConfigStatus: '',
         geminiConfigStatusClass: '',
 
@@ -218,6 +220,8 @@ document.addEventListener('alpine:init', () => {
                 // Load Gemini model config
                 this.geminiModel = data.gemini_model || '';
                 this.geminiEmbeddingsModel = data.gemini_embeddings_model || '';
+                this.activeGeminiModel = data.gemini_model || '';
+                this.activeGeminiEmbeddingsModel = data.gemini_embeddings_model || '';
                 this.googleApiKeySet = data.google_api_key_set || false;
                 this.evolutionApiKeySet = data.evolution_api_key_set || false;
             } catch (err) {
@@ -261,6 +265,10 @@ document.addEventListener('alpine:init', () => {
                 const data = await res.json();
                 this.geminiConfigStatus = data.message;
                 this.geminiConfigStatusClass = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
+                if (data.status === "success") {
+                    this.activeGeminiModel = this.geminiModel;
+                    this.activeGeminiEmbeddingsModel = this.geminiEmbeddingsModel;
+                }
                 window.showToast(data.message, data.status === "success" ? 'success' : 'error');
             } catch (err) {
                 this.geminiConfigStatus = "✕ Error al guardar modelos";

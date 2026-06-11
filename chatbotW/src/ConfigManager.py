@@ -76,7 +76,7 @@ class ConfigManager:
             # Audio comparte la misma key (no hay config separada).
             self.config.setdefault("gemini_model", "gemini-3.1-flash-lite")
             # Modelo de embeddings para FAISS index. Cambiar invalida el vectorstore.
-            self.config.setdefault("gemini_embeddings_model", "models/gemini-embedding-2-preview")
+            self.config.setdefault("gemini_embeddings_model", "gemini-embedding-2-preview")
 
     def guardar(self, nuevo_email=None, nuevo_tel=None):
         """Actualiza los valores en memoria y los persiste en el disco."""

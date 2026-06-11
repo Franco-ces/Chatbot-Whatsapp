@@ -35,12 +35,16 @@ class DocumentManager:
         self.cache = EmbeddingCache()
 
         # Modelo de embeddings de Google — configurable desde config_bot.json
+        # NOTA: La API de Google necesita el prefijo "models/" internamente,
+        # pero en config se guarda sin él para consistencia con el modelo de
+        # generación. Lo agregamos acá al construir el cliente.
         config_manager = ConfigManager()
-        embeddings_model_name = config_manager.config.get(
-            "gemini_embeddings_model", "models/gemini-embedding-2-preview"
+        raw_name = config_manager.config.get(
+            "gemini_embeddings_model", "gemini-embedding-2-preview"
         )
+        api_name = raw_name if raw_name.startswith("models/") else f"models/{raw_name}"
         self.embeddings_model = GoogleGenerativeAIEmbeddings(
-            model=embeddings_model_name,
+            model=api_name,
             google_api_key=self.api_key
         )
 
