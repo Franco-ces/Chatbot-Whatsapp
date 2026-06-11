@@ -43,6 +43,7 @@ class ErrorCode(str, Enum):
     API_NOT_FOUND = "E-API-002"
     API_SERVER_ERROR = "E-API-003"
     API_UNAUTHORIZED = "E-API-004"
+    API_RATE_LIMITED = "E-API-005"
 
     # System errors (E-SYS)
     SYS_UNEXPECTED = "E-SYS-001"
@@ -83,6 +84,7 @@ _USER_MESSAGES = {
     ErrorCode.API_NOT_FOUND: "Recurso no encontrado.",
     ErrorCode.API_SERVER_ERROR: "Error interno del servidor.",
     ErrorCode.API_UNAUTHORIZED: "Acceso no autorizado.",
+    ErrorCode.API_RATE_LIMITED: "Demasiados intentos. Esperá un minuto.",
     ErrorCode.SYS_UNEXPECTED: "Ocurrió un error inesperado.",
     ErrorCode.SYS_DEPENDENCY_MISSING: "El sistema no está correctamente inicializado.",
     ErrorCode.FAQ_INVALID_DATA: "Datos inválidos para la FAQ.",
@@ -96,6 +98,7 @@ _HTTP_STATUSES = {
     ErrorCode.API_NOT_FOUND: 404,
     ErrorCode.API_SERVER_ERROR: 500,
     ErrorCode.API_UNAUTHORIZED: 401,
+    ErrorCode.API_RATE_LIMITED: 429,
     ErrorCode.EVO_INSTANCE_NOT_LINKED: 409,
     ErrorCode.EVO_INSTANCE_ALREADY_EXISTS: 409,
     ErrorCode.EVO_INSTANCE_ACTIVE: 409,

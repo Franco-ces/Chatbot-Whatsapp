@@ -17,21 +17,21 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Colores ANSI
 # ---------------------------------------------------------------------------
-readonly C_RED='\033[0;31m'
-readonly C_GREEN='\033[0;32m'
-readonly C_YELLOW='\033[0;33m'
-readonly C_CYAN='\033[0;36m'
-readonly C_BOLD='\033[1m'
-readonly C_RESET='\033[0m'
+readonly C_RED=$'\033[0;31m'
+readonly C_GREEN=$'\033[0;32m'
+readonly C_YELLOW=$'\033[0;33m'
+readonly C_CYAN=$'\033[0;36m'
+readonly C_BOLD=$'\033[1m'
+readonly C_RESET=$'\033[0m'
 
 # ---------------------------------------------------------------------------
 # Utilidades de impresion
 # ---------------------------------------------------------------------------
-info()    { echo -e "${C_CYAN}[INFO]${C_RESET}  $*"; }
-ok()      { echo -e "${C_GREEN}[OK]${C_RESET}    $*"; }
-warn()    { echo -e "${C_YELLOW}[WARN]${C_RESET}  $*"; }
-fail()    { echo -e "${C_RED}[ERROR]${C_RESET} $*"; }
-header()  { echo -e "\n${C_BOLD}${C_CYAN}=== $* ===${C_RESET}"; }
+info()    { printf '%s[INFO]%s  %s\n' "$C_CYAN" "$C_RESET" "$*"; }
+ok()      { printf '%s[OK]%s    %s\n' "$C_GREEN" "$C_RESET" "$*"; }
+warn()    { printf '%s[WARN]%s  %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
+fail()    { printf '%s[ERROR]%s %s\n' "$C_RED" "$C_RESET" "$*"; }
+header()  { printf '\n%s=== %s ===%s\n' "${C_BOLD}${C_CYAN}" "$*" "$C_RESET"; }
 
 # ---------------------------------------------------------------------------
 # Error trap — muestra la linea donde fallo
@@ -238,7 +238,7 @@ wait_for_healthy() {
             break
         fi
 
-        echo -ne "\r  ${C_CYAN}Esperando${C_RESET} ${dots} (${elapsed}s / ${max_wait}s) "
+        printf '\r  %sEsperando%s %s (%ss / %ss) ' "$C_CYAN" "$C_RESET" "$dots" "$elapsed" "$max_wait"
         sleep "$interval"
         elapsed=$((elapsed + interval))
     done
@@ -277,7 +277,7 @@ print_summary() {
     echo "    Detener todo:    $DC down"
     echo "    Reiniciar:       $DC restart"
     echo ""
-    echo -en "${C_YELLOW}Presione Enter para continuar...${C_RESET}"
+    printf '%sPresione Enter para continuar...%s' "$C_YELLOW" "$C_RESET"
     read -r
 }
 
@@ -288,9 +288,9 @@ main() {
     # Verificar si se pidio modo verbose
     [[ "${1:-}" == "--verbose" ]] && set -x
 
-    echo -e "\n${C_BOLD}${C_CYAN}============================================${C_RESET}"
-    echo -e "${C_BOLD}${C_CYAN}  Instalacion — Chatbot WhatsApp${C_RESET}"
-    echo -e "${C_BOLD}${C_CYAN}============================================${C_RESET}\n"
+    printf '\n%s============================================%s\n' "${C_BOLD}${C_CYAN}" "$C_RESET"
+    printf '%s  Instalacion — Chatbot WhatsApp%s\n' "${C_BOLD}${C_CYAN}" "$C_RESET"
+    printf '%s============================================%s\n\n' "${C_BOLD}${C_CYAN}" "$C_RESET"
 
     # Ir al directorio del script
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

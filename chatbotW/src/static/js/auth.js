@@ -1,13 +1,55 @@
 import { apiFetch } from './api.js';
 
+// Inactividad timeout (30 minutos sin actividad = auto logout)
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+let inactivityTimer = null;
+let refreshInterval = null;
+
+function resetInactivityTimer() {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+        Alpine.store('auth').logout();
+    }, INACTIVITY_TIMEOUT);
+}
+
+function startInactivityTracking() {
+    // Eventos que cuentan como actividad del usuario
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach(event => {
+        document.addEventListener(event, resetInactivityTimer, { passive: true });
+    });
+    resetInactivityTimer();
+}
+
+function startTokenRefresh(token) {
+    if (refreshInterval) clearInterval(refreshInterval);
+    // Refrescar token cada 30 minutos
+    refreshInterval = setInterval(async () => {
+        try {
+            const res = await fetch('/api/auth/refresh', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem('token', data.token);
+                Alpine.store('auth').token = data.token;
+            } else {
+                Alpine.store('auth').logout();
+            }
+        } catch {
+            // Error de red — mantener token actual, fallará en el próximo request
+        }
+    }, 30 * 60 * 1000);
+}
+
+function stopTimers() {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    if (refreshInterval) clearInterval(refreshInterval);
+}
+
 export function initAuth(Alpine) {
     Alpine.store('auth', {
         token: localStorage.getItem('token'),
-        // Flag que indica si `verify()` ya termino (true = sabemos
-        // si el token es valido). Los componentes que dependan de
-        // auth deben esperar a que sea true antes de disparar
-        // requests; asi evitamos cargar datos con un token muerto
-        // que devuelve 401 y dispara toasts de error confusos.
         verified: false,
 
         async verify() {
@@ -20,14 +62,15 @@ export function initAuth(Alpine) {
                 if (!data.valid) {
                     this.token = null;
                     localStorage.removeItem('token');
+                } else {
+                    // Token válido — iniciar refresh e inactivity tracking
+                    startTokenRefresh(this.token);
+                    startInactivityTracking();
                 }
             } catch {
                 this.token = null;
                 localStorage.removeItem('token');
             } finally {
-                // Marcamos como verificado SIEMPRE (con o sin token,
-                // con exito o error de red): cualquier estado terminal
-                // es valido para que los componentes decidan que hacer.
                 this.verified = true;
             }
         },
@@ -36,38 +79,42 @@ export function initAuth(Alpine) {
             this.verify();
         },
 
-        async login(username, password) {
+        async login(password) {
             const fd = new FormData();
-            fd.append('username', username);
             fd.append('password', password);
             const res = await apiFetch('/api/auth/login', { method: 'POST', body: fd });
             if (!res.ok) {
                 const err = await res.json();
-                throw new Error(err.detail || 'Credenciales inválidas');
+                throw new Error(err.detail || 'Contraseña incorrecta');
             }
             const data = await res.json();
             this.token = data.token;
             localStorage.setItem('token', data.token);
+            startTokenRefresh(data.token);
+            startInactivityTracking();
         },
 
         logout() {
+            stopTimers();
             this.token = null;
             localStorage.removeItem('token');
         }
     });
 
     Alpine.data('loginForm', () => ({
-        username: '',
         password: '',
+        showPassword: false,
         loading: false,
         error: '',
+        loginShake: false,
         async doLogin() {
             this.loading = true;
             this.error = '';
             try {
-                await Alpine.store('auth').login(this.username, this.password);
+                await Alpine.store('auth').login(this.password);
             } catch (e) {
                 this.error = e.message;
+                this.loginShake = true;
             } finally {
                 this.loading = false;
             }

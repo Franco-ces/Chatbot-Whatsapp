@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 import os
 import shutil
+import hashlib
 from pathlib import Path
 from typing import List, Any
 from jose import jwt, JWTError
@@ -19,6 +20,8 @@ import csv
 import json
 import re
 import uuid
+from collections import defaultdict
+import time as _time
 from pydantic import BaseModel, Field
 
 from ConfigManager import ConfigManager
@@ -118,10 +121,16 @@ if not WEBHOOK_SECRET:
     except OSError:
         pass  # Bind-mount (Docker/WSL2) no permite escribir
 
-ADMIN_USER = os.getenv("ADMIN_USER", "admin")
-ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
+if not ADMIN_PASSWORD_HASH:
+    # Contraseña por defecto "admin123" hasheada — solo en primer arranque sin env var
+    ADMIN_PASSWORD_HASH = hashlib.sha256("admin123".encode()).hexdigest()
 
-EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/", "/api/reload-rag",
+def verify_password(password: str) -> bool:
+    return hashlib.sha256(password.encode()).hexdigest() == ADMIN_PASSWORD_HASH
+
+EXCLUDED_PATHS = {"/api/auth/login", "/api/auth/verify", "/api/auth/refresh",
+                  "/", "/api/reload-rag",
                   "/api/reportes/tipos", "/api/reportes/generar"}
 
 
@@ -134,13 +143,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         auth = request.headers.get("Authorization")
         if not auth or not auth.startswith("Bearer "):
-            return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+            return JSONResponse(status_code=401, content={"detail": "No autenticado"})
 
         token = auth.split(" ", 1)[1]
         try:
             jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         except JWTError:
-            return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
+            return JSONResponse(status_code=401, content={"detail": "Token inválido o expirado"})
 
         return await call_next(request)
 
@@ -308,8 +317,8 @@ async def listar_pdfs():
 async def subir_pdfs(files: List[UploadFile] = File(...)):
     for file in files:
         if not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(
-                status_code=422,
+            raise APIError(
+                ErrorCode.API_INVALID_PAYLOAD,
                 detail=f"'{file.filename}' no es un archivo PDF. Solo se permiten archivos .pdf"
             )
         file_location = PDF_FOLDER / file.filename
@@ -343,8 +352,8 @@ async def subir_csvs(files: List[UploadFile] = File(...)):
     import subprocess
     for file in files:
         if not file.filename.lower().endswith(".csv"):
-            raise HTTPException(
-                status_code=422,
+            raise APIError(
+                ErrorCode.API_INVALID_PAYLOAD,
                 detail=f"'{file.filename}' no es válido. Solo se permiten archivos .csv"
             )
         file_location = CSV_FOLDER / file.filename
@@ -372,8 +381,8 @@ async def subir_csvs(files: List[UploadFile] = File(...)):
                 
             error_msg = result.stdout.strip()
             # Limpiar ANSI codes por las dudas y devolver mensaje claro
-            raise HTTPException(
-                status_code=422,
+            raise APIError(
+                ErrorCode.API_INVALID_PAYLOAD,
                 detail=f"Error en {file.filename}:\n{error_msg}"
             )
             
@@ -389,20 +398,20 @@ async def eliminar_csv(filename: str):
     if ruta.exists():
         os.remove(ruta)
         return {"status": "success"}
-    raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    raise APIError(ErrorCode.API_NOT_FOUND, detail="Archivo no encontrado")
 
 @app.get("/api/csvs/{filename}")
 async def descargar_csv(filename: str):
     ruta = CSV_FOLDER / filename
     if not ruta.exists():
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        raise APIError(ErrorCode.API_NOT_FOUND, detail="Archivo no encontrado")
     return FileResponse(ruta, filename=filename, media_type='text/csv')
 
 @app.get("/api/csvs/{filename}/data")
 async def leer_csv_data(filename: str):
     ruta = CSV_FOLDER / filename
     if not ruta.exists():
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        raise APIError(ErrorCode.API_NOT_FOUND, detail="Archivo no encontrado")
     try:
         with open(ruta, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -410,31 +419,31 @@ async def leer_csv_data(filename: str):
             rows = [[row[h] for h in headers] for row in reader]
         return {"headers": headers, "rows": rows}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise APIError(ErrorCode.API_SERVER_ERROR, detail=str(e))
 
 @app.put("/api/csvs/{filename}/data")
 async def escribir_csv_data(filename: str, data: dict):
     if not filename.endswith(".csv"):
-        raise HTTPException(status_code=422, detail="El archivo debe tener extensión .csv")
+        raise APIError(ErrorCode.API_INVALID_PAYLOAD, detail="El archivo debe tener extensión .csv")
 
     headers = data.get("headers")
     rows = data.get("rows")
 
     if not headers or not rows:
-        raise HTTPException(status_code=400, detail="headers y rows no pueden estar vacíos")
+        raise APIError(ErrorCode.API_INVALID_PAYLOAD, detail="headers y rows no pueden estar vacíos")
 
     ruta = CSV_FOLDER / filename
     if not ruta.exists():
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        raise APIError(ErrorCode.API_NOT_FOUND, detail="Archivo no encontrado")
 
     # Validate column count matches headers
     num_cols = len(headers)
     for i, row in enumerate(rows):
         if len(row) != num_cols:
-            raise HTTPException(
-                status_code=422,
-                detail=f"La fila {i+1} tiene {len(row)} columnas, se esperaban {num_cols}"
-            )
+                raise APIError(
+                    ErrorCode.API_INVALID_PAYLOAD,
+                    detail=f"La fila {i+1} tiene {len(row)} columnas, se esperaban {num_cols}"
+                )
 
     # Backup original before write
     backup_path = CSV_FOLDER / f"{filename}.bak"
@@ -449,7 +458,7 @@ async def escribir_csv_data(filename: str, data: dict):
     except Exception as e:
         # Restore backup on write failure
         shutil.copy2(backup_path, ruta)
-        raise HTTPException(status_code=500, detail=f"Error al escribir CSV: {str(e)}")
+        raise APIError(ErrorCode.API_SERVER_ERROR, detail=f"Error al escribir CSV: {str(e)}")
 # ────────────────────────────────────────────────────────────────────────
 
 @app.get("/api/logs")
@@ -506,14 +515,27 @@ async def leer_log(filename: str):
         raise APIError(ErrorCode.API_SERVER_ERROR, detail=str(e))
 
 # ─── Auth Endpoints ────────────────────────────────────────────────────
-@app.post("/api/auth/login")
-async def login(username: str = Form(...), password: str = Form(...)):
-    if username != ADMIN_USER or password != ADMIN_PASS:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+# Rate limiting en memoria para el endpoint de login
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_WINDOW = 60  # segundos
 
-    exp = datetime.utcnow() + timedelta(hours=24)
+@app.post("/api/auth/login")
+async def login(request: Request, password: str = Form(...)):
+    client_ip = request.client.host if request.client else "unknown"
+    now = _time.time()
+    # Limpiar intentos viejos
+    _login_attempts[client_ip] = [t for t in _login_attempts[client_ip] if now - t < LOGIN_WINDOW]
+    if len(_login_attempts[client_ip]) >= MAX_LOGIN_ATTEMPTS:
+        raise APIError(ErrorCode.API_RATE_LIMITED, detail="Demasiados intentos. Esperá 1 minuto.")
+
+    if not verify_password(password):
+        _login_attempts[client_ip].append(now)
+        raise APIError(ErrorCode.API_UNAUTHORIZED, detail="Contraseña incorrecta")
+
+    exp = datetime.utcnow() + timedelta(hours=2)
     token = jwt.encode(
-        {"sub": username, "exp": exp},
+        {"sub": "admin", "exp": exp},
         SECRET_KEY,
         algorithm="HS256",
     )
@@ -532,6 +554,26 @@ async def verify_token(request: Request):
         return {"valid": True}
     except JWTError:
         return {"valid": False}
+
+
+@app.post("/api/auth/refresh")
+async def refresh_token(request: Request):
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        raise APIError(ErrorCode.API_UNAUTHORIZED, detail="No autenticado")
+    token = auth.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        # Emitir nuevo token con expiración fresca de 2h
+        exp = datetime.utcnow() + timedelta(hours=2)
+        new_token = jwt.encode(
+            {"sub": payload["sub"], "exp": exp},
+            SECRET_KEY,
+            algorithm="HS256",
+        )
+        return {"token": new_token}
+    except JWTError:
+        raise APIError(ErrorCode.API_UNAUTHORIZED, detail="Token inválido o expirado")
 # ────────────────────────────────────────────────────────────────────────
 
 # ─── FAQ CRUD Endpoints ────────────────────────────────────────────────
