@@ -131,6 +131,7 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
         respuesta_texto = resultado.respuesta
         rag_duration_ms = int((time.perf_counter() - rag_start) * 1000)
         respuesta_cacheable = resultado.cacheable
+        query_error_code = resultado.error_code
 
         logger.info("RAG responded successfully", rag_duration_ms=rag_duration_ms)
 
@@ -159,7 +160,7 @@ async def procesar_mensaje_bot(rag_instance, wa_client, remitente: str, texto: s
             remitente=remitente, push_name=push_name, texto=texto,
             es_audio=es_audio, respuesta=respuesta_texto,
             cacheable=respuesta_cacheable, cache_hit=False, faq_hit=False,
-            error_code=None, rag_duration_ms=rag_duration_ms,
+            error_code=query_error_code, rag_duration_ms=rag_duration_ms,
             send_duration_ms=send_duration_ms, total_duration_ms=total_duration_ms,
         ))
 

@@ -11,6 +11,7 @@ from prompts import PROMPT_ASISTENTE_VIRTUAL, TONOS_DISPONIBLES
 from guardrails import evaluar_guardrail_entrada, evaluar_guardrail_salida, detectar_solicitud_humano, _MSJ_HANDOFF
 from context_builder import construir_contexto
 from logging_config import get_logger
+from error_codes import ErrorCode
 
 if TYPE_CHECKING:
     # Evita import circular: faq_matcher importa numpy y logging_config; no necesita
@@ -41,6 +42,7 @@ class QueryResult:
     transcripcion: Optional[str]
     respuesta: str
     cacheable: bool
+    error_code: Optional[str] = None
 
 
 def notificar_handoff(remitente: str | None, texto: str, historial: str):
@@ -113,7 +115,7 @@ class QueryProcessor:
             self.llm_guardrail
         )
         if not es_seguro:
-            return QueryResult(transcripcion_detectada, mensaje_rechazo, cacheable=False)
+            return QueryResult(transcripcion_detectada, mensaje_rechazo, cacheable=False, error_code=ErrorCode.RAG_GUARDRAIL_REJECTED.value)
 
         # --- HANDOFF: deteccion de solicitud de humano ---
         if detectar_solicitud_humano(texto_para_buscar):
@@ -196,6 +198,6 @@ class QueryProcessor:
             respuesta_texto, contexto_total, self.llm_guardrail
         )
         if not es_aceptado:
-            return QueryResult(transcripcion_detectada, mensaje_rechazo_salida, cacheable=False)
+            return QueryResult(transcripcion_detectada, mensaje_rechazo_salida, cacheable=False, error_code=ErrorCode.RAG_GUARDRAIL_REJECTED.value)
 
         return QueryResult(transcripcion_detectada, respuesta_texto, cacheable=True)

@@ -33,6 +33,7 @@ class ErrorCode(str, Enum):
     RAG_NO_PDFS = "E-RAG-001"
     RAG_QUERY_FAILED = "E-RAG-002"
     RAG_AUDIO_FAILED = "E-RAG-003"
+    RAG_GUARDRAIL_REJECTED = "E-RAG-004"
 
     # Config errors (E-CFG)
     CFG_READ_FAILED = "E-CFG-001"
