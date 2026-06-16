@@ -2,7 +2,7 @@
 
 Estrategia: leemos el HTML como texto y verificamos contratos:
 1. Título y sección "Modelos activos" existen.
-2. El separador hr está presente antes de la tarjeta.
+2. La tarjeta está dentro del accordion de Gemini Models.
 3. Las etiquetas "Generación" y "Embeddings" están presentes.
 4. Los bindings x-text para activeGeminiModel y activeGeminiEmbeddingsModel existen.
 5. El ícono fa-microchip está presente en el header.
@@ -63,17 +63,18 @@ class TestActiveModelsCardTitle:
 
 
 class TestActiveModelsSeparator:
-    """Verifica que exista el separador hr antes de la tarjeta."""
+    """Verifica que la tarjeta de modelos activos esté dentro del accordion de Gemini."""
 
     def test_separator_before_card(self, html_content):
-        """Debe existir un <hr> antes de la tarjeta de modelos activos."""
-        # Buscar hr seguido de la tarjeta
-        hr_pos = html_content.find('<hr class="my-4 border-gray-100 dark:border-gray-700">')
+        """La tarjeta de modelos activos debe estar dentro del accordion de Gemini Models."""
+        # After the accordion conversion, models active is inside the Gemini Models accordion body
+        # instead of being preceded by an <hr> separator
+        accordion_pos = html_content.find("accordionState.geminiModels")
         card_pos = html_content.find("Modelos activos")
-        assert hr_pos >= 0, "Debe existir el <hr> separador"
+        assert accordion_pos >= 0, "Debe existir el accordion de Gemini Models"
         assert card_pos >= 0, "Debe existir el título 'Modelos activos'"
-        assert hr_pos < card_pos, (
-            "El <hr> debe estar antes de la tarjeta 'Modelos activos'"
+        assert accordion_pos < card_pos, (
+            "La tarjeta 'Modelos activos' debe estar dentro del accordion de Gemini Models"
         )
 
 

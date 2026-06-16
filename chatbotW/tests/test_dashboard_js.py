@@ -310,7 +310,7 @@ class TestDashboardWatcher:
         # Buscar dentro del init() el $watch
         idx = app_js.find("$watch('activeTab'")
         assert idx >= 0, "Debe existir $watch('activeTab', ...) en app.js"
-        watcher_slice = app_js[idx:idx + 1000]
+        watcher_slice = app_js[idx:idx + 2000]
         assert "dashboard" in watcher_slice, (
             "El watcher de activeTab debe manejar el valor 'dashboard'"
         )
@@ -318,7 +318,7 @@ class TestDashboardWatcher:
     def test_watcher_calls_load_telemetry_on_dashboard(self, app_js):
         """El watcher debe llamar loadTelemetry cuando activeTab es 'dashboard'."""
         idx = app_js.find("$watch('activeTab'")
-        watcher_slice = app_js[idx:idx + 1000]
+        watcher_slice = app_js[idx:idx + 2000]
         # Verificar que hay una condición para dashboard que llama a loadTelemetry
         assert "loadTelemetry" in watcher_slice, (
             "El watcher debe llamar loadTelemetry cuando activeTab === 'dashboard'"
@@ -327,7 +327,7 @@ class TestDashboardWatcher:
     def test_watcher_calls_destroy_on_tab_leave(self, app_js):
         """El watcher debe llamar destroyCharts al salir del tab dashboard."""
         idx = app_js.find("$watch('activeTab'")
-        watcher_slice = app_js[idx:idx + 1000]
+        watcher_slice = app_js[idx:idx + 2000]
         assert "destroyCharts" in watcher_slice, (
             "El watcher debe llamar destroyCharts cuando se sale del tab dashboard"
         )

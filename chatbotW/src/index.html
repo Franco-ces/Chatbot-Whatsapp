@@ -148,148 +148,210 @@
             <!-- TAB BAR -->
             <div class="max-w-5xl mx-auto py-6 px-4">
                 <div class="flex space-x-1 border-b border-gray-300 dark:border-gray-700 mb-6 overflow-x-auto items-end">
-                    <button @click="switchTab('config')" :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-key mr-1.5"></i> Configuración</button>
+                    <button @click="switchTab('dashboard')" :class="activeTab === 'dashboard' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-chart-pie mr-1.5"></i> Dashboard</button>
                     <button @click="switchTab('docs')" :class="activeTab === 'docs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-folder-open mr-1.5"></i> Documentos</button>
                     <button @click="switchTab('faqs')" :class="activeTab === 'faqs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-circle-question mr-1.5"></i> FAQs</button>
                     <button @click="switchTab('instances')" :class="activeTab === 'instances' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-satellite-dish mr-1.5"></i> Instancias</button>
-                    <button @click="switchTab('dashboard')" :class="activeTab === 'dashboard' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-chart-pie mr-1.5"></i> Dashboard</button>
                     <button @click="switchTab('logs')" :class="activeTab === 'logs' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-scroll mr-1.5"></i> Logs</button>
                     <button @click="switchTab('reports')" :class="activeTab === 'reports' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-clock mr-1.5"></i> Informes</button>
+                    <button @click="switchTab('config')" :class="activeTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm dark:bg-gray-800 dark:text-blue-400 dark:border-blue-400' : 'bg-gray-200 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'" class="px-6 py-3 font-semibold rounded-t-lg focus:outline-none transition-colors whitespace-nowrap"><i class="fas fa-key mr-1.5"></i> Configuración</button>
                 </div>
 
                 <!-- ─── TAB: Configuración ─── -->
-                <div x-show="activeTab === 'config'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-                    <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100"><i class="fas fa-key text-blue-500 mr-2"></i> Configuración de Google API Key</h2>
-                    <div class="flex gap-4">
-                        <input type="text" x-model="apiKey" placeholder="Pega tu clave aquí..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <button @click="saveApiKey()" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
-                    </div>
-                    <p x-text="apiStatus" :class="apiStatusClass" class="mt-3 font-medium text-sm h-5"></p>
-
-                    <hr class="my-8 border-gray-100 dark:border-gray-700">
-
-                    <h2 class="text-xl font-semibold mb-4 mt-8 text-gray-800 dark:text-gray-100"><i class="fas fa-key text-blue-500 mr-2"></i> Configuraci&oacute;n de Evolution API Key</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Esta clave permite que el panel admin se comunique con Evolution API. Si la cambi&aacute;s, reinici&aacute; el contenedor de Evolution aplicando los cambios.</p>
-                    <div class="flex gap-4">
-                        <input type="text" x-model="evoApiKey" placeholder="Pega tu clave de Evolution aqu&iacute;..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <button @click="saveEvolutionKey()" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
-                    </div>
-                    <p x-text="evoApiStatus" :class="evoApiStatusClass" class="mt-3 font-medium text-sm h-5"></p>
-
-                    <hr class="my-8 border-gray-100 dark:border-gray-700">
-
-                    <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100"><i class="fas fa-address-card text-blue-500 mr-2"></i> Variables de Contacto (Bot)</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Estos datos definen el comportamiento y los datos inyectados dinámicamente en las respuestas de la IA.</p>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Correo de Soporte</label>
-                            <input type="email" x-model="configEmail" placeholder="soporte@tuempresa.com" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                <div x-show="activeTab === 'config'" class="space-y-3">
+                    <!-- Accordion: Google API Key -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <button @click="accordionState.googleApiKey = !accordionState.googleApiKey" class="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-key text-blue-500"></i>
+                                <span class="font-semibold text-gray-800 dark:text-gray-100">Google API Key</span>
+                                <span class="text-sm" :class="googleApiKeySet ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'" x-text="googleApiKeySet ? '✓ Configurada' : '⚠ No configurada'"></span>
+                            </div>
+                            <i class="fas transition-transform duration-200" :class="accordionState.googleApiKey ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="accordionState.googleApiKey" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Para que el motor RAG y la transcripción de audio funcionen, necesitás una API Key de Gemini. Andá a <a href="https://aistudio.google.com/" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Google AI Studio</a>, obtené una nueva API Key, pegala acá y guardala. El bot la detecta automáticamente sin reiniciar.</p>
+                            <div class="flex gap-4">
+                                <input type="text" x-model="apiKey" placeholder="Pega tu clave aquí..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <button @click="saveApiKey()" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
+                            </div>
+                            <p x-text="apiStatus" :class="apiStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Teléfono de Contacto</label>
-                            <div class="flex shadow-sm rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
-                                <select x-model="configPhoneCode" class="px-2 py-2 bg-gray-50 dark:bg-gray-700/50 border-r border-gray-300 dark:border-gray-600 cursor-pointer max-w-[180px] outline-none">
-                                    <option value="+54">(ARG) +54</option>
-                                    <option value="+56">(CHL) +56</option>
-                                    <option value="+57">(COL) +57</option>
-                                    <option value="+52">(MEX) +52</option>
-                                    <option value="+51">(PER) +51</option>
-                                    <option value="+598">(URY) +598</option>
-                                    <option value="+58">(VEN) +58</option>
-                                    <option value="+591">(BOL) +591</option>
-                                    <option value="+595">(PRY) +595</option>
-                                    <option value="+593">(ECU) +593</option>
-                                    <option value="+1">(USA) +1</option>
-                                    <option value="+34">(ESP) +34</option>
+                    </div>
+
+                    <!-- Accordion: Evolution API Key -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <button @click="accordionState.evolutionApiKey = !accordionState.evolutionApiKey" class="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-key text-blue-500"></i>
+                                <span class="font-semibold text-gray-800 dark:text-gray-100">Evolution API Key</span>
+                                <span class="text-sm" :class="evolutionApiKeySet ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'" x-text="evolutionApiKeySet ? '✓ Configurada' : '⚠ No configurada'"></span>
+                            </div>
+                            <i class="fas transition-transform duration-200" :class="accordionState.evolutionApiKey ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="accordionState.evolutionApiKey" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Esta clave permite que el panel admin se comunique con Evolution API. Si la cambiás, reiniciá el contenedor de Evolution aplicando los cambios.</p>
+                            <div class="flex gap-4">
+                                <input type="text" x-model="evoApiKey" placeholder="Pega tu clave de Evolution aquí..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <button @click="saveEvolutionKey()" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar en .env</button>
+                            </div>
+                            <p x-text="evoApiStatus" :class="evoApiStatusClass" class="mt-3 font-medium text-sm h-5"></p>
+                        </div>
+                    </div>
+
+                    <!-- Accordion: Contact Variables -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <button @click="accordionState.contactVars = !accordionState.contactVars" class="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-address-card text-blue-500"></i>
+                                <span class="font-semibold text-gray-800 dark:text-gray-100">Variables de Contacto (Bot)</span>
+                            </div>
+                            <i class="fas transition-transform duration-200" :class="accordionState.contactVars ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="accordionState.contactVars" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Estos datos definen el comportamiento y los datos inyectados dinámicamente en las respuestas de la IA.</p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Correo de Soporte</label>
+                                    <input type="email" x-model="configEmail" placeholder="soporte@tuempresa.com" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Teléfono de Contacto</label>
+                                    <div class="flex shadow-sm rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                                        <select x-model="configPhoneCode" class="px-2 py-2 bg-gray-50 dark:bg-gray-700/50 border-r border-gray-300 dark:border-gray-600 cursor-pointer max-w-[180px] outline-none">
+                                            <option value="+54">(ARG) +54</option>
+                                            <option value="+56">(CHL) +56</option>
+                                            <option value="+57">(COL) +57</option>
+                                            <option value="+52">(MEX) +52</option>
+                                            <option value="+51">(PER) +51</option>
+                                            <option value="+598">(URY) +598</option>
+                                            <option value="+58">(VEN) +58</option>
+                                            <option value="+591">(BOL) +591</option>
+                                            <option value="+595">(PRY) +595</option>
+                                            <option value="+593">(ECU) +593</option>
+                                            <option value="+1">(USA) +1</option>
+                                            <option value="+34">(ESP) +34</option>
+                                        </select>
+                                        <input type="text" x-model="configPhoneNum" placeholder="11 1234-5678" class="flex-1 px-4 py-2 outline-none dark:bg-gray-700 dark:text-white">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex gap-3">
+                                <button @click="saveContactConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Datos</button>
+                            </div>
+                            <p x-text="configStatus" :class="configStatusClass" class="mt-3 font-medium text-sm h-5"></p>
+                        </div>
+                    </div>
+
+                    <!-- Accordion: Bot Tone -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <button @click="accordionState.botTone = !accordionState.botTone" class="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-comment-dots text-blue-500"></i>
+                                <span class="font-semibold text-gray-800 dark:text-gray-100">Tono del Bot</span>
+                                <span class="text-sm text-gray-400 dark:text-gray-500" x-text="configBotTone ? (configBotTone.charAt(0).toUpperCase() + configBotTone.slice(1)) : 'Profesional'"></span>
+                            </div>
+                            <i class="fas transition-transform duration-200" :class="accordionState.botTone ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="accordionState.botTone" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Define la personalidad con la que responderá la IA. Afecta el tono, formalidad y estilo de las respuestas.</p>
+                            <div class="max-w-md">
+                                <select x-model="configBotTone" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white cursor-pointer">
+                                    <option value="profesional">Profesional (Serio y preciso)</option>
+                                    <option value="amigable">Amigable (Informal y empático)</option>
+                                    <option value="directo">Directo (Técnico y sin rodeos)</option>
+                                    <option value="comercial">Comercial (Persuasivo y vendedor)</option>
                                 </select>
-                                <input type="text" x-model="configPhoneNum" placeholder="11 1234-5678" class="flex-1 px-4 py-2 outline-none dark:bg-gray-700 dark:text-white">
                             </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Tono del Bot</label>
-                            <select x-model="configBotTone" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white cursor-pointer">
-                                <option value="profesional">Profesional (Serio y preciso)</option>
-                                <option value="amigable">Amigable (Informal y empático)</option>
-                                <option value="directo">Directo (Técnico y sin rodeos)</option>
-                                <option value="comercial">Comercial (Persuasivo y vendedor)</option>
-                            </select>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Define la personalidad con la que responderá la IA.</p>
-                        </div>
-                    </div>
-                    <div class="flex gap-3 mt-6">
-                        <button @click="saveContactConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Datos</button>
-                    </div>
-                    <p x-text="configStatus" :class="configStatusClass" class="mt-3 font-medium text-sm h-5"></p>
-
-                    <hr class="my-8 border-gray-100 dark:border-gray-700">
-
-                    <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100"><i class="fas fa-robot text-blue-500 mr-2"></i> Modelos de Gemini</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Configurá los modelos de IA que usa el bot. Los valores por defecto funcionan bien para la mayoría de los casos.</p>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Modelo de generación</label>
-                            <input type="text" id="geminiModelInput" x-model="geminiModel" placeholder="gemini-3.1-flash-lite" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            <p class="text-xs text-yellow-600 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i> Los rate limits, costos y calidad de respuesta pueden variar según el modelo.</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Modelo de embeddings</label>
-                            <input type="text" id="geminiEmbeddingsInput" x-model="geminiEmbeddingsModel" placeholder="gemini-embedding-2-preview" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            <p class="text-xs text-red-600 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i> <strong>CRÍTICO:</strong> Cambiar este modelo invalida el vectorstore. Deberás reindexar todos los documentos.</p>
-                        </div>
-                    </div>
-                    <div class="flex gap-3 mt-6">
-                        <button @click="saveGeminiConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Modelos</button>
-                    </div>
-                    <p x-text="geminiConfigStatus" :class="geminiConfigStatusClass" class="mt-3 font-medium text-sm h-5"></p>
-
-                    <hr class="my-4 border-gray-100 dark:border-gray-700">
-
-                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                      <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-                        <i class="fas fa-microchip text-blue-500"></i> Modelos activos
-                      </h3>
-                      <div class="space-y-2 text-sm">
-                        <div class="flex items-center gap-2">
-                          <span class="text-blue-500"><i class="fas fa-circle-check"></i></span>
-                          <span class="text-gray-600 dark:text-gray-400">Generación:</span>
-                          <span class="font-mono font-medium text-gray-800 dark:text-gray-100" x-text="activeGeminiModel || '—'"></span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <span class="text-blue-500"><i class="fas fa-circle-check"></i></span>
-                          <span class="text-gray-600 dark:text-gray-400">Embeddings:</span>
-                          <span class="font-mono font-medium text-gray-800 dark:text-gray-100" x-text="activeGeminiEmbeddingsModel || '—'"></span>
-                        </div>
-                      </div>
                     </div>
 
-                    <hr class="my-8 border-gray-100 dark:border-gray-700">
-
-                    <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100"><i class="fas fa-lock text-blue-500 mr-2"></i> Cambiar Contraseña</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Actualizá la contraseña del panel admin. Se te pedirá que vuelvas a iniciar sesión.</p>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Contraseña actual</label>
-                            <input type="password" x-model="changePasswordCurrent" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nueva contraseña</label>
-                            <input type="password" x-model="changePasswordNew" placeholder="Mínimo 4 caracteres" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Confirmar nueva</label>
-                            <input type="password" x-model="changePasswordConfirm" placeholder="Repetí la contraseña" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        </div>
-                    </div>
-                    <div class="flex gap-3">
-                        <button @click="changePassword()" :disabled="changePasswordLoading" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2">
-                            <span x-show="!changePasswordLoading"><i class="fas fa-key mr-1"></i> Cambiar contraseña</span>
-                            <span x-show="changePasswordLoading"><i class="fas fa-spinner fa-spin mr-1"></i> Cambiando...</span>
+                    <!-- Accordion: Gemini Models -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <button @click="accordionState.geminiModels = !accordionState.geminiModels" class="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-robot text-blue-500"></i>
+                                <span class="font-semibold text-gray-800 dark:text-gray-100">Modelos de Gemini</span>
+                                <span class="text-sm text-gray-400 dark:text-gray-500 font-mono" x-text="(activeGeminiModel || 'gemini-3.1-flash-lite') + ' · ' + (activeGeminiEmbeddingsModel || 'embedding-2')"></span>
+                            </div>
+                            <i class="fas transition-transform duration-200" :class="accordionState.geminiModels ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                         </button>
+                        <div x-show="accordionState.geminiModels" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Configurá los modelos de IA que usa el bot. Los valores por defecto funcionan bien para la mayoría de los casos.</p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Modelo de generación</label>
+                                    <input type="text" id="geminiModelInput" x-model="geminiModel" placeholder="gemini-3.1-flash-lite" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    <p class="text-xs text-yellow-600 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i> Los rate limits, costos y calidad de respuesta pueden variar según el modelo.</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Modelo de embeddings</label>
+                                    <input type="text" id="geminiEmbeddingsInput" x-model="geminiEmbeddingsModel" placeholder="gemini-embedding-2-preview" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    <p class="text-xs text-red-600 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i> <strong>CRÍTICO:</strong> Cambiar este modelo invalida el vectorstore. Deberás reindexar todos los documentos.</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-6">
+                                <button @click="saveGeminiConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Modelos</button>
+                            </div>
+                            <p x-text="geminiConfigStatus" :class="geminiConfigStatusClass" class="mt-3 font-medium text-sm h-5"></p>
+
+                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700 mt-4">
+                                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-microchip text-blue-500"></i> Modelos activos
+                                </h3>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-blue-500"><i class="fas fa-circle-check"></i></span>
+                                        <span class="text-gray-600 dark:text-gray-400">Generación:</span>
+                                        <span class="font-mono font-medium text-gray-800 dark:text-gray-100" x-text="activeGeminiModel || '—'"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-blue-500"><i class="fas fa-circle-check"></i></span>
+                                        <span class="text-gray-600 dark:text-gray-400">Embeddings:</span>
+                                        <span class="font-mono font-medium text-gray-800 dark:text-gray-100" x-text="activeGeminiEmbeddingsModel || '—'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <p x-show="changePasswordStatus" x-text="changePasswordStatus" :class="changePasswordStatusClass" class="mt-3 font-medium text-sm h-5"></p>
+
+                    <!-- Accordion: Change Password -->
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <button @click="accordionState.password = !accordionState.password" class="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-lock text-blue-500"></i>
+                                <span class="font-semibold text-gray-800 dark:text-gray-100">Cambiar Contraseña</span>
+                            </div>
+                            <i class="fas transition-transform duration-200" :class="accordionState.password ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="accordionState.password" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Actualizá la contraseña del panel admin. Se te pedirá que vuelvas a iniciar sesión.</p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Contraseña actual</label>
+                                    <input type="password" x-model="changePasswordCurrent" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nueva contraseña</label>
+                                    <input type="password" x-model="changePasswordNew" placeholder="Mínimo 4 caracteres" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Confirmar nueva</label>
+                                    <input type="password" x-model="changePasswordConfirm" placeholder="Repetí la contraseña" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+                            </div>
+                            <div class="flex gap-3">
+                                <button @click="changePassword()" :disabled="changePasswordLoading" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2">
+                                    <span x-show="!changePasswordLoading"><i class="fas fa-key mr-1"></i> Cambiar contraseña</span>
+                                    <span x-show="changePasswordLoading"><i class="fas fa-spinner fa-spin mr-1"></i> Cambiando...</span>
+                                </button>
+                            </div>
+                            <p x-show="changePasswordStatus" x-text="changePasswordStatus" :class="changePasswordStatusClass" class="mt-3 font-medium text-sm h-5"></p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ─── TAB: Documentos ─── -->
@@ -601,12 +663,11 @@
                                         <td class="px-4 py-3 text-sm">
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
                                                   :class="{
-                                                      'bg-green-100 text-green-800': inst.connectionState === 'open',
-                                                      'bg-yellow-100 text-yellow-800': inst.connectionState === 'connecting',
-                                                      'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': inst.connectionState === 'close',
-                                                      'bg-red-100 text-red-700': inst.connectionState === 'unknown'
+                                                      'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': isActive(inst) && inst.connectionState === 'open',
+                                                      'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': !isActive(inst) && inst.connectionState === 'open',
+                                                      'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300': inst.connectionState !== 'open'
                                                   }"
-                                                  x-text="inst.connectionState"></span>
+                                                  x-text="isActive(inst) && inst.connectionState === 'open' ? 'Activa' : (inst.connectionState === 'open' ? 'Vinculada' : 'Sin vincular')"></span>
                                         </td>
                                         <td class="px-4 py-3 text-center">
                                             <div class="inline-flex items-center relative">
@@ -677,7 +738,7 @@
                                 </template>
                             </div>
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">El QR se refresca automáticamente. Cerrá esta ventana una vez vinculado.</p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Estado actual: <span class="font-mono font-semibold" x-text="selected && selected.connectionState"></span></p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Estado actual: <span class="font-mono font-semibold" x-text="selected && selected.connectionState === 'open' ? 'Vinculada' : 'Sin vincular'"></span></p>
                             <div class="flex justify-end gap-2 mt-5">
                                 <button @click="closeQrModal()" class="bg-gray-50 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold py-2 px-5 rounded-lg transition-colors shadow-sm">Cerrar</button>
                             </div>
@@ -700,7 +761,7 @@
                             </label>
 
                             <p x-show="swapTarget && swapTarget.connectionState !== 'open'" class="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-2 mb-3">
-                                <i class="fas fa-triangle-exclamation text-orange-500 mr-1"></i> La instancia debe estar en estado <span class="font-mono">open</span> (vinculada) para activarse. Estado actual: <span class="font-mono font-semibold" x-text="swapTarget && swapTarget.connectionState"></span>.
+                                <i class="fas fa-triangle-exclamation text-orange-500 mr-1"></i> La instancia debe estar <span class="font-semibold">Vinculada</span> para activarse. Estado actual: <span class="font-semibold">Sin vincular</span>.
                             </p>
 
                             <p x-show="swapError" x-text="swapError" class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2 mb-3 font-medium"></p>
@@ -876,22 +937,30 @@
                         </div>
                     </div>
 
-                    <!-- Health Status -->
-                    <div class="mb-6">
-                        <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Estado del Sistema</h3>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                                <span class="w-2.5 h-2.5 rounded-full" :class="healthData?.components?.evolution_api?.status === 'ok' ? 'bg-green-500' : 'bg-red-500'"></span>
-                                <div>
-                                    <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">Evolution API</p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400" x-text="healthData?.components?.evolution_api?.status === 'ok' ? 'Conectado' : (healthData?.components?.evolution_api?.detail?.substring(0,40) || 'Sin conexión')"></p>
-                                </div>
+                    <!-- Health Status (accordion) -->
+                    <div class="mb-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <button @click="dashboardAccordionState.health = !dashboardAccordionState.health" class="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-heartbeat text-blue-500"></i>
+                                <span class="font-semibold text-gray-800 dark:text-gray-100">Estado del Sistema</span>
                             </div>
-                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                                <span class="w-2.5 h-2.5 rounded-full" :class="healthData?.components?.postgresql?.status === 'ok' ? 'bg-green-500' : 'bg-red-500'"></span>
-                                <div>
-                                    <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">PostgreSQL</p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400" x-text="healthData?.components?.postgresql?.status === 'ok' ? 'Conectado' : (healthData?.components?.postgresql?.detail?.substring(0,40) || 'Sin conexión')"></p>
+                            <i class="fas transition-transform duration-200" :class="dashboardAccordionState.health ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="dashboardAccordionState.health" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex items-center gap-3">
+                                    <span class="w-2.5 h-2.5 rounded-full" :class="healthData?.components?.evolution_api?.status === 'ok' ? 'bg-green-500' : 'bg-red-500'"></span>
+                                    <div>
+                                        <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">Evolution API</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400" x-text="healthData?.components?.evolution_api?.status === 'ok' ? 'Conectado' : (healthData?.components?.evolution_api?.detail?.substring(0,40) || 'Sin conexión')"></p>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex items-center gap-3">
+                                    <span class="w-2.5 h-2.5 rounded-full" :class="healthData?.components?.postgresql?.status === 'ok' ? 'bg-green-500' : 'bg-red-500'"></span>
+                                    <div>
+                                        <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">PostgreSQL</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400" x-text="healthData?.components?.postgresql?.status === 'ok' ? 'Conectado' : (healthData?.components?.postgresql?.detail?.substring(0,40) || 'Sin conexión')"></p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -913,33 +982,95 @@
                     <!-- Content -->
                     <template x-if="telemetryData && telemetryData.total_messages > 0">
                         <div>
-                            <!-- 4 metric cards -->
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl p-4 text-center">
-                                    <p class="text-xs text-blue-600 dark:text-blue-300 uppercase font-semibold tracking-wide">Mensajes</p>
-                                    <p class="text-2xl font-bold text-blue-800 dark:text-blue-300 mt-1" x-text="telemetryData.total_messages"></p>
+                            <!-- Accordion: Métricas -->
+                            <div class="mb-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                <button @click="dashboardAccordionState.charts = !dashboardAccordionState.charts" class="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fas fa-chart-bar text-blue-500"></i>
+                                        <span class="font-semibold text-gray-800 dark:text-gray-100">Métricas</span>
+                                        <span class="text-xs text-gray-400 dark:text-gray-500" x-text="telemetryData.total_messages + ' msgs'"></span>
+                                    </div>
+                                    <i class="fas transition-transform duration-200" :class="dashboardAccordionState.charts ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                </button>
+                                <div x-show="dashboardAccordionState.charts" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                                    <!-- 4 metric cards -->
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl p-4 text-center">
+                                            <p class="text-xs text-blue-600 dark:text-blue-300 uppercase font-semibold tracking-wide">Mensajes</p>
+                                            <p class="text-2xl font-bold text-blue-800 dark:text-blue-300 mt-1" x-text="telemetryData.total_messages"></p>
+                                        </div>
+                                        <div class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-xl p-4 text-center">
+                                            <p class="text-xs text-red-600 dark:text-red-300 uppercase font-semibold tracking-wide">Errores</p>
+                                            <p class="text-2xl font-bold text-red-800 dark:text-red-300 mt-1" x-text="telemetryData.total_errors"></p>
+                                        </div>
+                                        <div class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-xl p-4 text-center">
+                                            <p class="text-xs text-green-600 dark:text-green-300 uppercase font-semibold tracking-wide">Tiempo Prom.</p>
+                                            <p class="text-2xl font-bold text-green-800 dark:text-green-300 mt-1" x-text="telemetryData.avg_total_duration_ms + 'ms'"></p>
+                                        </div>
+                                        <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 rounded-xl p-4 text-center">
+                                            <p class="text-xs text-purple-600 dark:text-purple-300 uppercase font-semibold tracking-wide">Tasa Error</p>
+                                            <p class="text-2xl font-bold text-purple-800 dark:text-purple-300 mt-1" x-text="telemetryData.error_rate + '%'"></p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Charts 2x2 grid -->
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartMessages" class="h-64 w-full"></canvas></div>
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartErrors" class="h-64 w-full"></canvas></div>
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartDurations" class="h-64 w-full"></canvas></div>
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartSources" class="h-64 w-full"></canvas></div>
+                                    </div>
+
+                                    <!-- Sub-accordion: Clasificación de Errores -->
+                                    <template x-if="telemetryData.total_errors > 0">
+                                        <div class="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                            <button @click="dashboardAccordionState.errorCategories = !dashboardAccordionState.errorCategories" class="w-full flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700/70 hover:bg-gray-200 dark:hover:bg-gray-600/70 transition-colors">
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fas fa-bug text-red-500"></i>
+                                                    <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">Clasificación de Errores</span>
+                                                    <span class="text-xs text-gray-400 dark:text-gray-500" x-text="telemetryData.total_errors + ' errores'"></span>
+                                                </div>
+                                                <i class="fas text-sm transition-transform duration-200" :class="dashboardAccordionState.errorCategories ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                            </button>
+                                            <div x-show="dashboardAccordionState.errorCategories" x-transition class="p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700 mb-4">
+                                                    <canvas x-ref="chartErrorCategories" class="h-64 w-full"></canvas>
+                                                </div>
+                                                <div class="overflow-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                                    <table class="w-full border-collapse">
+                                                        <thead>
+                                                            <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                                                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Código</th>
+                                                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Categoría</th>
+                                                                <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ocurrencias</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
+                                                            <template x-for="item in telemetryData.error_types" :key="item.code">
+                                                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors">
+                                                                    <td class="px-4 py-2 text-sm font-mono text-gray-800 dark:text-gray-100" x-text="item.code"></td>
+                                                                    <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300" x-text="errorCategoryLabels[item.code.substring(0, 5)] || item.code.substring(0, 5)"></td>
+                                                                    <td class="px-4 py-2 text-sm text-right font-semibold text-gray-800 dark:text-gray-100" x-text="item.count"></td>
+                                                                </tr>
+                                                            </template>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
                                 </div>
-                                <div class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-xl p-4 text-center">
-                                    <p class="text-xs text-red-600 dark:text-red-300 uppercase font-semibold tracking-wide">Errores</p>
-                                    <p class="text-2xl font-bold text-red-800 dark:text-red-300 mt-1" x-text="telemetryData.total_errors"></p>
-                                </div>
-                                <div class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-xl p-4 text-center">
-                                    <p class="text-xs text-green-600 dark:text-green-300 uppercase font-semibold tracking-wide">Tiempo Prom.</p>
-                                    <p class="text-2xl font-bold text-green-800 dark:text-green-300 mt-1" x-text="telemetryData.avg_total_duration_ms + 'ms'"></p>
-                                </div>
-                                <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 rounded-xl p-4 text-center">
-                                    <p class="text-xs text-purple-600 dark:text-purple-300 uppercase font-semibold tracking-wide">Tasa Error</p>
-                                    <p class="text-2xl font-bold text-purple-800 dark:text-purple-300 mt-1" x-text="telemetryData.error_rate + '%'"></p>
+                            </div>
+                        </div>
+                    </template>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </template>
                                 </div>
                             </div>
 
-                            <!-- Charts 2x2 grid -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartMessages" class="h-64 w-full"></canvas></div>
-                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartErrors" class="h-64 w-full"></canvas></div>
-                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartDurations" class="h-64 w-full"></canvas></div>
-                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700"><canvas x-ref="chartSources" class="h-64 w-full"></canvas></div>
-                            </div>
                         </div>
                     </template>
                 </div>
