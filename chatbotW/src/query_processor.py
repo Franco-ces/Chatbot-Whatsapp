@@ -149,6 +149,23 @@ class QueryProcessor:
             retriever, texto_para_buscar, folder_path
         )
 
+        # --- DETECCIÓN DE CONTEXTO SOLO-CSV ---
+        # Si no hay manuales (PDFs) pero sí hay datos comerciales (CSV),
+        # inyectar nota para que Gemini no diga "no tengo información".
+        _sep_manuales = "--- MANUALES TÉCNICOS Y DETALLES ---"
+        _sep_precios = "--- INFORMACIÓN COMERCIAL (PRECIOS Y STOCK) ---"
+        _partes = contexto_total.split(_sep_precios)
+        if len(_partes) == 2:
+            _docs_raw = _partes[0].replace(_sep_manuales, "").strip()
+            _precios_raw = _partes[1].strip()
+            if not _docs_raw and _precios_raw:
+                contexto_total += (
+                    "\n\nNOTA INTERNA: No se encontraron manuales técnicos "
+                    "relacionados. Respondé con los datos del catálogo "
+                    "y ofrecé los datos de contacto si el usuario "
+                    "necesita más ayuda."
+                )
+
         # --- HISTORIAL DE CONVERSACIÓN (últimos 10 mensajes) ---
         historial_texto = ""
         if session_manager and remitente:

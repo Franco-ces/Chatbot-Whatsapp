@@ -1181,12 +1181,12 @@ async def get_quick_stats():
 async def health_check():
     """Health check ligero para el dashboard del admin.
     
-    Verifica conectividad con Evolution API y PostgreSQL.
-    No requiere WhatsApp client ni RAG (a diferencia del health del bot).
+    Verifica conectividad con Evolution API, el estado de la
+    instancia activa (si existe), y PostgreSQL.
     """
     components = {}
     
-    # Evolution API
+    # Evolution API — conectividad base
     evo_url = os.environ.get("EVOLUTION_API_URL", "http://localhost:8080")
     evo_key = os.environ.get("EVO_API_KEY", os.environ.get("EVOLUTION_API_KEY", ""))
     try:
@@ -1195,6 +1195,32 @@ async def health_check():
         components["evolution_api"] = evo_result
     except Exception as e:
         components["evolution_api"] = {"status": "unhealthy", "duration_ms": 0, "detail": str(e)[:200]}
+    
+    # Instancia activa — estado WhatsApp real
+    try:
+        config_manager.cargar()
+        active_name = config_manager.config.get("active_instance_name", "")
+        if not active_name:
+            active_name = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
+        if active_name:
+            import time as _t
+            start = _t.perf_counter()
+            state = await evolution_admin.get_state(active_name)
+            duration_ms = int((_t.perf_counter() - start) * 1000)
+            if state.value == "open":
+                components["whatsapp_instance"] = {
+                    "status": "ok", "duration_ms": duration_ms,
+                    "detail": f"Instancia '{active_name}' vinculada"
+                }
+            else:
+                components["whatsapp_instance"] = {
+                    "status": "degraded", "duration_ms": duration_ms,
+                    "detail": f"Instancia '{active_name}' no conectada (estado: {state.value})"
+                }
+        else:
+            components["whatsapp_instance"] = {"status": "degraded", "duration_ms": 0, "detail": "Sin instancia activa configurada"}
+    except Exception as e:
+        components["whatsapp_instance"] = {"status": "unhealthy", "duration_ms": 0, "detail": str(e)[:200]}
     
     # PostgreSQL via telemetry pool
     try:
