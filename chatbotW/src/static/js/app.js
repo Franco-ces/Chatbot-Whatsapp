@@ -9,7 +9,7 @@ document.addEventListener('alpine:init', () => {
     initInstancesPanel(Alpine);
 
     Alpine.data('adminPanel', () => ({
-        activeTab: 'config',
+        activeTab: 'dashboard',
         activeInstanceName: '',
         activeInstanceLoaded: false,
         googleApiKeySet: false,
@@ -60,6 +60,17 @@ document.addEventListener('alpine:init', () => {
         telemetryError: '',
         charts: [],
 
+        // Error category labels (Spanish)
+        errorCategoryLabels: {
+            'E-COM': 'Comunicación',
+            'E-RAG': 'RAG',
+            'E-CFG': 'Configuración',
+            'E-API': 'API',
+            'E-SYS': 'Sistema',
+            'E-FAQ': 'FAQ',
+            'E-TEL': 'Telemetría',
+        },
+
         // Schedules state
         schedules: [],
         scheduleForm: {
@@ -103,6 +114,7 @@ document.addEventListener('alpine:init', () => {
         quickStats: null,
         healthData: null,
         healthLoading: false,
+        healthPollInterval: null,
 
         // Password change state
         changePasswordCurrent: '',
@@ -112,6 +124,23 @@ document.addEventListener('alpine:init', () => {
         changePasswordStatusClass: '',
         changePasswordLoading: false,
 
+        // Accordion state for Config tab
+        accordionState: {
+            googleApiKey: false,
+            evolutionApiKey: false,
+            contactVars: false,
+            botTone: false,
+            geminiModels: false,
+            password: false,
+        },
+
+        // Accordion state for Dashboard tab
+        dashboardAccordionState: {
+            health: false,
+            charts: true,
+            errorCategories: false,
+        },
+
         init() {
             // Restaurar tab activo desde sessionStorage
             const savedTab = sessionStorage.getItem('activeTab');
@@ -120,11 +149,22 @@ document.addEventListener('alpine:init', () => {
             }
             this.$watch('activeTab', (val) => {
                 sessionStorage.setItem('activeTab', val);
-                if (val === 'config') this.loadContactConfig();
+                if (val === 'config') { this.resetAccordions(); this.loadContactConfig(); }
                 if (val === 'docs') { this.loadPdfs(); this.loadCsvs(); }
                 if (val === 'faqs') this.loadFaqs();
                 if (val === 'logs') { this.loadLogs(); this.searchQuery = ''; }
-                if (val === 'dashboard') { this.loadTelemetry(); this.loadHealth(); }
+                if (val === 'dashboard') { 
+                    this.dashboardAccordionState.health = false;
+                    this.dashboardAccordionState.charts = true;
+                    this.dashboardAccordionState.errorCategories = false; 
+                    this.loadTelemetry(); 
+                    this.loadHealth();
+                    // Polling cada 30s para reflejar cambios de estado en tiempo real
+                    if (this.healthPollInterval) clearInterval(this.healthPollInterval);
+                    this.healthPollInterval = setInterval(() => this.loadHealth(true), 30000);
+                } else {
+                    if (this.healthPollInterval) { clearInterval(this.healthPollInterval); this.healthPollInterval = null; }
+                }
                 if (val === 'reports') this.loadSchedules();
                 if (val !== 'dashboard') this.destroyCharts();
             });
@@ -134,13 +174,40 @@ document.addEventListener('alpine:init', () => {
                 // Reset params when tipo changes
                 this.scheduleForm.params = {};
             });
-            this.$nextTick(() => {
-                this.loadContactConfig();
-                this.loadActiveInstance();
-                this.loadQuickStats();
-                this.loadHealth();
-                this.loadSchedules();
-            });
+
+            // Carga inicial: esperar a que el token de auth esté disponible
+            // antes de hacer llamadas a la API (mismo patrón que instances.js).
+            // Usamos setTimeout(0) para que Alpine termine de inicializar el
+            // componente antes de cualquier llamada async.
+            const auth = Alpine.store('auth');
+            const boot = () => {
+                const token = Alpine.store('auth')?.token;
+                if (!token) return;
+                setTimeout(() => {
+                    this.loadContactConfig();
+                    this.loadActiveInstance();
+                    this.loadQuickStats();
+                    this.loadSchedules();
+                    if (this.activeTab === 'dashboard') {
+                        this.loadTelemetry();
+                        this.loadHealth();
+                        if (!this.healthPollInterval) {
+                            this.healthPollInterval = setInterval(() => this.loadHealth(true), 30000);
+                        }
+                    }
+                    if (this.activeTab === 'reports') this.loadSchedules();
+                }, 0);
+            };
+            if (auth && auth.verified && auth.token) {
+                boot();
+            } else {
+                this.$watch('$store.auth.verified', (verified) => {
+                    if (verified && Alpine.store('auth')?.token) boot();
+                });
+                this.$watch('$store.auth.token', (token) => {
+                    if (token && Alpine.store('auth')?.verified) boot();
+                });
+            }
             // Load destino history from localStorage
             try {
                 const stored = localStorage.getItem('destinoHistory');
@@ -706,8 +773,11 @@ document.addEventListener('alpine:init', () => {
                     total_faq_hits: d.faq_hits || 0,
                     total_cache_hits: d.cache_hits || 0,
                     messages_by_day: (d.daily || []).map(day => ({ date: day.date, count: day.total_messages })),
+                    error_categories: d.error_categories || {},
+                    error_types: d.error_types || [],
                 };
-                this.$nextTick(() => this.initCharts());
+                await this.$nextTick();
+                this.initCharts();
             } catch (e) {
                 this.telemetryError = 'Error al cargar el dashboard';
                 window.showToast('Error al cargar dashboard', 'error');
@@ -763,6 +833,24 @@ document.addEventListener('alpine:init', () => {
                 },
                 options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' } } }
             }));
+
+            // Error categories bar chart (only if errors exist)
+            if (data.total_errors > 0 && data.error_categories && Object.keys(data.error_categories).length > 0) {
+                const catLabels = Object.keys(data.error_categories).map(k => this.errorCategoryLabels[k] || k);
+                const catValues = Object.values(data.error_categories);
+                const catColors = Object.keys(data.error_categories).map(k => {
+                    const colorMap = { 'E-COM': '#3B82F6', 'E-RAG': '#EF4444', 'E-CFG': '#F59E0B', 'E-API': '#8B5CF6', 'E-SYS': '#6B7280', 'E-FAQ': '#06B6D4', 'E-TEL': '#10B981' };
+                    return colorMap[k] || '#9CA3AF';
+                });
+                this.charts.push(new Chart(this.$refs.chartErrorCategories, {
+                    type: 'bar',
+                    data: {
+                        labels: catLabels,
+                        datasets: [{ label: 'Errores', data: catValues, backgroundColor: catColors }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                }));
+            }
         },
 
         // --- SCHEDULES (Informes Programados) ---
@@ -1010,17 +1098,28 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async loadHealth() {
-            this.healthLoading = true;
+        async loadHealth(silent = false) {
+            if (!silent) this.healthLoading = true;
             try {
                 const res = await apiFetch('/api/health');
                 if (res.ok) this.healthData = await res.json();
             } catch (e) {
                 this.healthData = null;
-                window.showToast('Error al verificar estado del sistema', 'error');
+                if (!silent) window.showToast('Error al verificar estado del sistema', 'error');
             } finally {
-                this.healthLoading = false;
+                if (!silent) this.healthLoading = false;
             }
+        },
+
+        resetAccordions() {
+            this.accordionState = {
+                googleApiKey: !this.googleApiKeySet,
+                evolutionApiKey: !this.evolutionApiKeySet,
+                contactVars: false,
+                botTone: false,
+                geminiModels: false,
+                password: false,
+            };
         },
 
         destroyCharts() {

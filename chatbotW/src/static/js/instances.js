@@ -26,6 +26,7 @@ export function initInstancesPanel(Alpine) {
         swapError: '',
         createForm: { name: '', error: '', saving: false },
         openMenus: [], // Nombres de las instancias con menú kebab abierto (permite múltiples)
+        _instancesPoll: null, // Interval ID para polling silencioso de estados
         // `createForm` se declara aca, no en el HTML, para que el panel
         // sea self-contained: el state vive en el componente Alpine y
         // `x-model="createForm.name"` en el form apunta directamente a
@@ -96,6 +97,21 @@ export function initInstancesPanel(Alpine) {
                     this.openMenus = [];
                 }
             });
+
+            // Polling silencioso cada 30s para reflejar cambios de estado
+            // en tiempo real (ej: instancia huerfana cuando el usuario
+            // desvincula WhatsApp desde su telefono).
+            this._instancesPoll = setInterval(async () => {
+                try {
+                    await Promise.all([
+                        this.refreshInstancesList(),
+                        this.refreshActiveInstance(),
+                    ]);
+                    this._syncBotPhone();
+                } catch (e) {
+                    // Silencioso: no mostramos toast en polling
+                }
+            }, 30000);
         },
 
         // ─── List ─────────────────────────────────────────────────
