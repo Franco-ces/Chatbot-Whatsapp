@@ -379,6 +379,8 @@ class TestGetSummary:
         assert result["error_count"] == 0
         assert result["unique_users"] == 0
         assert result["daily"] == []
+        assert result["error_categories"] == {}
+        assert result["error_types"] == []
 
     @pytest.mark.asyncio
     async def test_returns_aggregated_data_with_rows(self):
@@ -394,7 +396,7 @@ class TestGetSummary:
             "error_count": 5,
             "unique_users": 42,
         }
-        conn.fetch.return_value = [
+        daily_rows = [
             {"date": "2026-06-03", "total_messages": 50, "faq_hits": 10,
              "cache_hits": 8, "avg_rag_ms": 1100, "avg_send_ms": 280,
              "error_count": 2, "unique_users": 21},
@@ -402,6 +404,17 @@ class TestGetSummary:
              "cache_hits": 7, "avg_rag_ms": 1300, "avg_send_ms": 320,
              "error_count": 3, "unique_users": 25},
         ]
+        category_rows = [
+            {"category": "E-COM", "count": 3},
+            {"category": "E-RAG", "count": 2},
+        ]
+        type_rows = [
+            {"error_code": "E-COM-001", "count": 2},
+            {"error_code": "E-COM-002", "count": 1},
+            {"error_code": "E-RAG-002", "count": 2},
+        ]
+        # fetch is called 3 times: daily, categories, types
+        conn.fetch.side_effect = [daily_rows, category_rows, type_rows]
 
         result = await get_summary(pool)
 
@@ -414,6 +427,9 @@ class TestGetSummary:
         assert result["unique_users"] == 42
         assert len(result["daily"]) == 2
         assert result["daily"][0]["date"] == "2026-06-03"
+        assert result["error_categories"] == {"E-COM": 3, "E-RAG": 2}
+        assert len(result["error_types"]) == 3
+        assert result["error_types"][0] == {"code": "E-COM-001", "count": 2}
 
     @pytest.mark.asyncio
     async def test_passes_days_parameter_to_query(self):

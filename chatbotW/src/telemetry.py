@@ -276,6 +276,28 @@ GROUP BY DATE(created_at)
 ORDER BY DATE(created_at) ASC
 """
 
+_ERROR_CATEGORIES_SQL = """
+SELECT
+    SUBSTRING(error_code, 1, 5) AS category,
+    COUNT(*) AS count
+FROM telemetry.bot_messages
+WHERE error_code IS NOT NULL
+    AND created_at >= NOW() - INTERVAL '{days} days'
+GROUP BY SUBSTRING(error_code, 1, 5)
+ORDER BY count DESC
+"""
+
+_ERROR_TYPES_SQL = """
+SELECT
+    error_code,
+    COUNT(*) AS count
+FROM telemetry.bot_messages
+WHERE error_code IS NOT NULL
+    AND created_at >= NOW() - INTERVAL '{days} days'
+GROUP BY error_code
+ORDER BY count DESC
+"""
+
 
 async def get_summary(pool: asyncpg.Pool | None, days: int = 7) -> dict:
     """Devuelve datos agregados para el dashboard de telemetría.
@@ -301,6 +323,12 @@ async def get_summary(pool: asyncpg.Pool | None, days: int = 7) -> dict:
             daily_rows = await conn.fetch(
                 _DAILY_SQL.format(days=days)
             )
+            category_rows = await conn.fetch(
+                _ERROR_CATEGORIES_SQL.format(days=days)
+            )
+            type_rows = await conn.fetch(
+                _ERROR_TYPES_SQL.format(days=days)
+            )
 
         if totals is None:
             totals = {
@@ -323,6 +351,16 @@ async def get_summary(pool: asyncpg.Pool | None, days: int = 7) -> dict:
             for row in daily_rows
         ]
 
+        error_categories = {
+            row["category"]: row["count"]
+            for row in category_rows
+        }
+
+        error_types = [
+            {"code": row["error_code"], "count": row["count"]}
+            for row in type_rows
+        ]
+
         return {
             "total_messages": totals["total_messages"] or 0,
             "faq_hits": totals["faq_hits"] or 0,
@@ -332,6 +370,8 @@ async def get_summary(pool: asyncpg.Pool | None, days: int = 7) -> dict:
             "error_count": totals["error_count"] or 0,
             "unique_users": totals["unique_users"] or 0,
             "daily": daily,
+            "error_categories": error_categories,
+            "error_types": error_types,
         }
 
     except AppError:

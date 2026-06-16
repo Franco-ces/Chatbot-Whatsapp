@@ -33,7 +33,8 @@ from payload_parser import EvolutionWebhook, extraer_datos_limpios
 from bot_service import procesar_mensaje_bot
 from error_handler import register_error_handlers
 from error_codes import ErrorCode
-from evo_client import _get_evo_api_key
+from evo_client import _get_evo_api_key, build_evolution_admin
+from evolution_models import WebhookConfig
 from exceptions import AppError
 from sesionLoggerManager import SessionManager
 from health import run_health_probes
@@ -134,6 +135,30 @@ async def cleanup_loop():
                 del mensajes_procesados[msg_id]
 
 
+async def _ensure_webhook_on_startup(evolution_url, api_key, instance_name, bot_url, webhook_secret):
+    """Fire-and-forget: reconfigura el webhook de Evolution al arrancar.
+
+    No es fatal si falla — el bot puede seguir funcionando y el admin
+    puede reintentar la activación desde el panel.
+    """
+    try:
+        admin = build_evolution_admin(api_url=evolution_url, api_key=api_key)
+        config = WebhookConfig(
+            url=bot_url,
+            events=["MESSAGES_UPSERT"],
+            enabled=True,
+            headers={"X-Webhook-Secret": webhook_secret},
+        )
+        await admin.set_webhook(instance_name, config)
+        logger.info("Webhook auto-configurado al arrancar", instance_name=instance_name, url=bot_url)
+    except Exception as e:
+        logger.warning(
+            "Webhook auto-configure falló (no fatal)",
+            instance_name=instance_name,
+            detail=str(e),
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global rag, wa_client, instance_watcher, session_manager, logger
@@ -220,6 +245,19 @@ async def lifespan(app: FastAPI):
     await instance_watcher.start()
     initial_name = instance_watcher.get_active_name() or legacy_instance or ""
     logger.info("InstanceWatcher inicializado", active_instance_name=initial_name or "(ninguna)")
+
+    # Auto-configurar webhook de Evolution si hay instancia activa y BOT_URL
+    bot_url = os.getenv("BOT_URL", "")
+    if initial_name and bot_url:
+        asyncio.create_task(
+            _ensure_webhook_on_startup(
+                evolution_url=evolution_url,
+                api_key=evolution_key,
+                instance_name=initial_name,
+                bot_url=bot_url,
+                webhook_secret=webhook_secret,
+            )
+        )
 
     # Inicializar pool de telemetría
     await telemetry.init_pool()

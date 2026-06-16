@@ -271,6 +271,11 @@ class EvolutionAdmin:
         via el bridge `instance_activation`); este modulo solo habla
         con Evolution.
 
+        Si la instancia quedo huerfana (el usuario desvinculo WhatsApp
+        desde su telefono), Evolution puede devolver 400 porque la sesion
+        interna ya no existe. En ese caso, deshabilitamos el webhook
+        primero y reintentamos el delete.
+
         Raises:
             APIError: 404 si la instancia no existe, 400 si el nombre
                 es invalido, 5xx si Evolution tiene un problema interno.
@@ -280,6 +285,29 @@ class EvolutionAdmin:
         try:
             await self._http.delete(f"instance/delete/{name}")
         except CommunicationError as e:
+            if e.status_code == 400:
+                # Instancia posiblemente huerfana: el usuario borro la
+                # vinculacion de WhatsApp desde su telefono. Probamos
+                # deshabilitar el webhook (limpia estado interno en
+                # Evolution) y reintentar el delete.
+                logger.info(
+                    "Delete devolvio 400, intentando con disable_webhook previo",
+                    instance_name=name,
+                )
+                try:
+                    await self.disable_webhook(name)
+                except Exception:
+                    pass  # Si falla, igual reintentamos el delete.
+                try:
+                    await self._http.delete(f"instance/delete/{name}")
+                    logger.info(
+                        "Evolution instance deleted (after disable_webhook)",
+                        instance_name=name,
+                    )
+                    return
+                except CommunicationError as e2:
+                    self._raise_as_api_error(e2, op=f"delete_instance({name})")
+                    raise
             self._raise_as_api_error(e, op=f"delete_instance({name})")
             raise  # noqa: nunca llega aca; _raise_as_api_error siempre lanza
 
