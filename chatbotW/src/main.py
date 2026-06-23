@@ -454,3 +454,24 @@ async def webhook(request: Request, payload: EvolutionWebhook):
         )
 
     return {"status": "ok"}
+
+
+@app.get("/stats/sessions")
+async def active_sessions():
+    """Devuelve la cantidad de conversaciones activas en este momento.
+
+    Una conversación está activa si el último mensaje del usuario fue hace
+    menos de `session_manager.timeout` segundos.
+    """
+    global session_manager
+    if not session_manager:
+        return {"active_sessions": 0, "timeout_seconds": 300}
+    ahora = time.time()
+    count = sum(
+        1 for data in session_manager.sessions.values()
+        if ahora - data["last_activity"] <= session_manager.timeout
+    )
+    return {
+        "active_sessions": count,
+        "timeout_seconds": session_manager.timeout,
+    }

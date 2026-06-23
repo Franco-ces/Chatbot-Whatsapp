@@ -58,6 +58,14 @@ class QueryProcessor:
     Procesa consultas del usuario: audio → guardrails → contexto → prompt → Gemini → guardrails.
     """
 
+    # Mapeo de categorías de rechazo del guardrail de salida a códigos de error
+    # específicos. Se define a nivel de clase para no recrearlo en cada llamada.
+    _CODIGO_ERROR_SALIDA = {
+        "ALUCINACION": ErrorCode.RAG_GUARDRAIL_HALLUCINATION.value,
+        "LENGUAJE_INAPROPIADO": ErrorCode.RAG_GUARDRAIL_LANGUAGE.value,
+        "TONO_INCORRECTO": ErrorCode.RAG_GUARDRAIL_TONE.value,
+    }
+
     def __init__(self, api_key, faq_matcher: Optional["FAQMatcher"] = None):
         self.api_key = api_key
 
@@ -110,12 +118,12 @@ class QueryProcessor:
                 transcripcion_detectada = texto_extraido
 
         # --- GUARDRAIL DE ENTRADA ---
-        es_seguro, mensaje_rechazo = await evaluar_guardrail_entrada(
+        es_seguro, mensaje_rechazo, categoria_entrada = await evaluar_guardrail_entrada(
             texto_para_buscar if texto_para_buscar else "audio",
             self.llm_guardrail
         )
         if not es_seguro:
-            return QueryResult(transcripcion_detectada, mensaje_rechazo, cacheable=False, error_code=ErrorCode.RAG_GUARDRAIL_REJECTED.value)
+            return QueryResult(transcripcion_detectada, mensaje_rechazo, cacheable=False, error_code=ErrorCode.RAG_GUARDRAIL_INPUT.value)
 
         # --- HANDOFF: deteccion de solicitud de humano ---
         if detectar_solicitud_humano(texto_para_buscar):
@@ -211,10 +219,11 @@ class QueryProcessor:
         respuesta_texto = response.text
 
         # --- GUARDRAIL DE SALIDA ---
-        es_aceptado, mensaje_rechazo_salida = await evaluar_guardrail_salida(
-            respuesta_texto, contexto_total, self.llm_guardrail
+        es_aceptado, mensaje_rechazo_salida, categoria_salida = await evaluar_guardrail_salida(
+            respuesta_texto, contexto_total, self.llm_guardrail, bot_tone=instruccion_tono
         )
         if not es_aceptado:
-            return QueryResult(transcripcion_detectada, mensaje_rechazo_salida, cacheable=False, error_code=ErrorCode.RAG_GUARDRAIL_REJECTED.value)
+            error_code = self._CODIGO_ERROR_SALIDA.get(categoria_salida, ErrorCode.RAG_GUARDRAIL_HALLUCINATION.value)
+            return QueryResult(transcripcion_detectada, mensaje_rechazo_salida, cacheable=False, error_code=error_code)
 
         return QueryResult(transcripcion_detectada, respuesta_texto, cacheable=True)

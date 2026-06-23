@@ -313,10 +313,24 @@ export function initInstancesPanel(Alpine) {
                 );
                 return;
             }
-            const ok = window.confirm(
-                `¿Desactivar la instancia "${name}"? `
-                + 'El bot dejará de recibir mensajes hasta que actives otra.'
-            );
+
+            // Fetch active conversations count before showing confirm
+            let activeCount = 0;
+            try {
+                const res = await apiFetch('/api/stats/sessions');
+                if (res.ok) {
+                    const data = await res.json();
+                    activeCount = data.active_sessions || 0;
+                }
+            } catch (e) {
+                // Si falla, mostramos el confirm sin el contador (degradación elegante)
+            }
+
+            let message = `¿Desactivar la instancia "${name}"? El bot dejará de recibir mensajes hasta que actives otra.`;
+            if (activeCount > 0) {
+                message = `¿Desactivar la instancia "${name}"?\n\nHay ${activeCount} conversación(es) activa(s) en este momento. Si desactivás, estos usuarios perderán el contexto actual de la conversación.`;
+            }
+            const ok = window.confirm(message);
             if (!ok) return;
             try {
                 const res = await apiFetch(

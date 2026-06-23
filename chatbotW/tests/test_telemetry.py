@@ -429,7 +429,7 @@ class TestGetSummary:
         assert result["daily"][0]["date"] == "2026-06-03"
         assert result["error_categories"] == {"E-COM": 3, "E-RAG": 2}
         assert len(result["error_types"]) == 3
-        assert result["error_types"][0] == {"code": "E-COM-001", "count": 2}
+        assert result["error_types"][0] == {"code": "E-COM-001", "count": 2, "description": "No se pudo conectar con el servicio de mensajería."}
 
     @pytest.mark.asyncio
     async def test_passes_days_parameter_to_query(self):

@@ -57,6 +57,7 @@ services:
       EVO_API_KEY: ${EVO_API_KEY}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      BOT_INTERNAL_URL: http://whatsapp-bot:5000
     volumes:
       - ./src:/app/src
       - ./PDFs:/app/PDFs

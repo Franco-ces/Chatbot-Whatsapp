@@ -91,8 +91,10 @@ class ConfigManager:
         try:
             with open(self.path, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
         except Exception as e:
-            logger.warning("Error saving configuration", detail=str(e))
+            raise ConfigError(ErrorCode.CFG_WRITE_FAILED, detail=str(e)) from e
 
     def set_active_instance(self, name: str) -> None:
         """Escribe `active_instance_name` de forma atomica (tmp + fsync + replace).

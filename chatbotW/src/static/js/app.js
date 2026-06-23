@@ -20,6 +20,7 @@ document.addEventListener('alpine:init', () => {
         searchResults: [],
         searchQuery: '',
         currentLogContent: '',
+        currentLogFile: '',
         currentLogTitle: 'Selecciona un archivo para leer',
         loadingLog: false,
 
@@ -27,7 +28,10 @@ document.addEventListener('alpine:init', () => {
         apiKey: '',
         apiStatus: '',
         apiStatusClass: '',
-        configBotTone: '',
+        configBotTone: 'profesional',
+        toneSaving: false,
+        toneStatus: '',
+        toneStatusClass: '',
         evoApiKey: '',
         evoApiStatus: '',
         evoApiStatusClass: '',
@@ -50,6 +54,9 @@ document.addEventListener('alpine:init', () => {
         pdfUploadStatusClass: '',
         csvUploadStatus: '',
         csvUploadStatusClass: '',
+
+        // Kebab menus for doc items (PDF/CSV)
+        openDocMenus: [],
 
         // FAQs state
         faqs: [],
@@ -107,8 +114,10 @@ document.addEventListener('alpine:init', () => {
             },
         },
 
-        // Dark mode state
-        darkMode: localStorage.getItem('darkMode') === 'true',
+        // Dark mode state — sincronizado con el estado real del DOM
+        // (el script FOUC en index.html puede haber puesto 'dark' por OS preference)
+        darkMode: localStorage.getItem('darkMode') === 'true'
+            || (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches),
 
         // Quick stats state
         quickStats: null,
@@ -168,11 +177,21 @@ document.addEventListener('alpine:init', () => {
                 if (val === 'reports') this.loadSchedules();
                 if (val !== 'dashboard') this.destroyCharts();
             });
+            this.$watch('searchQuery', (val) => {
+                if (!val || !val.trim()) this.searchResults = null;
+            });
             this.$watch('scheduleForm.tipo', (val) => {
                 const tipo = this.scheduleForm.tipos.find(t => t.id === val);
                 this.scheduleForm.selectedTipoParams = tipo ? tipo.parametros || [] : [];
-                // Reset params when tipo changes
                 this.scheduleForm.params = {};
+            });
+
+            // Cerrar menús kebab de documentos al hacer click fuera
+            document.addEventListener('click', (e) => {
+                if (this.openDocMenus.length === 0) return;
+                if (!e.target.closest('[data-doc-kebab]')) {
+                    this.openDocMenus = [];
+                }
             });
 
             // Carga inicial: esperar a que el token de auth esté disponible
@@ -195,6 +214,9 @@ document.addEventListener('alpine:init', () => {
                             this.healthPollInterval = setInterval(() => this.loadHealth(true), 30000);
                         }
                     }
+                    if (this.activeTab === 'docs') { this.loadPdfs(); this.loadCsvs(); }
+                    if (this.activeTab === 'faqs') this.loadFaqs();
+                    if (this.activeTab === 'logs') this.loadLogs();
                     if (this.activeTab === 'reports') this.loadSchedules();
                 }, 0);
             };
@@ -298,10 +320,16 @@ document.addEventListener('alpine:init', () => {
 
         async loadContactConfig() {
             try {
+                // Usar cache de sessionStorage si existe (persiste entre cambios de pestaña)
+                const cached = sessionStorage.getItem('savedBotTone');
+                if (cached) this.configBotTone = cached;
+
                 const res = await apiFetch('/api/config');
                 const data = await res.json();
 
                 this.configBotTone = data.bot_tone || 'profesional';
+                // Sincronizar sessionStorage
+                sessionStorage.setItem('savedBotTone', this.configBotTone);
                 this.configEmail = data.email || '';
                 const telCompleto = data.telefono || '';
                 let numeroSinCodigo = telCompleto;
@@ -346,10 +374,38 @@ document.addEventListener('alpine:init', () => {
                 this.configStatus = data.message;
                 this.configStatusClass = data.status === "success" ? "mt-3 text-green-600 font-medium h-5" : "mt-3 text-red-600 font-medium h-5";
                 window.showToast(data.message, data.status === "success" ? 'success' : 'error');
+                // Persistir en sessionStorage para reflejar el cambio inmediatamente
+                if (data.status === "success" && this.configBotTone) {
+                    sessionStorage.setItem('savedBotTone', this.configBotTone);
+                }
             } catch (err) {
                 this.configStatus = "✕ Error al guardar datos";
                 this.configStatusClass = "mt-3 text-red-600 font-medium h-5";
                 window.showToast('Error al guardar datos', 'error');
+            }
+        },
+
+        async saveBotTone() {
+            this.toneSaving = true;
+            this.toneStatus = '';
+            try {
+                const formData = new FormData();
+                formData.append("bot_tone", this.configBotTone);
+                const res = await apiFetch('/api/config', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.status === "success") {
+                    this.toneStatus = 'Tono guardado';
+                    this.toneStatusClass = 'text-green-600';
+                    sessionStorage.setItem('savedBotTone', this.configBotTone);
+                } else {
+                    this.toneStatus = data.message || 'Error al guardar';
+                    this.toneStatusClass = 'text-red-600';
+                }
+            } catch (err) {
+                this.toneStatus = 'Error de conexión';
+                this.toneStatusClass = 'text-red-600';
+            } finally {
+                this.toneSaving = false;
             }
         },
 
@@ -505,7 +561,9 @@ document.addEventListener('alpine:init', () => {
 
         // --- LOGS ---
         get displayLogs() {
-            return this.searchQuery.trim() ? this.searchResults : this.logs.map(log => ({ filename: log }));
+            const q = this.searchQuery.trim();
+            if (!q) return this.logs.map(log => ({ filename: log }));
+            return this.searchResults || [];
         },
 
         async loadLogs() {
@@ -523,7 +581,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         async performSearch() {
-            if (!this.searchQuery.trim()) return;
+            const q = this.searchQuery.trim();
+            if (!q) { this.searchResults = null; return; }
             try {
                 const res = await apiFetch(`/api/logs/search?q=${encodeURIComponent(this.searchQuery)}`);
                 if (res.ok) {
@@ -537,6 +596,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async readLog(filename) {
+            this.currentLogFile = filename;
             this.currentLogTitle = `${filename}`;
             this.currentLogContent = '';
             this.loadingLog = true;
@@ -834,19 +894,32 @@ document.addEventListener('alpine:init', () => {
                 options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' } } }
             }));
 
-            // Error categories bar chart (only if errors exist)
-            if (data.total_errors > 0 && data.error_categories && Object.keys(data.error_categories).length > 0) {
-                const catLabels = Object.keys(data.error_categories).map(k => this.errorCategoryLabels[k] || k);
-                const catValues = Object.values(data.error_categories);
-                const catColors = Object.keys(data.error_categories).map(k => {
-                    const colorMap = { 'E-COM': '#3B82F6', 'E-RAG': '#EF4444', 'E-CFG': '#F59E0B', 'E-API': '#8B5CF6', 'E-SYS': '#6B7280', 'E-FAQ': '#06B6D4', 'E-TEL': '#10B981' };
-                    return colorMap[k] || '#9CA3AF';
+            // Error types bar chart (only if errors exist)
+            if (data.total_errors > 0 && data.error_types && data.error_types.length > 0) {
+                const typeLabels = data.error_types.map(t => t.code);
+                const typeValues = data.error_types.map(t => t.count);
+                const typeColors = data.error_types.map(t => {
+                    const colorMap = {
+                        'E-COM-001': '#1E40AF', 'E-COM-002': '#0891B2', 'E-COM-003': '#2563EB',
+                        'E-COM-004': '#0D9488', 'E-COM-005': '#4F46E5', 'E-COM-006': '#0284C7',
+                        'E-COM-007': '#6366F1', 'E-COM-008': '#14B8A6',
+                        'E-RAG-001': '#991B1B', 'E-RAG-002': '#EA580C', 'E-RAG-003': '#DC2626',
+                        'E-RAG-004': '#D97706', 'E-RAG-005': '#B91C1C', 'E-RAG-006': '#E11D48',
+                        'E-RAG-007': '#C2410C', 'E-RAG-008': '#BE123C',
+                        'E-CFG-001': '#A16207', 'E-CFG-002': '#CA8A04',
+                        'E-API-001': '#7C3AED', 'E-API-002': '#9333EA', 'E-API-003': '#6D28D9',
+                        'E-API-004': '#A855F7', 'E-API-005': '#8B5CF6',
+                        'E-SYS-001': '#374151', 'E-SYS-002': '#78716C',
+                        'E-FAQ-001': '#0F766E', 'E-FAQ-002': '#06B6D4', 'E-FAQ-003': '#0284C7',
+                        'E-TEL-001': '#15803D',
+                    };
+                    return colorMap[t.code] || '#9CA3AF';
                 });
                 this.charts.push(new Chart(this.$refs.chartErrorCategories, {
                     type: 'bar',
                     data: {
-                        labels: catLabels,
-                        datasets: [{ label: 'Errores', data: catValues, backgroundColor: catColors }]
+                        labels: typeLabels,
+                        datasets: [{ label: 'Errores', data: typeValues, backgroundColor: typeColors }]
                     },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
                 }));
@@ -997,14 +1070,30 @@ document.addEventListener('alpine:init', () => {
             try {
                 const res = await apiFetch(`/api/reportes/schedules/${sched.id}/toggle`, { method: 'POST' });
                 if (res.ok) {
-                    window.showToast(sched.activo ? 'Programa desactivado' : 'Programa activado', 'success');
-                    await this.loadSchedules();
+                    sched.activo = !sched.activo;
+                    window.showToast(sched.activo ? 'Programa activado' : 'Programa desactivado', 'success');
                 } else {
                     window.showToast('Error al cambiar estado', 'error');
                 }
             } catch (err) {
                 window.showToast('Error de conexión', 'error');
             }
+        },
+
+        // --- Doc item kebab menus ---
+        toggleDocMenu(filename) {
+            const idx = this.openDocMenus.indexOf(filename);
+            if (idx >= 0) {
+                this.openDocMenus.splice(idx, 1);
+            } else {
+                this.openDocMenus.push(filename);
+            }
+        },
+        isDocMenuOpen(filename) {
+            return this.openDocMenus.includes(filename);
+        },
+        closeDocMenus() {
+            this.openDocMenus = [];
         },
 
         async confirmDeleteSchedule(sched) {

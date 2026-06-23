@@ -1,6 +1,6 @@
-# Chatbot de WhatsApp con RAG (Gemini + Evolution API)
+# Neuradocs — Chatbot de WhatsApp con RAG (Gemini + Evolution API)
 
-Este proyecto implementa un sistema de respuesta automatizada para WhatsApp basado en la arquitectura **RAG (Retrieval-Augmented Generation)**. El sistema permite la consulta de bases de conocimiento almacenadas en documentos PDF y archivos CSV locales, procesando entradas de texto y audio de voz mediante el modelo Gemini de Google.
+Neuradocs es un sistema de respuesta automatizada para WhatsApp basado en la arquitectura **RAG (Retrieval-Augmented Generation)**. El sistema permite la consulta de bases de conocimiento almacenadas en documentos PDF y archivos CSV locales, procesando entradas de texto y audio de voz mediante el modelo Gemini de Google.
 
 La solución se encuentra totalmente contenedorizada mediante **Docker**, asegurando la portabilidad y la consistencia del entorno de ejecución.
 
@@ -63,7 +63,7 @@ La configuración de WhatsApp se realiza de manera centralizada desde el Panel d
 
 ## 🖥️ Operación del Sistema
 
-El ecosistema se compone de dos interfaces principales:
+El ecosistema Neuradocs se compone de dos interfaces principales:
 
 ### 1. Panel de Administración (Admin UI)
 * **Acceso:** URL informada al finalizar la instalación (por defecto `http://localhost:8000`).

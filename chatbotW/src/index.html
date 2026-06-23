@@ -254,15 +254,22 @@
                             </div>
                             <i class="fas transition-transform duration-200" :class="accordionState.botTone ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                         </button>
-                        <div x-show="accordionState.botTone" x-transition class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <div x-show="accordionState.botTone" class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                             <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Define la personalidad con la que responderá la IA. Afecta el tono, formalidad y estilo de las respuestas.</p>
                             <div class="max-w-md">
-                                <select x-model="configBotTone" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white cursor-pointer">
-                                    <option value="profesional">Profesional (Serio y preciso)</option>
-                                    <option value="amigable">Amigable (Informal y empático)</option>
-                                    <option value="directo">Directo (Técnico y sin rodeos)</option>
-                                    <option value="comercial">Comercial (Persuasivo y vendedor)</option>
-                                </select>
+                                <div class="flex gap-3 items-end">
+                                    <select @change="configBotTone = $event.target.value" class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white cursor-pointer">
+                                        <option value="profesional" :selected="configBotTone === 'profesional'">Profesional (Serio y preciso)</option>
+                                        <option value="amigable" :selected="configBotTone === 'amigable'">Amigable (Informal y empático)</option>
+                                        <option value="directo" :selected="configBotTone === 'directo'">Directo (Técnico y sin rodeos)</option>
+                                        <option value="comercial" :selected="configBotTone === 'comercial'">Comercial (Persuasivo y vendedor)</option>
+                                    </select>
+                                    <button @click="saveBotTone()" :disabled="toneSaving" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 shadow-sm text-sm whitespace-nowrap">
+                                        <span x-show="!toneSaving">Guardar tono</span>
+                                        <span x-show="toneSaving"><i class="fas fa-spinner fa-spin mr-1"></i> Guardando...</span>
+                                    </button>
+                                </div>
+                                <span x-show="toneStatus" x-text="toneStatus" :class="toneStatusClass" class="text-sm font-medium mt-2 inline-block"></span>
                             </div>
                         </div>
                     </div>
@@ -358,29 +365,40 @@
                 <div x-show="activeTab === 'docs'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div>
-                            <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100 flex items-center min-h-[40px]"><i class="fas fa-arrow-up-from-bracket text-blue-500 mr-2"></i> Subir Nuevos (PDF)</h2>
+                            <h3 class="text-lg font-semibold mb-3 text-gray-700 dark:text-gray-300 flex items-center min-h-[36px]"><i class="fas fa-arrow-up-from-bracket text-blue-500 mr-2"></i> Subir PDFs</h3>
                             <input type="file" multiple accept=".pdf" @change="uploadPdfs" class="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer border border-gray-200 dark:border-gray-600 rounded-lg p-2 transition-colors">
                             <p x-text="pdfUploadStatus" :class="pdfUploadStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
                         <div>
-                            <h2 class="text-xl font-semibold mb-4 flex justify-between items-center min-h-[40px] text-gray-800 dark:text-gray-100">
-                                <span><i class="fas fa-folder-open text-blue-500 mr-2"></i> Archivos en Servidor</span>
+                            <h3 class="text-lg font-semibold mb-3 flex justify-between items-center min-h-[36px] text-gray-700 dark:text-gray-300">
+                                <span><i class="fas fa-folder-open text-blue-500 mr-2"></i> Archivos PDF</span>
                                 <button @click="loadPdfs()" class="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
-                            </h2>
+                            </h3>
                             <ul class="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700 bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-inner max-h-[300px] overflow-y-auto custom-scrollbar">
                                 <template x-if="pdfs.length === 0">
                                     <li class="p-8 text-center">
                                         <i class="fas fa-folder-open text-gray-300 dark:text-gray-600 text-5xl mb-3 block"></i>
-                                        <p class="text-gray-500 dark:text-gray-400 font-medium mb-1">No hay documentos cargados</p>
-                                        <p class="text-gray-400 dark:text-gray-500 dark:text-gray-400 text-sm">Subí PDFs desde el panel de la izquierda para empezar</p>
+                                        <p class="text-gray-500 dark:text-gray-400 font-medium mb-1">No hay archivos PDF</p>
+                                        <p class="text-gray-400 dark:text-gray-500 text-sm">Subí PDFs desde el panel de la izquierda para empezar</p>
                                     </li>
                                 </template>
                                 <template x-for="pdf in pdfs" :key="pdf">
                                     <li class="p-3 flex justify-between items-center hover:bg-white dark:hover:bg-gray-800 transition-colors group border-b border-gray-100 dark:border-gray-700 last:border-b-0">
                                         <span class="font-medium text-gray-700 dark:text-gray-300 mr-2 flex items-center gap-2 min-w-0"><i class="fas fa-file-pdf text-red-500"></i> <span x-text="pdf" class="text-sm truncate"></span></span>
-                                        <div class="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button @click="downloadFile('/api/pdfs/' + pdf, pdf)" class="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-1.5 rounded-md transition-colors leading-none" title="Descargar"><i class="fas fa-arrow-down"></i></button>
-                                            <button @click="deletePdf(pdf)" class="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 rounded-md transition-colors leading-none" title="Eliminar"><i class="fas fa-xmark"></i></button>
+                                        <div class="relative">
+                                            <button @click.stop="toggleDocMenu('pdf-'+pdf)" class="flex items-center justify-center w-8 h-8 rounded hover:bg-gray-300/50 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400" title="Acciones"><i class="fas fa-ellipsis-vertical text-sm"></i></button>
+                                            <div data-doc-kebab x-show="isDocMenuOpen('pdf-'+pdf)"
+                                                 x-transition:enter="transition ease-out duration-150"
+                                                 x-transition:enter-start="opacity-0 scale-95"
+                                                 x-transition:enter-end="opacity-100 scale-100"
+                                                 x-transition:leave="transition ease-in duration-100"
+                                                 x-transition:leave-start="opacity-100 scale-100"
+                                                 x-transition:leave-end="opacity-0 scale-95"
+                                                 @keydown.escape.window="closeDocMenus()"
+                                                 class="absolute right-0 top-1/2 -translate-y-1/2 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-lg shadow-lg bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 border border-gray-300/60 dark:border-gray-600">
+                                                <button @click="closeDocMenus(); downloadFile('/api/pdfs/' + pdf, pdf)" class="p-1.5 rounded hover:bg-white/50 text-gray-700 dark:text-gray-300 hover:text-gray-900 transition-all duration-150" title="Descargar"><i class="fas fa-arrow-down"></i></button>
+                                                <button @click="closeDocMenus(); deletePdf(pdf)" class="p-1.5 rounded hover:bg-white/50 text-red-500 hover:text-red-700 transition-all duration-150" title="Eliminar"><i class="fas fa-xmark"></i></button>
+                                            </div>
                                         </div>
                                     </li>
                                 </template>
@@ -392,30 +410,41 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                         <div>
-                            <h3 class="text-lg font-semibold mb-3 text-gray-700 dark:text-gray-300 flex items-center min-h-[36px]"><i class="fas fa-arrow-up-from-bracket text-green-600 mr-2"></i> Subir CSV</h3>
-                            <input type="file" accept=".csv" @change="uploadCsvs" class="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-4 cursor-pointer border border-gray-200 dark:border-gray-600 rounded-lg p-2 transition-colors">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-700 dark:text-gray-300 flex items-center min-h-[36px]"><i class="fas fa-arrow-up-from-bracket text-green-600 mr-2"></i> Subir CSVs</h3>
+                            <input type="file" multiple accept=".csv" @change="uploadCsvs" class="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-4 cursor-pointer border border-gray-200 dark:border-gray-600 rounded-lg p-2 transition-colors">
                             <p x-text="csvUploadStatus" :class="csvUploadStatusClass" class="mt-3 font-medium text-sm h-5"></p>
                         </div>
                         <div>
                             <h3 class="text-lg font-semibold mb-3 flex justify-between items-center min-h-[36px] text-gray-700 dark:text-gray-300">
-                                <span><i class="fas fa-file-csv text-green-600 mr-2"></i> Archivos CSV</span>
+                                <span><i class="fas fa-folder-open text-green-600 mr-2"></i> Archivos CSV</span>
                                 <button @click="loadCsvs()" class="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"><i class="fas fa-rotate-right mr-1"></i> Refrescar</button>
                             </h3>
                             <ul class="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-700 bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-inner max-h-[300px] overflow-y-auto custom-scrollbar">
                                 <template x-if="csvs.length === 0">
                                     <li class="p-8 text-center">
-                                        <i class="fas fa-file-csv text-gray-300 dark:text-gray-600 text-5xl mb-3 block"></i>
+                                        <i class="fas fa-folder-open text-gray-300 dark:text-gray-600 text-5xl mb-3 block"></i>
                                         <p class="text-gray-500 dark:text-gray-400 font-medium mb-1">No hay archivos CSV</p>
-                                        <p class="text-gray-400 dark:text-gray-500 text-sm">Subí CSVs desde el panel de la izquierda</p>
+                                        <p class="text-gray-400 dark:text-gray-500 text-sm">Subí CSVs desde el panel de la izquierda para empezar</p>
                                     </li>
                                 </template>
                                 <template x-for="csv in csvs" :key="csv">
                                     <li class="p-3 flex justify-between items-center hover:bg-white dark:hover:bg-gray-800 transition-colors group border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-                                        <span class="font-medium text-gray-700 dark:text-gray-300 mr-2 flex items-center gap-2 min-w-0"><i class="fas fa-file-csv text-green-600"></i> <span x-text="csv" class="text-sm truncate max-w-[200px]"></span></span>
-                                        <div class="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button @click="$store.csvEditor.edit(csv)" class="text-yellow-600 hover:bg-yellow-50 p-1.5 rounded-md transition-colors leading-none" title="Editar"><i class="fas fa-pen"></i></button>
-                                            <button @click="downloadFile('/api/csvs/' + csv, csv)" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors leading-none" title="Descargar"><i class="fas fa-arrow-down"></i></button>
-                                            <button @click="deleteCsv(csv)" class="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors leading-none" title="Eliminar"><i class="fas fa-xmark"></i></button>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300 mr-2 flex items-center gap-2 min-w-0"><i class="fas fa-file-csv text-green-600"></i> <span x-text="csv" class="text-sm truncate"></span></span>
+                                        <div class="relative">
+                                            <button @click.stop="toggleDocMenu('csv-'+csv)" class="flex items-center justify-center w-8 h-8 rounded hover:bg-gray-300/50 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400" title="Acciones"><i class="fas fa-ellipsis-vertical text-sm"></i></button>
+                                            <div data-doc-kebab x-show="isDocMenuOpen('csv-'+csv)"
+                                                 x-transition:enter="transition ease-out duration-150"
+                                                 x-transition:enter-start="opacity-0 scale-95"
+                                                 x-transition:enter-end="opacity-100 scale-100"
+                                                 x-transition:leave="transition ease-in duration-100"
+                                                 x-transition:leave-start="opacity-100 scale-100"
+                                                 x-transition:leave-end="opacity-0 scale-95"
+                                                 @keydown.escape.window="closeDocMenus()"
+                                                 class="absolute right-0 top-1/2 -translate-y-1/2 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-lg shadow-lg bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 border border-gray-300/60 dark:border-gray-600">
+                                                <button @click="closeDocMenus(); $store.csvEditor.edit(csv)" class="p-1.5 rounded hover:bg-white/50 text-yellow-600 hover:text-yellow-800 transition-all duration-150" title="Editar"><i class="fas fa-pen"></i></button>
+                                                <button @click="closeDocMenus(); downloadFile('/api/csvs/' + csv, csv)" class="p-1.5 rounded hover:bg-white/50 text-gray-700 dark:text-gray-300 hover:text-gray-900 transition-all duration-150" title="Descargar"><i class="fas fa-arrow-down"></i></button>
+                                                <button @click="closeDocMenus(); deleteCsv(csv)" class="p-1.5 rounded hover:bg-white/50 text-red-500 hover:text-red-700 transition-all duration-150" title="Eliminar"><i class="fas fa-xmark"></i></button>
+                                            </div>
                                         </div>
                                     </li>
                                 </template>
@@ -489,12 +518,19 @@
                                 <span class="absolute left-3 top-2 text-gray-400"><i class="fas fa-search"></i></span>
                             </div>
                             <ul class="space-y-2 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                                <template x-if="displayLogs.length === 0">
-                                    <li class="text-gray-400 dark:text-gray-500 italic text-sm text-center mt-4">No se encontraron conversaciones con ese nombre</li>
+                                <template x-if="!searchQuery && logs.length === 0">
+                                    <li class="text-center py-8">
+                                        <i class="fas fa-scroll text-gray-300 dark:text-gray-600 text-5xl mb-3 block"></i>
+                                        <p class="text-gray-500 dark:text-gray-400 font-medium mb-1">No hay conversaciones registradas</p>
+                                        <p class="text-gray-400 dark:text-gray-500 text-sm">Los logs aparecerán acá cuando el bot tenga interacciones</p>
+                                    </li>
+                                </template>
+                                <template x-if="searchQuery && displayLogs.length === 0">
+                                    <li class="text-gray-400 dark:text-gray-500 italic text-sm text-center mt-4">No se encontraron conversaciones con ese término</li>
                                 </template>
                                 <template x-for="log in displayLogs" :key="log.filename">
                                     <li>
-                                        <button @click="readLog(log.filename)" class="w-full text-left px-4 py-2.5 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:shadow-sm transition-all text-sm text-gray-700 dark:text-gray-300 truncate group">
+                                        <button @click="readLog(log.filename)" :class="currentLogFile === log.filename ? 'bg-blue-50 border-blue-300 shadow-sm dark:bg-blue-900/20 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700'" class="w-full text-left px-4 py-2.5 border rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:shadow-sm transition-all text-sm text-gray-700 dark:text-gray-300 truncate group">
                                             <span class="group-hover:translate-x-1 inline-block transition-transform duration-200"><i class="fas fa-folder text-blue-400 mr-1.5"></i> <span x-text="log.filename"></span></span>
                                         </button>
                                     </li>
@@ -608,7 +644,7 @@
                     <!-- Crear instancia -->
                     <div class="mb-6 border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-gray-50 dark:bg-gray-700/50 shadow-sm">
                         <h3 class="text-lg font-semibold mb-3 text-gray-800 dark:text-gray-100"><i class="fas fa-plus text-blue-500 mr-2"></i> Crear nueva instancia</h3>
-                        <form @submit.prevent="createInstance()" class="flex flex-col sm:flex-row gap-3 sm:items-center">
+                        <form @submit.prevent="createInstance()" class="flex flex-col sm:flex-row gap-3 sm:items-end">
                             <div class="flex-1">
                                 <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1" for="new-instance-name">Nombre</label>
                                 <input id="new-instance-name" type="text" x-model="createForm.name" placeholder="ej. bot_2" pattern="[A-Za-z0-9_-]+" maxlength="64" aria-describedby="new-instance-name-help" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
@@ -1041,6 +1077,7 @@
                                                         <thead>
                                                             <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
                                                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Código</th>
+                                                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Descripción</th>
                                                                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Categoría</th>
                                                                 <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ocurrencias</th>
                                                             </tr>
@@ -1049,6 +1086,7 @@
                                                             <template x-for="item in telemetryData.error_types" :key="item.code">
                                                                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors">
                                                                     <td class="px-4 py-2 text-sm font-mono text-gray-800 dark:text-gray-100" x-text="item.code"></td>
+                                                                    <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300" x-text="item.description || '—'"></td>
                                                                     <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300" x-text="errorCategoryLabels[item.code.substring(0, 5)] || item.code.substring(0, 5)"></td>
                                                                     <td class="px-4 py-2 text-sm text-right font-semibold text-gray-800 dark:text-gray-100" x-text="item.count"></td>
                                                                 </tr>
@@ -1063,13 +1101,6 @@
                             </div>
                         </div>
                     </template>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </template>
-                                </div>
-                            </div>
 
                         </div>
                     </template>

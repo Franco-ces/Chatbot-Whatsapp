@@ -44,6 +44,14 @@ from logging_config import get_logger
 
 logger = get_logger("telemetry")
 
+# Reverse map: "E-COM-001" → "No se pudo conectar con el servicio de mensajería."
+_ERROR_DESCRIPTIONS = {}
+for code in ErrorCode:
+    try:
+        _ERROR_DESCRIPTIONS[code.value] = code.user_message
+    except KeyError:
+        pass  # deprecated codes without user_message
+
 # ─── Module-level pool ───────────────────────────────────────────────
 _pool: asyncpg.Pool | None = None
 
@@ -357,7 +365,8 @@ async def get_summary(pool: asyncpg.Pool | None, days: int = 7) -> dict:
         }
 
         error_types = [
-            {"code": row["error_code"], "count": row["count"]}
+            {"code": row["error_code"], "count": row["count"],
+             "description": _ERROR_DESCRIPTIONS.get(row["error_code"], "")}
             for row in type_rows
         ]
 

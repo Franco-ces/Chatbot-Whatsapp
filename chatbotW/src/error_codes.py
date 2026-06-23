@@ -33,7 +33,11 @@ class ErrorCode(str, Enum):
     RAG_NO_PDFS = "E-RAG-001"
     RAG_QUERY_FAILED = "E-RAG-002"
     RAG_AUDIO_FAILED = "E-RAG-003"
-    RAG_GUARDRAIL_REJECTED = "E-RAG-004"
+    RAG_GUARDRAIL_REJECTED = "E-RAG-004"  # deprecated — kept for historical telemetry data
+    RAG_GUARDRAIL_INPUT = "E-RAG-005"     # input guardrail: insult, prompt injection, illegal topic
+    RAG_GUARDRAIL_HALLUCINATION = "E-RAG-006"  # output guardrail: hallucination
+    RAG_GUARDRAIL_TONE = "E-RAG-007"      # output guardrail: tone mismatch
+    RAG_GUARDRAIL_LANGUAGE = "E-RAG-008"  # output guardrail: inappropriate language
 
     # Config errors (E-CFG)
     CFG_READ_FAILED = "E-CFG-001"
@@ -79,6 +83,10 @@ _USER_MESSAGES = {
     ErrorCode.RAG_NO_PDFS: "El sistema no tiene manuales cargados para consultar.",
     ErrorCode.RAG_QUERY_FAILED: "Ocurrió un error al procesar su consulta.",
     ErrorCode.RAG_AUDIO_FAILED: "No se pudo procesar el audio.",
+    ErrorCode.RAG_GUARDRAIL_INPUT: "Tu mensaje fue bloqueado por los filtros de seguridad.",
+    ErrorCode.RAG_GUARDRAIL_HALLUCINATION: "El sistema generó información no verificable y bloqueó la respuesta.",
+    ErrorCode.RAG_GUARDRAIL_TONE: "La respuesta generada no cumplió con el tono configurado.",
+    ErrorCode.RAG_GUARDRAIL_LANGUAGE: "La respuesta generada contenía lenguaje inapropiado y fue bloqueada.",
     ErrorCode.CFG_READ_FAILED: "Error interno de configuración.",
     ErrorCode.CFG_WRITE_FAILED: "Error interno al guardar configuración.",
     ErrorCode.API_INVALID_PAYLOAD: "Solicitud inválida.",
@@ -104,6 +112,10 @@ _HTTP_STATUSES = {
     ErrorCode.EVO_INSTANCE_ALREADY_EXISTS: 409,
     ErrorCode.EVO_INSTANCE_ACTIVE: 409,
     ErrorCode.RAG_NO_PDFS: 503,
+    ErrorCode.RAG_GUARDRAIL_INPUT: 400,
+    ErrorCode.RAG_GUARDRAIL_HALLUCINATION: 500,
+    ErrorCode.RAG_GUARDRAIL_TONE: 500,
+    ErrorCode.RAG_GUARDRAIL_LANGUAGE: 500,
     ErrorCode.SYS_DEPENDENCY_MISSING: 503,
     ErrorCode.FAQ_INVALID_DATA: 400,
     ErrorCode.FAQ_WRITE_FAILED: 500,

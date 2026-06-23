@@ -24,6 +24,8 @@ from collections import defaultdict
 import time as _time
 from pydantic import BaseModel, Field
 
+import httpx
+
 from ConfigManager import ConfigManager
 from error_handler import register_error_handlers
 from error_codes import ErrorCode
@@ -1043,6 +1045,27 @@ async def deactivate_evolution_instance(name: str):
     )
     await record_audit("instance.deactivate", target=name)
     return {"status": "accepted", "deactivated": name}
+
+
+@app.get("/api/stats/sessions")
+async def active_sessions():
+    """Proxy a main.py para obtener el conteo de conversaciones activas.
+
+    En Docker, main.py corre en el servicio whatsapp-bot:5000.
+    En local dev, main.py corre en 127.0.0.1:5000.
+    Usa BOT_INTERNAL_URL si está configurada como variable de entorno.
+    """
+    bot_url = os.environ.get("BOT_INTERNAL_URL", "http://127.0.0.1:5000")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+            resp = await client.get(f"{bot_url}/stats/sessions")
+            resp.raise_for_status()
+        return resp.json()
+    except httpx.RequestError as e:
+        return JSONResponse(
+            content={"error": "No se pudo conectar con el servicio del bot"},
+            status_code=502,
+        )
 
 
 @app.delete("/api/evolution/instances/{name}", status_code=204)

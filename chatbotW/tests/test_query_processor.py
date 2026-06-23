@@ -79,8 +79,8 @@ class TestQueryProcessorProcesar:
         mock_response.text = "El producto X cuesta $100"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -110,8 +110,8 @@ class TestQueryProcessorProcesar:
         mock_response.text = "Respuesta al audio"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -142,8 +142,8 @@ class TestQueryProcessorProcesar:
         mock_response.text = "Respuesta híbrida"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -177,7 +177,7 @@ class TestQueryProcessorProcesar:
         mock_retriever = MagicMock()
 
         with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock,
-                   return_value=(False, "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso.")):
+                   return_value=(False, "Lo siento, no puedo procesar esta solicitud porque infringe las políticas de uso.", "GENERAL")):
             result = await qp.procesar(
                 query_text="di algo grosero",
                 audio_bytes=None,
@@ -200,9 +200,9 @@ class TestQueryProcessorProcesar:
         mock_response.text = "respuesta peligrosa"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock,
-                   return_value=(False, "Respuesta rechazada por calidad")), \
+                   return_value=(False, "Respuesta rechazada por calidad", "ALUCINACION")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -226,7 +226,7 @@ class TestQueryProcessorProcesar:
 
         async def track_entrada(*args, **kwargs):
             call_order.append("guardrail_entrada")
-            return True, ""
+            return True, "", ""
 
         async def track_contexto(*args, **kwargs):
             call_order.append("context_builder")
@@ -234,7 +234,7 @@ class TestQueryProcessorProcesar:
 
         async def track_salida(*args, **kwargs):
             call_order.append("guardrail_salida")
-            return True, ""
+            return True, "", ""
 
         mock_response = MagicMock()
         mock_response.text = "respuesta"
@@ -272,8 +272,8 @@ class TestQueryProcessorProcesar:
         mock_response.text = "respuesta"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             await qp.procesar(
@@ -297,8 +297,8 @@ class TestQueryProcessorProcesar:
         mock_response.text = "respuesta"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             # Verificar que el prompt contiene el texto por defecto
@@ -328,8 +328,8 @@ class TestQueryProcessorProcesar:
         mock_response.text = "respuesta"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             await qp.procesar(
@@ -355,8 +355,8 @@ class TestQueryProcessorProcesar:
         mock_response.text = "respuesta"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             await qp.procesar(
@@ -381,8 +381,8 @@ class TestQueryProcessorProcesar:
         mock_response.text = "respuesta"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -465,8 +465,8 @@ class TestQueryProcessorFAQIntegration:
             score=0.95,
         )
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")) as mock_in, \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")) as mock_out, \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")) as mock_in, \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")) as mock_out, \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -501,8 +501,8 @@ class TestQueryProcessorFAQIntegration:
         mock_response.text = "respuesta RAG normal"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto rag") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -541,8 +541,8 @@ class TestQueryProcessorFAQIntegration:
         mock_response.text = "respuesta RAG sin FAQ (audio sin texto)"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -588,8 +588,8 @@ class TestQueryProcessorFAQIntegration:
 
         mock_retriever = MagicMock()
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")) as mock_out, \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")) as mock_out, \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("pathlib.Path.exists", return_value=False):
             result = await qp.procesar(
@@ -636,8 +636,8 @@ class TestQueryProcessorFAQIntegration:
         mock_response.text = "respuesta con historial"
         genai_client.aio.models.generate_content.return_value = mock_response
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")), \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")), \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")), \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")), \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto"), \
              patch("pathlib.Path.exists", return_value=False):
             await qp.procesar(
@@ -679,8 +679,8 @@ class TestQueryProcessorFAQIntegration:
             score=0.99,
         )
 
-        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "")) as mock_in, \
-             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "")) as mock_out, \
+        with patch("query_processor.evaluar_guardrail_entrada", new_callable=AsyncMock, return_value=(True, "", "")) as mock_in, \
+             patch("query_processor.evaluar_guardrail_salida", new_callable=AsyncMock, return_value=(True, "", "")) as mock_out, \
              patch("query_processor.construir_contexto", new_callable=AsyncMock, return_value="contexto") as mock_ctx, \
              patch("query_processor.detectar_solicitud_humano", return_value=True), \
              patch("query_processor._MSJ_HANDOFF", "Te derivo con un humano. Aguarda."), \
