@@ -13,7 +13,7 @@ import os
 import pytest
 
 SCRIPT_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "primera_instalacion.sh"
+    os.path.dirname(__file__), "..", "..", "scripts", "primera_instalacion.sh"
 )
 SCRIPT_PATH = os.path.normpath(SCRIPT_PATH)
 
