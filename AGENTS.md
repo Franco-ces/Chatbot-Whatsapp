@@ -12,7 +12,7 @@ Chatbot-Whatsapp/
 │   ├── vectorstore/           # FAISS index + metadata.json (auto-rebuilt on PDF change)
 │   ├── cache/                 # Embedding cache (embeddings_cache.json)
 │   ├── logs/                  # Chat session logs (chat_YYYY-MM-DD_HH-MM-SS.txt)
-│   ├── config_bot.json        # Runtime config (email, phone) — edited by admin UI
+│   ├── config_bot.json        # Runtime config (local-only, gitignored) — edited by admin UI
 │   ├── docker-compose.yml     # 5 services: bot, admin-ui, evolution-api, postgres, redis
 │   ├── Dockerfile             # Python 3.12-slim, installs ffmpeg
 │   └── requirements.txt       # Python deps (pinned versions for fastapi, uvicorn, pytest)
