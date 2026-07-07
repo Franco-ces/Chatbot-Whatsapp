@@ -14,6 +14,11 @@ lib/
 develop-eggs/
 dist/
 build/
+# Windows-style venv layout (pyvenv.cfg + Scripts/ + Include/ + share/)
+Scripts/
+Include/
+pyvenv.cfg
+share/
 
 # Variables de entorno y secretos (Seguridad)
 .env
