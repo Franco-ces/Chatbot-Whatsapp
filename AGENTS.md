@@ -137,6 +137,7 @@ uvicorn src.interface:app --host 127.0.0.1 --port 8000
 - **No type hints on most functions** — existing codebase doesn't use them consistently. Follow the pattern of the file you're editing.
 - **Never commit or push without explicit authorization**: before running `git commit` or `git push`, ask the user. Even if the task is complete, let the user decide when and whether to commit and push. Never use `--no-verify` without asking. Never use `--force`, `--force-with-lease`, or any force push under any circumstance — if history needs rewriting, explain the situation and let the user decide.
 - **Keep docs in sync**: when a code change introduces operator-facing functionality (new endpoints, auth flow changes, new admin panel features), the implementing agent should NOT update `DOCUMENTACION_TECNICA.md` inline. Instead, note what needs documenting and delegate a separate doc update to a fresh agent at the end. Code changes without doc updates create drift that hurts onboarding and troubleshooting.
+- **PR descriptions** must end with a `## Reviewer notes` section containing at least one specific file path that was manually inspected during the change.
 
 ## Environment Variables
 
