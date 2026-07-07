@@ -5,3 +5,22 @@
 # volume compartido con admin-ui).
 config_bot.json
 .env
+
+# Generated / runtime artifacts (volumes o rebuildables)
+cache/
+logs/
+vectorstore/
+
+# Virtual environments (never bake into image)
+venv/
+.venv/
+Scripts/
+Include/
+pyvenv.cfg
+
+# Python bytecode/cache
+__pycache__/
+*.pyc
+
+# Test cache
+.pytest_cache/

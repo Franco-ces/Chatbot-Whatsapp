@@ -260,52 +260,60 @@ class TestDocumentManagerActualizarMemoriaExceptionHandling:
 
 
 class TestReloadRagEndpoint:
-    """Task 3.1: POST /api/reload-rag endpoint."""
+    """Task 3.1: POST /api/reload-rag endpoint.
+
+    Usa httpx.AsyncClient + ASGITransport (compatible con httpx 0.28+ / starlette
+    reciente). El patrón TestClient(app=...) anterior rompe con la API nueva de
+    httpx: Client.__init__() no acepta 'app' como keyword.
+    """
 
     @pytest.mark.asyncio
     async def test_reload_rag_endpoint_exists(self):
         """GIVEN interface app WHEN POST /api/reload-rag called THEN returns status."""
-        from fastapi.testclient import TestClient
+        import httpx
 
         with patch("interface._rag_instance", create=True) as mock_rag:
             mock_rag.actualizar_memoria = AsyncMock(return_value=True)
 
             from interface import app
-            client = TestClient(app)
-
-            response = client.post("/api/reload-rag")
-            # Endpoint should exist (not 404/405)
-            assert response.status_code != 404
-            assert response.status_code != 405
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post("/api/reload-rag")
+                # Endpoint should exist (not 404/405)
+                assert response.status_code != 404
+                assert response.status_code != 405
 
     @pytest.mark.asyncio
     async def test_reload_rag_no_instance_returns_no_changes(self):
         """GIVEN no RAG instance set WHEN POST /api/reload-rag called THEN returns no_changes."""
-        from fastapi.testclient import TestClient
+        import httpx
 
         with patch("interface._rag_instance", None):
             from interface import app
-            client = TestClient(app)
-
-            response = client.post("/api/reload-rag")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["status"] == "no_changes"
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post("/api/reload-rag")
+                assert response.status_code == 200
+                data = response.json()
+                assert data["status"] == "no_changes"
 
     @pytest.mark.asyncio
     async def test_reload_rag_with_instance_calls_actualizar(self):
         """GIVEN RAG instance set WHEN POST /api/reload-rag called THEN actualizar_memoria called."""
-        from fastapi.testclient import TestClient
+        import httpx
 
         mock_rag = MagicMock()
         mock_rag.actualizar_memoria = AsyncMock(return_value=True)
 
         with patch("interface._rag_instance", mock_rag):
             from interface import app
-            client = TestClient(app)
-
-            response = client.post("/api/reload-rag")
-            assert response.status_code == 200
-            mock_rag.actualizar_memoria.assert_called_once()
-            data = response.json()
-            assert data["status"] == "reloaded"
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post("/api/reload-rag")
+                assert response.status_code == 200
+                mock_rag.actualizar_memoria.assert_called_once()
+                data = response.json()
+                assert data["status"] == "reloaded"

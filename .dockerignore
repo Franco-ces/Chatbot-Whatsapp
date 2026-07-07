@@ -1,0 +1,29 @@
+# Repo-root .dockerignore — mirrors chatbotW/.dockerignore but with chatbotW/ prefixes
+# so IDEs, indexing tools, and container tooling that scan from the repo root also skip
+# generated / runtime artifacts and local-only files. The chatbotW/ directory remains
+# the Docker build context (see chatbotW/Dockerfile), so chatbotW/.dockerignore still
+# applies there; this file covers root-level scans.
+
+# Local-only runtime config (mounted into Docker, never baked in)
+chatbotW/config_bot.json
+.env
+
+# Generated / runtime artifacts (volumes or rebuildables)
+chatbotW/cache/
+chatbotW/logs/
+chatbotW/vectorstore/
+
+# Virtual environments (never bake into image)
+chatbotW/venv/
+chatbotW/.venv/
+chatbotW/Scripts/
+chatbotW/Include/
+chatbotW/pyvenv.cfg
+
+# Python bytecode/cache
+chatbotW/__pycache__/
+__pycache__/
+*.pyc
+
+# Test cache
+chatbotW/.pytest_cache/

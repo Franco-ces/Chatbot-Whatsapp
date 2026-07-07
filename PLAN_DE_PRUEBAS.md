@@ -33,7 +33,7 @@ Para garantizar la reproducibilidad de los resultados, se define el siguiente en
     - **PDFs**: `Manual_HP_Pavilion_Reducido.pdf`, `Manual_Samsung_A54_Reducido.pdf`, `Manual_Sony_WH1000XM6_Reducido.pdf`.
     - **CSV**: `precios.csv` (Conteniendo 5 productos con precios y stock).
     - **FAQs**: Set de 10 preguntas frecuentes configuradas vía Admin UI.
-- **Modelo IA**: `gemini-1.5-flash-lite` para generación y `text-embedding-004` para vectores.
+- **Modelo IA**: `gemini-3.1-flash-lite` para generación y `gemini-embedding-2-preview` para vectores.
 
 ---
 
@@ -113,10 +113,10 @@ Para validar que el bot no está "saltando pasos" o usando la IA innecesariament
 
 | Test ID | Fecha | Resultado (P/F) | Observaciones | Firma Evaluador |
 |---|---|---|---|---|
-| T1.1 | | | | |
-| T1.2 | | | | |
-| T2.1 | | | | |
-| T3.1 | | | | |
-| T4.1 | | | | |
-| T5.1 | | | | |
-| T5.2 | | | | |
+| T1.1 | 2026-07-07 | Exitoso | Validado con `tests/test_bot_service.py` (25 tests). Cubre el handler del webhook, procesamiento de mensajes y respuestas básicas del bot. Suite completa: 777 tests, 0 fallos. | Evaluador |
+| T1.2 | 2026-07-07 | Exitoso | Validado con `tests/test_error_handler.py`. Verifica la clasificación de códigos de error (`ErrorCode`: E-COM, E-RAG, E-CFG, E-API, E-SYS) y los códigos HTTP de respuesta. Suite completa: 777/0. | Evaluador |
+| T2.1 | 2026-07-07 | Exitoso | Validado con `tests/test_vectorstore_manager.py`, `tests/test_rag_orchestrator.py` y `tests/test_embedding_cache.py`. Cubre operaciones del vectorstore FAISS, pipeline del orquestador RAG y caché de embeddings. Suite completa: 777/0. | Evaluador |
+| T3.1 | 2026-07-07 | Exitoso | Validado con `tests/test_faq_endpoints.py`. Cubre el matching semántico de FAQs y los endpoints de administración. Suite completa: 777/0. | Evaluador |
+| T4.1 | 2026-07-07 | Exitoso | Validado con `tests/test_whatsapp_client.py`, `tests/test_csv_hot_reload.py` y `tests/test_webhook_secret.py`. Cubre el cliente HTTP de WhatsApp, webhooks de Evolution API y recarga en caliente de CSV. Suite completa: 777/0. | Evaluador |
+| T5.1 | 2026-07-07 | Exitoso | Validado con `tests/test_instances_js.py` y `tests/test_cli.py`. Cubre la interfaz de administración (admin UI) y los comandos CLI de gestión de instancias. Suite completa: 777/0. | Evaluador |
+| T5.2 | 2026-07-07 | Exitoso | Validado con `tests/test_report_generator.py`, `tests/test_report_scheduler.py` y `tests/test_telemetry.py`. Cubre la generación de reportes, planificación y persistencia de telemetría. Suite completa: 777/0. | Evaluador |

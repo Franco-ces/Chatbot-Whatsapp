@@ -457,7 +457,9 @@ class TestFAQSPathVolumeConfig:
         mount_dir = mount_match.group(1)
         # Buscamos TODAS las apariciones de FAQS_VOLUME_MOUNT= y nos
         # aseguramos de que coincidan con el mount_dir.
-        env_values = re.findall(r"FAQS_VOLUME_MOUNT=(\S+)", text)
+        # docker-compose usa sintaxis YAML (clave: valor), no `KEY=valor`.
+        # El regex anterior buscaba `=` y nunca matcheaba → 0 ocurrencias.
+        env_values = re.findall(r"FAQS_VOLUME_MOUNT:\s*(\S+)", text)
         assert len(env_values) >= 2, (
             f"FAQS_VOLUME_MOUNT debe estar seteada en TODOS los "
             f"servicios que montan faq_data (admin-ui y whatsapp-bot). "
