@@ -19,7 +19,7 @@ def _make_watcher_stub(instance_name="bot_test"):
 
 
 def _make_payload(text="Hola", from_me=False, event="messages.upsert"):
-    """Helper to build a valid EvolutionWebhook payload."""
+    """Construye un payload EvolutionWebhook válido."""
     return EvolutionWebhook(
         event=event,
         data=WebhookData(
@@ -29,21 +29,6 @@ def _make_payload(text="Hola", from_me=False, event="messages.upsert"):
                 id="msg-001",
             ),
             message={"conversation": text},
-            pushName="TestUser",
-        ),
-    )
-
-
-def _make_audio_payload(from_me=False):
-    return EvolutionWebhook(
-        event="messages.upsert",
-        data=WebhookData(
-            key=MessageKey(
-                remoteJid="5491123456789@s.whatsapp.net",
-                fromMe=from_me,
-                id="msg-002",
-            ),
-            message={"audioMessage": {"mimetype": "audio/ogg"}},
             pushName="TestUser",
         ),
     )
@@ -80,7 +65,7 @@ class TestWebhookInstanceRouting:
 
     @pytest.fixture(autouse=True)
     def _mock_logger(self):
-        """Ensure main.logger is not None during tests."""
+        """Asegura que main.logger no sea None durante los tests."""
         import main
         original_logger = main.logger
         original_dedup = main.mensajes_procesados.copy()
@@ -182,7 +167,7 @@ class TestWebhookInstanceRouting:
         mock_wa = MagicMock()
         mock_wa.enviar_mensaje = AsyncMock()
 
-        with patch.dict("os.environ", {"WEBHOOK_SECRET": ""}, clear=False), \
+        with patch.dict("os.environ", {"WEBHOOK_SECRET": "", "EVOLUTION_INSTANCE_NAME": ""}, clear=False), \
              patch("main.rag", MagicMock()), \
              patch("main.wa_client", mock_wa), \
              patch("main.session_manager", MagicMock()), \
@@ -213,8 +198,7 @@ class TestWebhookValidPayload:
 
     @pytest.fixture(autouse=True)
     def _mock_logger(self):
-        """Ensure main.logger is not None during tests."""
-        from unittest.mock import MagicMock
+        """Asegura que main.logger no sea None durante los tests."""
         import main
         original_logger = main.logger
         original_dedup = main.mensajes_procesados.copy()
@@ -227,9 +211,8 @@ class TestWebhookValidPayload:
 
     @pytest.mark.asyncio
     async def test_returns_ok_and_spawns_task(self):
-        """REQ-6: Valid payload → returns ok, spawns background task."""
+        """REQ-6: Payload válido → retorna ok, lanza tarea en background."""
         from main import app
-        from fastapi.testclient import TestClient
         import httpx
 
         mock_rag = MagicMock()
@@ -265,7 +248,7 @@ class TestWebhookValidPayload:
 
     @pytest.mark.asyncio
     async def test_returns_ok_for_empty_payload(self):
-        """REQ-6: Empty/invalid payload → returns ok, no task spawned."""
+        """REQ-6: Payload vacío/inválido → retorna ok, no lanza tarea."""
         from main import app
         import httpx
 
@@ -275,7 +258,7 @@ class TestWebhookValidPayload:
              patch("main.session_manager", MagicMock()):
 
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-                # fromMe=True means extraer_datos_limpios returns None
+                # fromMe=True hace que extraer_datos_limpios devuelva None
                 resp = await client.post("/webhook", json={
                     "event": "messages.upsert",
                     "data": {
@@ -294,7 +277,7 @@ class TestWebhookValidPayload:
 
     @pytest.mark.asyncio
     async def test_rate_limited_sender(self):
-        """REQ-6: Rate-limited sender → returns rate_limited."""
+        """REQ-6: Remitente con rate-limit → retorna rate_limited."""
         from main import app
         import httpx
 
@@ -331,11 +314,11 @@ class TestWebhookValidPayload:
 
     @pytest.mark.asyncio
     async def test_webhook_uses_create_task_not_background_tasks(self):
-        """REQ-6: Webhook uses asyncio.create_task, not BackgroundTasks."""
+        """REQ-6: El webhook usa asyncio.create_task, no BackgroundTasks."""
         import inspect
         from main import webhook
 
-        # Verify the webhook function signature doesn't include BackgroundTasks
+        # Verificar que la firma del webhook no incluya BackgroundTasks
         sig = inspect.signature(webhook)
         assert "background_tasks" not in sig.parameters
         assert "BackgroundTasks" not in str(sig)

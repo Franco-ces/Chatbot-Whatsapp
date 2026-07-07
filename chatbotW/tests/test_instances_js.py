@@ -48,9 +48,13 @@ class TestDeactivateInstanceMethod:
 
     def test_deactivate_uses_post_method(self, js_content):
         """La llamada fetch debe usar method: 'POST'."""
-        # Buscamos POST dentro de deactivateInstance (método completo ~600 chars)
+        # deactivateInstance creció al añadir el conteo de sesiones activas
+        # antes del confirm y la construcción dinámica del mensaje; el fetch
+        # con method: 'POST' queda a ~1502 chars del inicio del método. La
+        # ventana anterior (1500) quedaba 2 chars corta. Ventana holgada como
+        # el test hermano test_deactivate_refreshes_list_optimistic.
         deactivate_section = js_content[js_content.index("deactivateInstance"):]
-        deactivate_section = deactivate_section[:1500]
+        deactivate_section = deactivate_section[:3000]
         assert "method: 'POST'" in deactivate_section, (
             "deactivateInstance debe usar method: 'POST'"
         )

@@ -54,6 +54,11 @@ services:
       - .env
     environment:
       <<: *bot-env
+      # FAQS_VOLUME_MOUNT declarado explícito (además del heredado via *bot-env)
+      # para que el contrato "todo servicio que monta faq_data setea la env var
+      # al mismo directorio" sea visible por inspección estática del compose y
+      # no dependa de resolver el anchor merge de YAML.
+      FAQS_VOLUME_MOUNT: /app/faqs_data
       EVO_API_KEY: ${EVO_API_KEY}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
