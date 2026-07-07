@@ -26,7 +26,7 @@ Si el bot inicia pero no genera respuestas o reporta errores de autenticación, 
 ## 3. Errores de permisos al ejecutar Docker
 Si al ejecutar los scripts de instalación se obtiene un error de `permission denied` al intentar acceder al socket de Docker:
 
-*   **Solución temporal:** Anteponga `sudo` al comando de ejecución (ejemplo: `sudo ./primera_instalacion.sh`).
+*   **Solución temporal:** Anteponga `sudo` al comando de ejecución (ejemplo: `sudo ./scripts/primera_instalacion.sh`).
 *   **Solución recomendada:** Incorpore su usuario al grupo `docker` para otorgar privilegios adecuados:
     ```bash
     sudo usermod -aG docker $USER

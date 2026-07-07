@@ -2,7 +2,7 @@
 
 Thanks for your interest in contributing! This document covers the essentials for getting set up and shipping changes that merge cleanly.
 
-For deeper architectural context, see [`README.md`](./README.md) and [`DOCUMENTACION_TECNICA.md`](./DOCUMENTACION_TECNICA.md). English versions (`README.en.md`, `DOCUMENTACION_TECNICA.en.md`) are available for international contributors.
+For deeper architectural context, see [`README.md`](./README.md) and [`docs/DOCUMENTACION_TECNICA.md`](./docs/DOCUMENTACION_TECNICA.md). English versions (`README.en.md`, `docs/DOCUMENTACION_TECNICA.en.md`) are available for international contributors.
 
 ## Getting Started
 
@@ -112,7 +112,7 @@ pytest -k "test_audio"
 
 ## Documentation
 
-- **Update docs when you change behavior.** If you add an endpoint, a config flag, or alter an admin flow, the relevant doc (README, `DOCUMENTACION_TECNICA.md`, or `TROUBLESHOOTING.md`) must reflect it.
+- **Update docs when you change behavior.** If you add an endpoint, a config flag, or alter an admin flow, the relevant doc (README, `docs/DOCUMENTACION_TECNICA.md`, or `docs/TROUBLESHOOTING.md`) must reflect it.
 - **English versions** (`*.en.md`) exist for international contributors. Keep them in sync with their Spanish counterparts when a doc change touches translated content.
 - **Avoid doc drift**: code changes that introduce operator-facing functionality should note what needs documenting and delegate the doc update to a separate pass rather than leaving docs stale.
 

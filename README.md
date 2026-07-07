@@ -31,13 +31,13 @@ El proyecto incluye scripts que automatizan el levantamiento de la infraestructu
 #### En Windows (PowerShell):
 Ejecutar en la raíz del proyecto:
 ```powershell
-./primera_instalacion.ps1
+./scripts/primera_instalacion.ps1
 ```
 
 #### En Linux / macOS (Bash):
 Ejecutar en la raíz del proyecto:
 ```bash
-sudo bash primera_instalacion.sh
+sudo bash scripts/primera_instalacion.sh
 ```
 
 El script verificará la disponibilidad de puertos y, al finalizar, informará en cuáles está operativo cada servicio.
@@ -213,4 +213,4 @@ Comandos operativos para la administración del sistema desde la raíz de `chatb
 
 ---
 
-Si presenta problemas durante la instalación o ejecución, consulte la [Guía de Resolución de Problemas](TROUBLESHOOTING.md).
+Si presenta problemas durante la instalación o ejecución, consulte la [Guía de Resolución de Problemas](docs/TROUBLESHOOTING.md).

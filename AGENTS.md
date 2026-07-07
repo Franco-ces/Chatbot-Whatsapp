@@ -16,9 +16,10 @@ Chatbot-Whatsapp/
 │   ├── docker-compose.yml     # 5 services: bot, admin-ui, evolution-api, postgres, redis
 │   ├── Dockerfile             # Python 3.12-slim, installs ffmpeg
 │   └── requirements.txt       # Python deps (pinned versions for fastapi, uvicorn, pytest)
-├── primera_instalacion.sh     # One-time setup: builds containers, creates Evolution instance
-├── comandos.txt               # Docker commands reference
-└── conectar.html              # QR scanner for WhatsApp linking
+├── docs/                       # Documentation (technical, troubleshooting, test plan)
+├── scripts/                    # Install scripts and utilities
+│   ├── primera_instalacion.sh  # One-time setup (Linux/macOS)
+│   └── primera_instalacion.ps1 # One-time setup (Windows PowerShell)
 ```
 
 ## Architecture
@@ -106,7 +107,7 @@ docker compose down             # stop everything
 docker logs gemini_whatsapp_bot -f  # follow bot logs
 ```
 
-**First-time setup** requires running `primera_instalacion.sh` which builds containers, waits for Postgres/Redis, creates the Evolution API instance, and configures the webhook. You must scan a QR code manually during that process.
+**First-time setup** requires running `scripts/primera_instalacion.sh` which builds containers, waits for Postgres/Redis, creates the Evolution API instance, and configures the webhook. You must scan a QR code manually during that process.
 
 ### Run the admin UI
 ```bash
@@ -136,7 +137,7 @@ uvicorn src.interface:app --host 127.0.0.1 --port 8000
 - **Pydantic for webhook parsing** (`payload_parser.py`).
 - **No type hints on most functions** — existing codebase doesn't use them consistently. Follow the pattern of the file you're editing.
 - **Never commit or push without explicit authorization**: before running `git commit` or `git push`, ask the user. Even if the task is complete, let the user decide when and whether to commit and push. Never use `--no-verify` without asking. Never use `--force`, `--force-with-lease`, or any force push under any circumstance — if history needs rewriting, explain the situation and let the user decide.
-- **Keep docs in sync**: when a code change introduces operator-facing functionality (new endpoints, auth flow changes, new admin panel features), the implementing agent should NOT update `DOCUMENTACION_TECNICA.md` inline. Instead, note what needs documenting and delegate a separate doc update to a fresh agent at the end. Code changes without doc updates create drift that hurts onboarding and troubleshooting.
+- **Keep docs in sync**: when a code change introduces operator-facing functionality (new endpoints, auth flow changes, new admin panel features), the implementing agent should NOT update `docs/DOCUMENTACION_TECNICA.md` inline. Instead, note what needs documenting and delegate a separate doc update to a fresh agent at the end. Code changes without doc updates create drift that hurts onboarding and troubleshooting.
 - **PR descriptions** must end with a `## Reviewer notes` section containing at least one specific file path that was manually inspected during the change.
 
 ## Environment Variables

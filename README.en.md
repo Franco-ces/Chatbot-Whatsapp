@@ -31,13 +31,13 @@ The project includes scripts that automate the provisioning of the required infr
 #### On Windows (PowerShell):
 Run from the project root:
 ```powershell
-./primera_instalacion.ps1
+./scripts/primera_instalacion.ps1
 ```
 
 #### On Linux / macOS (Bash):
 Run from the project root:
 ```bash
-sudo bash primera_instalacion.sh
+sudo bash scripts/primera_instalacion.sh
 ```
 
 The script will check port availability and, upon completion, report which port each service is running on.
@@ -213,4 +213,4 @@ Operational commands for system administration from the `chatbotW/` root:
 
 ---
 
-If you experience problems during installation or execution, consult the [Troubleshooting Guide](TROUBLESHOOTING.en.md).
+If you experience problems during installation or execution, consult the [Troubleshooting Guide](docs/TROUBLESHOOTING.en.md).
