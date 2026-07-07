@@ -4,6 +4,8 @@
 [![CI](https://github.com/Franco-ces/Chatbot-Whatsapp/actions/workflows/ci.yml/badge.svg)](https://github.com/Franco-ces/Chatbot-Whatsapp/actions/workflows/ci.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 
+[English](README.en.md)
+
 Neuradocs es un sistema de respuesta automatizada para WhatsApp basado en la arquitectura **RAG (Retrieval-Augmented Generation)**. El sistema permite la consulta de bases de conocimiento almacenadas en documentos PDF y archivos CSV locales, procesando entradas de texto y audio de voz mediante el modelo Gemini de Google.
 
 La solución se encuentra totalmente contenedorizada mediante **Docker**, asegurando la portabilidad y la consistencia del entorno de ejecución.
