@@ -6,27 +6,39 @@ For deeper architectural context, see [`README.md`](./README.md) and [`DOCUMENTA
 
 ## Getting Started
 
-1. **Clone** the repository:
-   ```bash
-   git clone https://github.com/Franco-ces/Chatbot-Whatsapp.git
-   cd Chatbot-Whatsapp
-   ```
-2. **Create a virtual environment** and install dependencies:
-   ```bash
-   cd chatbotW
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. **Audio transcription** requires `ffmpeg` on the host:
+### Option 1: Full stack with Docker (recommended)
+
+The project runs as a 5-service Docker Compose stack (bot, admin-ui, evolution-api, postgres, redis). Use this when you need to test the full system end-to-end.
+
+```bash
+git clone https://github.com/Franco-ces/Chatbot-Whatsapp.git
+cd Chatbot-Whatsapp/chatbotW
+cp .env.example .env          # Edit .env with your API keys
+docker compose up -d --build
+docker logs gemini_whatsapp_bot -f  # Follow bot logs
+```
+
+See [`README.md`](./README.md) for the first-time setup script and WhatsApp QR linking.
+
+### Option 2: Local venv (test-only contributions)
+
+Use this for quick test runs when you don't need the full stack. Requires `ffmpeg` on the host.
+
+```bash
+git clone https://github.com/Franco-ces/Chatbot-Whatsapp.git
+cd Chatbot-Whatsapp/chatbotW
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pytest  # Confirm 777 passed, 0 failures
+```
+
+### Dependencies
+
+- **Audio transcription** requires `ffmpeg` on the host:
    ```bash
    sudo apt install ffmpeg   # Linux
    ```
-4. **Run the test suite** to confirm your environment is healthy:
-   ```bash
-   pytest
-   ```
-   A green run reports `777 passed, 0 failures`.
 
 ## Development Workflow
 
