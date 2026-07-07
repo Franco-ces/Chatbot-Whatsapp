@@ -5,14 +5,15 @@
 ```
 Chatbot-Whatsapp/
 ├── chatbotW/                  # Main application directory
-│   ├── src/                   # All Python source (flat module, no __init__.py)
+│   ├── src/                   # All Python source (flat module; importable as `python -m src` via namespace package)
 │   ├── tests/                 # pytest tests (conftest adds src/ to sys.path)
 │   ├── PDFs/                  # Uploaded PDFs for RAG (mounted in Docker)
+│   ├── CSVs/                  # Price/stock database (precios.csv) for fuzzy price lookup
 │   ├── vectorstore/           # FAISS index + metadata.json (auto-rebuilt on PDF change)
 │   ├── cache/                 # Embedding cache (embeddings_cache.json)
 │   ├── logs/                  # Chat session logs (chat_YYYY-MM-DD_HH-MM-SS.txt)
 │   ├── config_bot.json        # Runtime config (email, phone) — edited by admin UI
-│   ├── docker-compose.yml     # 4 services: bot, evolution-api, postgres, redis
+│   ├── docker-compose.yml     # 5 services: bot, admin-ui, evolution-api, postgres, redis
 │   ├── Dockerfile             # Python 3.12-slim, installs ffmpeg
 │   └── requirements.txt       # Python deps (pinned versions for fastapi, uvicorn, pytest)
 ├── primera_instalacion.sh     # One-time setup: builds containers, creates Evolution instance
@@ -22,30 +23,60 @@ Chatbot-Whatsapp/
 
 ## Architecture
 
-Two independent FastAPI apps:
+Two independent FastAPI apps plus a CLI entry point:
 - **`src/main.py`** — Bot webhook server (port 5000). Receives WhatsApp messages via Evolution API webhook, processes through RAG pipeline, responds.
-- **`src/interface.py`** — Admin web UI (port 8000). PDF upload/download, config editing, log viewer.
+- **`src/interface.py`** — Admin web UI (port 8000). PDF upload/download, config editing, log viewer, report scheduling.
+- **`src/__main__.py`** — Admin CLI (`python -m src <subcommand>`). Evolution instance management (list/create/qr/state/set-webhook/set-active). JSON to stdout, human messages to stderr, documented exit codes (0/1/2/3).
 
-Module responsibilities:
+Module responsibilities (all under `chatbotW/src/`):
 | Module | Role |
 |---|---|
+| **Core / Logic** | |
 | `main.py` | FastAPI app, lifespan, rate limiting, webhook endpoint |
 | `bot_service.py` | Orchestrates: audio download → RAG query → send response |
-| `rag_langchain_con_audio.py` | Core RAG: PDF retrieval, FAISS search, Gemini generation, guardrails |
+| `query_processor.py` | Core RAG: PDF retrieval, FAISS search, Gemini generation, guardrails |
+| `document_manager.py` | Document loading, chunking, embedding pipeline |
+| `rag_orchestrator.py` | Orchestrates retrieval + generation pipeline |
+| `faq_matcher.py` | Semantic FAQ matching |
+| `price_lookup.py` | Fuzzy CSV price/catalog search |
+| `guardrails.py` | Input/output guardrail checks via Gemini |
+| `context_builder.py` | Builds LangChain context for RAG queries |
+| `cache.py` | In-memory cache utilities |
+| `prompts.py` | LangChain prompt templates (RAG, guardrails) |
+| **WhatsApp / Evolution API** | |
 | `whatsapp_client.py` | HTTP client for Evolution API (send text, get audio) |
 | `payload_parser.py` | Pydantic models for Evolution webhook, extracts clean data |
-| `audio_handler.py` | Transcribes audio via Gemini `Part.from_bytes` |
+| `audio_handler.py` | Transcribes audio via Gemini |
+| `evo_client.py` | Evolution API client (instances, webhooks) |
+| `evolution_admin.py` | Evolution instance management |
+| `evolution_http.py` | Low-level Evolution HTTP helpers |
+| `evolution_models.py` | Pydantic models for Evolution API |
+| `instance_activation.py` | WhatsApp instance activation logic |
+| `instance_watcher.py` | Background instance state monitoring |
+| **Infrastructure** | |
 | `vectorstore_manager.py` | FAISS save/load, hash-based change detection |
 | `embedding_cache.py` | JSON-backed cache to avoid redundant Gemini embedding calls |
 | `ConfigManager.py` | Reads/writes `config_bot.json` (email, phone for support messages) |
-| `prompts.py` | LangChain prompt templates (RAG, guardrails) |
 | `error_codes.py` | `ErrorCode` enum (E-COM, E-RAG, E-CFG, E-API, E-SYS) |
 | `exceptions.py` | `AppError` hierarchy (CommunicationError, RAGError, etc.) |
 | `error_handler.py` | FastAPI exception handlers for all error types |
 | `chat_logger.py` | Writes chat logs to `logs/` |
 | `sesionLoggerManager.py` | Session tracking with timeout and context window |
+| `health.py` | Health check endpoint logic |
+| `httpx_idle_client.py` | HTTP client with connection pooling |
+| `logging_config.py` | structlog configuration |
+| `paths.py` | Centralized path constants |
+| `faq_paths.py` | Centralized resolution of the `faqs.json` path (reads `FAQS_VOLUME_MOUNT`) |
+| `telemetry.py` | Interaction telemetry persistence |
+| `verificar_datos.py` | Data validation utilities |
+| **Admin UI** | |
+| `interface.py` | Admin web UI (FastAPI, port 8000) |
+| `report_generator.py` | PDF report generation (WeasyPrint) |
+| `report_scheduler.py` | Scheduled report generation and delivery |
+| **Entry points** | |
+| `__main__.py` | Package CLI entry point (`python -m src`) |
 
-**Critical: `src/` is flat.** All imports are bare (`from bot_service import ...`). The test `conftest.py` adds `src/` to `sys.path`. Do NOT add `__init__.py` or use package-style imports.
+**Critical: `src/` is flat.** Imports are bare (`from bot_service import ...`), never package-style (`from src.bot_service import ...`). The test `conftest.py` adds `src/` to `sys.path`, and `__main__.py` inserts its own directory into `sys.path` (lines 41-43) so the CLI works both locally and in Docker. There is no `src/__init__.py` — `python -m src` and `import src.__main__` (used by `tests/test_cli.py`) work via Python 3 namespace packages (PEP 420). Do not re-add `__init__.py`.
 
 ## Commands
 
@@ -70,7 +101,7 @@ Tests use `pytest-asyncio` with `asyncio_mode = "auto"` (from pyproject.toml). A
 ### Docker
 ```bash
 cd chatbotW
-docker compose up -d --build    # build and start all 4 services
+docker compose up -d --build    # build and start all 5 services
 docker compose down             # stop everything
 docker logs gemini_whatsapp_bot -f  # follow bot logs
 ```
