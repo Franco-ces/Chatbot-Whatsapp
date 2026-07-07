@@ -117,11 +117,20 @@ class TestInterfacePyWebhookSecret:
         assert 'os.environ["WEBHOOK_SECRET"]' in source or "os.environ['WEBHOOK_SECRET']" in source
 
     def test_persists_to_env_file(self):
-        """Código debe persistir a .env via set_key."""
+        """Código debe persistir el secret a .env.
+
+        interface.py usa `_write_env` (escritura directa in-place) en vez
+        de `set_key` de python-dotenv: el bind-mount de .env en Docker/WSL2
+        hacía que `os.replace` (que set_key usa internamente) fallara con
+        "Device or resource busy". `_write_env` reescribe el archivo sin
+        reemplazo atómico y soporta bind-mounts. main.py sí usa set_key
+        porque allí el .env no está bind-mounted de la misma forma. La
+        persistencia está garantizada en ambos; difiere el mecanismo.
+        """
         import interface
         import inspect
         source = inspect.getsource(interface)
-        assert "set_key" in source
+        assert "_write_env" in source
         assert "WEBHOOK_SECRET" in source
 
     def test_follows_secret_key_pattern(self):
