@@ -214,3 +214,7 @@ Comandos operativos para la administración del sistema desde la raíz de `chatb
 ---
 
 Si presenta problemas durante la instalación o ejecución, consulte la [Guía de Resolución de Problemas](docs/TROUBLESHOOTING.md).
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting.
